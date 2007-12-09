@@ -1,0 +1,16 @@
+Source: fsvs
+Section: admin
+Priority: optional
+Maintainer: Sheldon Hearn <sheldonh@clue.co.za>
+Build-Depends: debhelper (>= 5), dpatch, autotools-dev, libsvn-dev, libgdbm-dev, ctags, libaprutil1-dev, libpcre3-dev
+Standards-Version: 3.7.2
+
+Package: fsvs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: subversion
+Description: full directory tree or filesystem versioning with metadata support
+ FSVS stands for "Fast System VerSioning", "File System VerSioning" or
+ "Full System VerSioning".  It it a complete backup/restore tool for all files
+ in a directory tree or for whole filesystems, with a subversion repository as
+ the backend. 

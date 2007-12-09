@@ -1,0 +1,56 @@
+.\"                                      Hey, EMACS: -*- nroff -*-
+.TH FSVS 1 "September 22, 2007"
+.SH NAME
+fsvs \- directory tree and filesystem versioning
+.SH SYNOPSIS
+.B fsvs
+.RI "command [options] [args]"
+.SH DESCRIPTION
+.B fsvs
+is a versioned backup and restore system
+for directory trees or whole filesystems,
+which uses subversion backends for storage.
+This means that previous versions of all filesystem objects and their metadata
+are available in case of
+hardware problems, data loss, virus infections, user mistakes, etc.
+.PP
+Run "fsvs help" for a list of commands.
+Run "fsvs help commandname" for usage instructions for a specific command.
+.PP
+.B fsvs
+does not create its own backend repositories.
+Use subversion's
+.BR svnadmin (1)
+utility to create respositories.
+Thereafter, you may use the
+.B fsvs
+command
+.I urls
+to initialize a working copy administrative area
+and connect the current working directory to the repository URLs.
+.SH FILES
+.IP /etc/fsvs
+default configuration area
+.IP /var/spool/fsvs
+default working copy administrative area
+.SH ENVIRONMENT
+.IP FSVS_CONF
+the location of the configuration area.
+.IP FSVS_WAA
+the location of the working copy administrative area.
+.SH SEE ALSO
+.BR svnadmin (1).
+.PP
+Commands are described in more detail in
+.BR /usr/share/doc/fsvs/USAGE.gz .
+.PP
+See
+.IR "the backup HOWTO"
+available at
+.BR http://fsvs.tigris.org/ .
+.SH AUTHOR
+.B fsvs
+was written by Philipp Marek <philipp@marek.priv.at>.
+.PP
+This manual page was written by Sheldon Hearn <sheldonh@clue.co.za>,
+for the Debian project (but may be used by others).
