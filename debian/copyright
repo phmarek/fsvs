@@ -1,4 +1,4 @@
-This package was debianized by Sheldon Hearn <sheldonh@clue.co.za> on
+This package was debianized by Sheldon Hearn <sheldonh@starjuice.net> on
 Sat, 22 Sep 2007 19:00:49 +0200.
 
 It was downloaded from http://fsvs.tigris.org/
@@ -25,6 +25,6 @@ License:
 On Debian systems, the complete text of the GNU General
 Public License can be found in `/usr/share/common-licenses/GPL-2'.
 
-The Debian packaging is (C) 2007, Sheldon Hearn <sheldonh@clue.co.za> and
+The Debian packaging is (C) 2007, Sheldon Hearn <sheldonh@starjuice.net> and
 is licensed under the GPL, see above.
 

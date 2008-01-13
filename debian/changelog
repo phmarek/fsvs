@@ -1,3 +1,13 @@
+fsvs (1.1.11-2) unstable; urgency=low
+
+  * Fix typo in package description (Closes: #458994)
+  * Applied upstream fix to softroot handling (Closes: #460519)
+  * Applied upstream fix that removed unnecessary dependency on
+    libsvn_client (Closes: 460557)
+  * Changed maintainer email address.
+
+ -- Sheldon Hearn <sheldonh@starjuice.net>  Sun, 13 Jan 2008 12:53:54 +0200
+
 fsvs (1.1.11-1) unstable; urgency=low
 
   * Initial release (Closes: #428311)

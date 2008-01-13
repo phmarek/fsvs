@@ -1,5 +1,5 @@
 #! /bin/sh /usr/share/dpatch/dpatch-run
-## fix_doc_whitespace.dpatch by Sheldon Hearn <sheldonh@clue.co.za>
+## fix_doc_whitespace.dpatch by Sheldon Hearn <sheldonh@starjuice.net>
 ##
 ## All lines beginning with `## DP:' are a description of the patch.
 ## DP: Add distclean target to top-level Makefile

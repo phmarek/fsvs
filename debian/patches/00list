@@ -1,2 +1,4 @@
 makefile_distclean
 fix_doc_whitespace
+fix_softroot_compare
+no_libsvn_client_dep

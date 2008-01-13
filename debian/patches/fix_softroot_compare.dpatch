@@ -1,0 +1,29 @@
+#! /bin/sh /usr/share/dpatch/dpatch-run
+## fix_doc_whitespace.dpatch by Sheldon Hearn <sheldonh@starjuice.net>
+##
+## All lines beginning with `## DP:' are a description of the patch.
+## DP: Fix comparison of softroot with argument
+
+@DPATCH@
+
+--- fsvs-1.1.11.orig/src/waa.c
++++ fsvs-1.1.11/src/waa.c
+@@ -343,6 +343,7 @@
+ 	int status, len, plen, wdlen;
+ 	char *cp;
+ 	unsigned char digest[APR_MD5_DIGESTSIZE], *p2dig;
++	const char root[]= { PATH_SEPARATOR, 0};
+ 
+ 	status=0;
+ 	cp=NULL;
+@@ -386,6 +387,10 @@
+ 		/* We need to be sure that the path starts with a PATH_SEPARATOR.
+ 		 * That is achieved in waa__init(); the softroot path gets normalized 
+ 		 * there. */
++		/* In case both the argument and the softroot are identical, 
++		 * we end up with *path==0. Change that to the root directory. */
++		if (!*path)
++			path=(char*)root;
+ 
+ 		plen=strlen(path);
+ 	}
