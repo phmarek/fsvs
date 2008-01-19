@@ -15,10 +15,9 @@ endif
 TEST_PROG_DIR	:= $(shell pwd)
 
 
-VALGRIND	:= valgrind --trace-children=no -v --error-exitcode=1 --log-file-exactly=/tmp/valgrind.out --suppressions=$(TEST_PROG_DIR)/valgrind-suppressions
+VALGRIND	:= valgrind --trace-children=no -v --error-exitcode=1 --log-file=/tmp/valgrind.out --suppressions=$(TEST_PROG_DIR)/valgrind-suppressions.supp
 CALLGRIND	:= valgrind -q --tool=callgrind --collect-systime=yes --collect-jumps=yes --dump-instr=yes
-MEMCHECK	:= valgrind --leak-check=full --show-reachable=yes --num-callers=15 --log-file=/tmp/valgrind.out --time-stamp=yes 
-# MEMCHECK	:= valgrind --leak-check=full --show-reachable=yes --num-callers=15 --log-file-exactly=../valgrind.out --time-stamp=yes 
+MEMCHECK	:= valgrind --leak-check=full --show-reachable=yes --num-callers=15 --log-file=/tmp/valgrind-%p.out --time-stamp=yes 
 
 export VALGRIND CALLGRIND
 ifeq ($(CHECKER),valgrind)
@@ -72,6 +71,9 @@ ifeq ($(PROTOCOL), svn+ssh)
 override PROTOCOL=svn+ssh://localhost/
 endif
 
+ifeq ($(RANDOM_ORDER), 1)
+TEST_LIST	:= $(shell perl -e 'srand();  while (@ARGV) { print splice(@ARGV, rand(@ARGV), 1),"\n"; } ' $(TEST_LIST))
+endif
 
 
 UID	:= $(shell id -u)
@@ -146,6 +148,8 @@ $(DFLT_REPO): $(TEST_PROG_DIR)/001_init_dir
 prepare_empty:
 	@echo Preparing clean repository ...
 	test -d $(REP) && rm -rf $(REP) || true
+	rm -rf $(FSVS_CONF) $(FSVS_WAA) || true
+	$(MAKE) $(FSVS_CONF) $(FSVS_WAA) || true
 	test -d $(LOGDIR) || mkdir $(LOGDIR)
 	svnadmin create $(REP)
 	echo '' > $(FSVS_CONF)/config
@@ -171,8 +175,8 @@ prepare_wc:
 	@echo Preparing $(_WC) ...
 	test -d $(_WC) && rm -rf $(_WC) || true
 	mkdir $(_WC)
-	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC)  "")/* || true 2> /dev/null
-	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC) "^")/* || true 2> /dev/null
+	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC)  "")/* 2> /dev/null || true
+	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC) "^")/* 2> /dev/null || true 
 	cd $(_WC) && echo $(REPURL) | $(BINq) urls load
 ifdef CMD
 	cd $(_WC) && $(BINq) $(CMD)

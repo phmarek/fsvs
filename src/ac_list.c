@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -73,6 +73,8 @@ static const char
 	.work=_work, .local_callback=_act, .local_uninit=_act_u, \
 	__VA_ARGS__ }
 
+
+/** -. */
 struct actionlist_t action_list[]=
 {
 	/* The first action is the default. */
@@ -103,8 +105,8 @@ struct actionlist_t action_list[]=
 	ACT(remote,   up__work,         NULL,                NULL, .is_compare=1, .repos_feedback=st__rm_status),
 };
 
-/** How many actions we know */
+/** -. */
 const int action_list_count = sizeof(action_list)/sizeof(action_list[0]);
-/* After commandline parsing set to the \e current action. */
+/** -. */
 struct actionlist_t *action=action_list;
 

@@ -2,7 +2,7 @@
  * Copyright (C) 2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -68,7 +68,7 @@ static inline int prp__first(hash_t db, datum *key)
 	return status;
 }
 /** Get next key. */
-static inline int prp__next(hash_t db, datum *key, datum oldkey)
+static inline int prp__next(hash_t db, datum *key, const datum *oldkey)
 {
   int status;
 	status=hsh__next(db, key, oldkey);

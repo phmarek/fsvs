@@ -1,0 +1,269 @@
+/**
+  \addtogroup dev
+
+  \section dev_welcome Dear developers/debuggers,
+
+thank you for your interest in fsvs.
+
+I highly appreciate any help, tips and tricks, and even if it's just
+a bug report I want to know that.
+
+I'm also looking forward to documentation updates, and notifying me about
+mistakes will be politely answered, too.
+
+*/
+
+/**
+	\defgroup dev_debug What to do in case of errors
+	\ingroup dev
+
+First, please read the documentation to rule out the possibility that
+it's just a badly written sentence that caused misunderstanding.
+
+If you can't figure it out yourself, don't hesitate and write a bug report.
+Please include the version you're running (output of <tt>fsvs -V</tt>), the 
+command line you're calling fsvs with, and the output it gives.
+
+Furthermore it might help diagnosing if you tried with the \ref 
+glob_opt_verb "-v" parameter, and/or with \ref glob_opt_deb "-d"; but 
+please mind that there might be data in the dump that you don't want to 
+make public -- if you're not sure, ask on the mailing lists.
+
+
+Send these things along with a description of what you wanted to do to \b 
+\c dev@fsvs.tigris.org or, if you like that alternative better, just file 
+an issue. \n
+(The bugs I find and the things on my \c TODO are not in the issue tracker,
+as I can't access it while on the train - and that's where I spend the most
+time working on fsvs).
+
+Please be aware that I possibly need more details or some other tries to
+find out what goes wrong.
+
+
+\section dev_devs People that like to help
+
+If you know C and want to help with fsvs, Just Do It (R) :-)
+Look into the \c TODO file, pick your favorite point, and implement it.
+
+If you don't know C, but another programming language (like perl, python, 
+or shell-programming), you can help, too -- help write test scripts. \n
+I mostly checked the positive behavior (ie. that something should happen
+given a set of predefined state and parameters), but testing for wrong and
+unexpected input makes sense, too.
+
+If you don't know any programming language, you can still look at the 
+documentation and point me to parts which need clarifying, write documents
+yourself, or just fix mistakes.
+
+
+All contributions should \b please be sent as a unified diff, along with 
+a description of the change, and there's a good chance to have it 
+integrated into the fsvs code-base.
+
+\note How to generate such a diff? \n
+If you're using svn or svk to track fsvs usage, the <tt>"svn diff"<tt> or 
+<tt>"svk diff"<tt> commands should do what you want.
+
+If you downloaded a \c .tar.gz or \c .tar.bz2, keep a pristine version in 
+some directory and make your changes in another copy. \n
+When you're finished making changes, run the command
+\code
+	diff -ur \e original \e new > \e my-changes.patch
+\endcode
+and send me that file.
+
+*/
+
+
+/**
+\defgroup dev_design The internal design
+\ingroup dev
+
+
+\section dev_design_terms Terms used in this document
+
+
+\subsection dev_des_t_entry Entry
+
+In subversion speak an entry is either a directory, a symlink or a file;
+In FSVS it can additionally be a block or character device. \n
+Sockets and pipes are currently ignored, as they're typically re-created by 
+the various applications.
+
+
+\subsection dev_des_t_waa WAA, CONF
+
+Please see \ref waa_file.
+
+
+\section dev_des_memory_layout In-memory layout
+
+In memory fsvs builds a complete tree of the needed entries (\c struct \c 
+estat). They are referenced with the \c parent pointers upwards to the 
+root, and the \c estat::by_inode and \c estat::by_name downwards.
+
+
+\subsection dev_des_mem_alloc Storage and allocation
+Every directory entry can have a string space allocated, ie. space needed 
+for the filenames in this directory (and possibly sub-directories, too.)
+On loading of the list in \c waa__input_tree() two memory ranges are 
+allocated - one for the <tt>struct estat</tt>s read, and one for the 
+filenames.
+
+Because of this \c free()ing of part of the entries is not possible; a 
+freelist for the <tt>struct estat</tt>s is used, but the string space is 
+more or less permanent.
+
+
+\section dev_des_algo Algorithms and assumption in the code
+
+Generally I tried to use fast and simple algorithms better than \c O(n);
+but it's possible that I forgot something.
+
+
+\subsection dev_des_algo_dsearch Searching for an entry
+Searching for an entry in a directory (in memory) is \c O(log2(n)), as I 
+use \c bsearch().
+
+
+\subsection dev_des_algo_output Writing the entry list
+Determining the correct order for writing the entries (in \c 
+waa__output_tree()) is optimized by having all lists pre-sorted; about half 
+the time (tested) a single compare is enough to determine the next written 
+entry.
+
+\note Of course, to keep the lists sorted, a lot of comparisons have to be 
+made before waa__output_tree().
+
+
+\subsection dev_des_algo_by estat::by_inode and estat::by_name
+
+The \c by_inode and \c by_name members are pointers to arrays of pointers 
+to entries (:-); they must reference the same entries, only the order may 
+differ.
+
+\c by_inode must (nearly) always be valid ; \c by_name is optional.
+
+The flag \c estat::to_be_sorted tells \c waa__output_tree() that the 
+order of the \c by_inode array might be wrong, and has to be re-sorted 
+before use.
+
+While scanning for changes we use a global \c by_inode ordering, as this 
+is \b much faster than naive traversal; the \c by_name array is used for 
+comparing directories, to determine whether there are any new entries.
+
+Both arrays \b must include a \c NULL -pointer at the end of the array.
+
+
+\subsection dev_des_algo_manber Manber-Hash and MD5
+
+To quickly find whether a given file has changed, and to send only the 
+changed bytes over the wire, we take a running hash (a Manber-Hash), and
+whenever we find a "magic" value we take that as buffer end.
+
+We calculate the MD5 of each buffer, and store them along with their 
+start offset in the file.
+So on commit we can find identical blocks and send only those, and while
+comparing we can return "changed" as soon as we find a difference.
+
+
+\section dev_des_errors Error checking and stopping
+
+Return codes are checked everywhere.
+
+The return value of functions in this program is normally (int);
+0 means success, something else an error.
+
+Either this error is expected (like ENOENT for some operations) and handled,
+or it must be returned to the caller.
+Most of this is already defined in macros.
+
+Typical function layout is like this (taken from waa.c):
+\code
+  int waa__make_info_link(char *directory, char *name, char *dest)
+  {
+    int status;
+    char *path, *eos;
+  
+  
+    STOPIF( waa___get_waa_directory(directory, &path, &eos), NULL);
+  
+    strcpy(eos, name);
+		...
+    if (access(path, F_OK) != 0)
+      STOPIF_CODE_ERR( symlink(dest, path) == -1,
+          errno, "cannot create informational symlink '%s' -> '%s'",
+          path, dest);
+  
+  ex:
+    return status;
+  }
+\endcode
+
+When a function gets called by subversion libraries, we have to use
+their return type.
+Here an example from commit.c:
+\code
+svn_error_t *ci___set_props(void *baton, 
+    struct estat *sts,
+    change_any_prop_t function,
+    apr_pool_t *pool)
+{
+  const char *ccp;
+  svn_string_t *str;
+  int status;
+  svn_error_t *status_svn;
+
+
+  status=0;
+	...
+  if (sts->entry_type != FT_SYMLINK)
+  {
+	  ...
+    str=svn_string_createf (pool, "%u %s", 
+        sts->st.uid, hlp__get_uname(sts->st.uid, "") );
+    STOPIF_SVNERR( function, (baton, propname_owner, str, pool) );
+
+    ...
+  }
+
+ex:
+  RETURN_SVNERR(status);
+}
+\endcode
+
+The various \c STOPIF() -macros automatically print an error message and,
+depending on the debug- and verbosity-flags given on the command line,
+a back trace too.
+
+Assertions should be checked by \c BUG_ON(condition, format_string, ...).
+This will cause a segmentation violation, which (for debug builds) will 
+automatically attach a debugger (\c gdb, only if present on the system).
+
+
+\section dev_des_comments Comments and documentation
+
+FSVS is normalized to use doxygen format for the documentation:
+<tt>"/§** ... *§/"</tt>.
+
+For non-trivial things it's practical to document the thoughts, too;
+such internal documentation uses the normal C-style comments 
+(<tt>"/§* ... *§/"</tt>).
+
+
+\subsection dev_des_ /§* in documentation
+
+In cases where a slash \c / and a star \c * have to be used in the 
+documentation, there's a hack by putting a paragraph symbol (\c \\c2\\xa7 in  
+UTF-8) between them, so that it doesn't break the comment block.
+
+There's a perl hack for documentation generation, where these get removed.
+
+\note For C this would not be strictly necessary; There's always the way of 
+putting a <tt># if 0</tt> block around that comment block. Doxygen doesn't 
+allow this; even if using a shell script (with comments indicated by \c #) 
+doxygen doesn't allow "<tt>/§*</tt> or <tt>*§/</tt>.
+
+*/
+// vi: filetype=doxygen spell spelllang=en_us

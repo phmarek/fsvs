@@ -2,7 +2,7 @@
  * Copyright (C) 2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -26,8 +26,8 @@
  * revisions that are shown; if no values are given, the logs are 
  * given starting from HEAD downwards.
  *
- * If you use the \ref glob_opt_verb "-v"-option, you get the files changed 
- * in each revision printed, too.
+ * If you use the \ref glob_opt_verb "-v" -option, you get the files 
+ * changed in each revision printed, too.
  *
  * Currently at most 100 log messages are shown.
  *

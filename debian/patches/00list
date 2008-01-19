@@ -1,4 +1,3 @@
 makefile_distclean
-fix_doc_whitespace
-fix_softroot_compare
-no_libsvn_client_dep
+fix_tree_copies
+tidy_manpage

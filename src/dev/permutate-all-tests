@@ -1,0 +1,268 @@
+#!/usr/bin/perl
+# vim: sw=2 ts=2 expandtab
+#
+# Runs the tests in various configurations
+# To be started from the src/ directory, to have matching paths
+#
+# If there's an environment variable MAKEFLAGS set, and it includes a
+# -j parameter, the tests are run in parallel. 
+#
+#
+##########################################################################
+# Copyright (C) 2005-2008 Philipp Marek.
+#
+# This program is free software;  you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 3 as
+# published by the Free Software Foundation.
+##########################################################################
+
+#
+
+#############################################################################
+# Detection and preparation
+#############################################################################
+{
+  @locales=`locale -a`;
+# look for UTF8
+  ($utf8_locale)=grep(/\.utf8/,@locales);
+  chomp $utf8_locale;
+# look for non-utf8
+  ($loc_locale)=grep(!/(POSIX|C|utf8$)/, @locales);
+  chomp $loc_locale;
+
+  ($cur_locale)=map { /LC_CTYPE="(.*)"/ ? ($1) : (); } `locale`;
+  @test_locales=($utf8_locale, $loc_locale);
+  push @test_locales, $cur_locale
+    unless grep($cur_locale eq $_, @test_locales);
+
+
+# Use special directories, so that normal system operation is not harmed.
+  $PTESTBASE="/tmp/fsvs-tests-permutated";
+  mkdir($PTESTBASE, 0777) || die $!
+    if !-d $PTESTBASE;
+
+  open(CSV, "> /tmp/fsvs-tests.csv") || die $!;
+  select((select(CSV), $|=1)[0]);
+  print CSV qq("Nr","Prot","LANG","priv","config","Result"\n);
+
+# To get some meaningful test name outputted
+  $ENV{"CURRENT_TEST"}="ext-tests";
+  $start=time();
+
+  $ENV{"MAKEFLAGS"} =~ /-j\s*(\d*)\b/;
+  $parallel=$ENV{"PARALLEL"} || ($1+0) || 1;
+  MSG("INFO", "Parallel found as $parallel") if $parallel;
+
+# Used for status output
+  $fail=0;
+# Used for counting
+  $sum=0;
+# For parallel execution
+  $running=0;
+
+# Wait for children
+  $SIG{"CHLD"}="DEFAULT";
+
+  %results=();
+  %pid_to_result=();
+
+  MSG("INFO", StartText($start));
+}
+
+
+#############################################################################
+# Run the tests
+#############################################################################
+{
+# My default is debug - so do that last, to have a 
+# correctly configured environment :-)
+# Furthermore the "unusual" configurations are done first.
+  for $release ("", "--enable-release", "--enable-debug")
+  {
+# make sure that the binary gets recompiled
+    $conf_cmd="( cd .. && ./configure $release ) && touch config.h && make";
+		system("( $conf_cmd ) > /tmp/fsvs-conf.txt 2>&1") && 
+			die "configure problem: $?";
+
+# Start the slow, uncommon tasks first.
+		for $prot ("svn+ssh", "file://")
+		{
+			for $user ("sudo", "")
+			{
+				for $lang (@test_locales)
+				{
+					$sum++;
+
+# We have to make the conf and waa directory depend on the
+# user, so that root and normal user don't share the same base -
+# the user would get some EPERM.
+# Furthermore parallel tests shouldn't collide.
+          $PTESTBASE2="$PTESTBASE/u.$user" . ($parallel ? ".$sum" : "");
+
+          # Start the test asynchronous, and wait if limit reached.
+          $pid=StartTest();
+          $running++;
+
+          {
+            my($tmp);
+            $tmp="?";
+            $results{$lang}{$user}{$prot}{$release}=\$tmp;
+            $pid_to_result{$pid}=\$tmp;
+          }
+
+
+          WaitForChilds($parallel);
+        }
+      }
+    }
+
+# As we reconfigure on the next run, we have to wait for *all* pending 
+# children.
+    WaitForChilds(1);
+  }
+}
+
+#############################################################################
+# Summary
+#############################################################################
+{
+  $end=time();
+  MSG("INFO", EndText($start, $end));
+
+  if ($fail)
+  {
+    MSG("ERROR","$fail of $sum tests failed.");
+  }
+  else
+  {
+    MSG("SUCCESS", "All $sum tests passed.");
+  }
+
+  close CSV;
+}
+exit;
+
+
+#############################################################################
+# Functions
+#############################################################################
+sub MSG
+{
+  my($type, @text)=@_;
+# We use the same shell functions, to get a nice consistent output.
+  system(". ../tests/test_functions\n\$$type '" . join(" ",@text) . "'");
+}
+
+
+# Gets all parameters from global variables.
+sub StartTest
+{
+	$pid=fork();
+	die $! unless defined($pid);
+	return $pid if ($pid);
+
+#	$x=(0.5 < rand())+0; print "$$: exit with $x\n"; exit($x);
+
+# this is the child ...
+	$parms="LC_ALL=$lang TESTBASEx=$PTESTBASE2 PROTOCOL=$prot RANDOM_ORDER=1";
+
+# To avoid getting N*N running tasks for a "-j N", we explicitly say 1.
+# Parallel execution within the tests is not done yet, but better safe 
+# than sorry.
+	$cmd="$user make run-tests -j1 $parms";
+
+	$start=time();
+
+# Output on STDOUT is short; the logfile says it all.
+	print "#$sum ", StartText($start);
+
+	open(LOG, "> /tmp/fsvs-test-$sum.log");
+	select((select(LOG), $|=1)[0]);
+	print LOG "Testing #$sum: (configure=$release) $parms\n",
+				StartText($start),
+				"\n$conf_cmd &&\n\t$cmd\n\n";
+
+# The sources are already configured; just the tests have to be run.
+
+	$pid=fork();
+	die $! unless defined($pid);
+	if (!$pid)
+	{
+		$ENV{"MAKEFLAGS"}="";
+		open(STDIN, "< /dev/null") || die $!;
+		open(STDOUT, ">&LOG") || die $!;
+		open(STDERR, ">&LOG") || die $!;
+# sudo removes some environment variables, so set all options via make.
+		exec $cmd;
+		die;
+	}
+
+	die $! if waitpid($pid, 0) == -1;
+	$error=$?;
+
+	$end=time();
+	$t=EndText($start, $end);
+
+	if ($error)
+	{
+		$status="FAIL";
+		open(F, "< /proc/loadavg") && print(LOG "LoadAvg: ", <F>) && close(F);
+		MSG("WARN", "#$sum failed; $t");
+	}
+	else
+	{
+		$status="OK";
+		MSG("INFO", "#$sum done; $t");
+
+		system("sudo rm -rf $PTESTBASE2");
+	}
+
+	print LOG "\n",
+				"$t\n",
+				"$status $error: $user $parms\n",
+				"\n",
+				"$conf_cmd && $cmd\n";
+	close LOG;
+
+	$u = $user || "user";
+	print CSV "$sum,'$prot','$lang','$u','$release','$status'\n";
+	close CSV;
+
+# We cannot return $error directly ... only the low 8bit would 
+# be taken, and these are the signal the process exited with.
+# A normal error status would be discarded!
+	exit($error ? 1 : 0);
+}
+
+
+sub WaitForChilds
+{
+	my($allowed)=@_;
+	my($pid, $ret);
+
+	while ($running >= $allowed)
+	{
+		$pid=wait();
+		$ret=$?;
+		die $! if $pid == -1;
+
+		${$pid_to_result{$pid}}=$ret;
+		$fail++ if $ret;
+		$running--;
+	}
+}
+
+
+# The \n don't matter for the shell, and they help for direct output.
+sub StartText
+{
+	my($start)=@_;
+	return "Started at (" . localtime($start) . ").\n";
+}
+
+sub EndText
+{
+	my($start, $end)=@_;
+	return "Finished after ". ($end - $start) . " seconds (" . 
+		localtime($end) . ").\n";
+}

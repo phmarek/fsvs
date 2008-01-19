@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -446,6 +446,19 @@ int ops__save_1entry(struct estat *sts,
 	int intnum;
 
 
+#if 0
+	if (sts->parent)
+	{
+		/* For entries other than the root node:
+		 * If the entry was not added or copied, it has to have an URL.
+		 *
+		 * But we cannot test for that, as _build_list does exactly that - and 
+		 * is needed by the tests. */
+		BUG_ON(!sts->url && 
+				!(sts->flags & (RF_COPY_SUB | RF_COPY_BASE | RF_ADD)));
+	}
+#endif
+
 	is_dir = S_ISDIR(sts->st.mode);
 	is_dev = S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode);
 	is_spec = S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode) ||
@@ -503,7 +516,7 @@ ex:
  *
  * If no \c PATH_SEPARATOR is found in the \a path, the \a path itself is 
  * returned. */
-inline const char *ops___get_filename(const char *path)
+inline const char *ops__get_filename(const char *path)
 {
 	char *cp;
 
@@ -679,7 +692,7 @@ int ops__new_entries(struct estat *dir,
 
 
 	status=0;
-	/* By name is no longer used */
+	/* By name is no longer valid. */
 	IF_FREE(dir->by_name);
 	/* Now insert the newly found entries in the dir list. */
 	dir->by_inode = realloc(dir->by_inode, 
@@ -717,7 +730,7 @@ int ops__find_entry_byname(struct estat *dir, const char *name,
 		STOPIF(dir__sortbyname(dir), NULL);
 
 	/* Strip the path, leave the file name */
-	filename=ops___get_filename(name);
+	filename=ops__get_filename(name);
 
 	/* find entry, binary search. */
 	sts_p=bsearch(filename, dir->by_name, dir->entry_count, 
@@ -804,7 +817,7 @@ int ops__allocate(int needed,
 	if (free_list)
 	{
 		free_p=free_list;
-		VALGRIND_MAKE_READABLE(free_p, sizeof(*free_p));
+		VALGRIND_MAKE_MEM_DEFINED(free_p, sizeof(*free_p));
 
 		if (free_p->count <= needed)
 		{
@@ -832,7 +845,7 @@ int ops__allocate(int needed,
 			DEBUGP("splitting block; %d remain", remain);
 		}
 
-		VALGRIND_MAKE_READABLE(*where, sizeof(**where)*returned);
+		VALGRIND_MAKE_MEM_DEFINED(*where, sizeof(**where)*returned);
 		/* Clear the memory. Not needed for calloc(). */
 		memset(*where, 0, sizeof(**where) * returned);
 	}
@@ -853,7 +866,7 @@ int ops__allocate(int needed,
 	/* The memory is cleared; cache_index == 0 means uninitialized, which is 
 	 * exactly what we want. */
 
-	VALGRIND_MAKE_READABLE(*where, sizeof(**where) * returned);
+	VALGRIND_MAKE_MEM_DEFINED(*where, sizeof(**where) * returned);
 
 ex:
 	return status;
@@ -907,17 +920,17 @@ int ops__free_entry(struct estat **sts_p)
 	prev=&free_list;
 	while (free_p)
 	{
-		VALGRIND_MAKE_READABLE(free_p, sizeof(*free_p));
+		VALGRIND_MAKE_MEM_DEFINED(free_p, sizeof(*free_p));
 		if ((char*)block + sizeof(struct estat) == (char*)free_p)
 		{
 			/* Copy data */
 			block->count = free_p->count+1;
 			block->next = free_p->next;
 			if (prev != &free_list)
-				VALGRIND_MAKE_READABLE(prev, sizeof(*prev));
+				VALGRIND_MAKE_MEM_DEFINED(prev, sizeof(*prev));
 			*prev = block;
 			if (prev != &free_list)
-				VALGRIND_MAKE_NOACCESS(prev, sizeof(*prev));
+				VALGRIND_MAKE_MEM_NOACCESS(prev, sizeof(*prev));
 			break;
 		}
 
@@ -932,14 +945,14 @@ int ops__free_entry(struct estat **sts_p)
 
 		free_p=*prev;
 
-		VALGRIND_MAKE_NOACCESS(free_p2, sizeof(*free_p2));
+		VALGRIND_MAKE_MEM_NOACCESS(free_p2, sizeof(*free_p2));
 	}
 
 
 	if (free_p)
 	{
 		DEBUGP("merged to %p; now size %d", block, free_p->count);
-		VALGRIND_MAKE_NOACCESS(free_p, sizeof(*free_p));
+		VALGRIND_MAKE_MEM_NOACCESS(free_p, sizeof(*free_p));
 	}
 	else
 	{
@@ -949,7 +962,7 @@ int ops__free_entry(struct estat **sts_p)
 		DEBUGP("new entry in free list");
 	}
 
-	VALGRIND_MAKE_NOACCESS( block, sizeof(struct estat));
+	VALGRIND_MAKE_MEM_NOACCESS( block, sizeof(struct estat));
 
 	*sts_p=NULL;
 
@@ -1321,27 +1334,188 @@ int ops__set_to_handle_bits(struct estat *sts)
 
 	status=0;
 
-	DEBUGP("before parent: do_full=%d.%d parent=%d.%d", 
-			sts->do_full, 
-			sts->do_full_child, 
-			sts->parent ? sts->parent->do_full : 0,
-			sts->parent ? sts->parent->do_full_child : 0);
+	DEBUGP("before parent: do_tree=%d.%d parent=%d.%d", 
+			sts->do_tree, 
+			sts->do_this_entry, 
+			sts->parent ? sts->parent->do_tree : 0,
+			sts->parent ? sts->parent->do_this_entry : 0);
 
 	/* For recursive operation: If we should do the parent completely, 
 	 * we do the sub-entries, too. */
 	if (opt_recursive>0)
-		sts->do_full |= sts->parent->do_full;
+		sts->do_tree |= sts->parent->do_tree;
 	/* For semi-recursive operation: Do the child, if the parent was 
 	 * wanted. */
 	if (opt_recursive>=0)
-		sts->do_full_child |= sts->parent->do_full | sts->do_full;
+		sts->do_this_entry |= sts->parent->do_tree | sts->do_tree;
 
-	DEBUGP("after parent: do_full=%d.%d parent=%d.%d", 
-			sts->do_full, 
-			sts->do_full_child, 
-			sts->parent ? sts->parent->do_full : 0,
-			sts->parent ? sts->parent->do_full_child : 0);
+	DEBUGP("after parent: do_tree=%d.%d parent=%d.%d", 
+			sts->do_tree, 
+			sts->do_this_entry, 
+			sts->parent ? sts->parent->do_tree : 0,
+			sts->parent ? sts->parent->do_this_entry : 0);
 
+	return status;
+}
+
+
+/** -.
+ *
+ * We have to preserve the \c parent pointer and the \c name of \a dest.  
+ * */
+void ops__copy_single_entry(struct estat *src, struct estat *dest)
+{
+	dest->st=src->st;
+
+	dest->repos_rev=SVN_INVALID_REVNUM;
+	/* parent is kept */
+	/* name is kept */
+
+	/* But, it being a non-committed entry, it has no URL yet. */
+	dest->url=NULL;
+
+
+	if (S_ISDIR(dest->st.mode))
+	{
+#if 0
+			/* Currently unused. */
+			dest->by_inode=NULL;
+			dest->by_name=NULL;
+			dest->entry_count=0;
+			dest->strings=NULL;
+			dest->other_revs=0;
+			dest->to_be_sorted=0;
+#endif
+	}
+	else
+	{
+		memcpy(dest->md5, src->md5, sizeof(dest->md5));
+#if 0
+		{
+			memset(dest->md5, 0, sizeof(dest->md5));
+			/* Currently unused. */
+			dest->change_flag=CF_NOTCHANGED;
+			dest->decoder=src->decoder;
+			dest->has_orig_md5=src->has_orig_md5;
+		}
+#endif
+	}
+
+#if 0
+		/* The temporary area is mostly void, but to be on the safe side ... */
+		dest->child_index=0;
+		dest->dir_pool=NULL;
+#endif
+
+	dest->flags=RF_ISNEW | RF_COPY_SUB;
+	dest->copyfrom_src=NULL;
+
+	/* Gets recalculated on next using */
+	dest->path_len=0;
+	dest->path_level=dest->parent->path_level+1;
+
+	/* The entry is not marked as FT_IGNORE ... that would change the entry 
+	 * type, and we have to save it anyway. */
+	dest->entry_type=src->entry_type;
+	dest->entry_status=FS_NEW;
+	dest->remote_status=FS_NEW;
+
+	dest->cache_index=0;
+	dest->decoder_is_correct=src->decoder_is_correct;
+
+	dest->was_output=0;
+	dest->do_tree=dest->do_a_child=dest->do_this_entry=0;
+	dest->arg=NULL;
+}
+
+
+/** -.
+ * \a only_A, \a both, and \a only_B are called, then \a for_every (if not 
+ * \c NULL).
+ *
+ * This builds and loops throught the sts::by_name lists, so modifying them 
+ * must be done carefully, to change only the elements already processed.
+ *
+ * Returning an error from any function stops the loop.
+ * */
+int ops__correlate_dirs(struct estat *dir_A, struct estat *dir_B,
+		ops__correlate_fn1_t only_A,
+		ops__correlate_fn2_t both,
+		ops__correlate_fn1_t only_B,
+		ops__correlate_fn2_t for_every)
+{
+	int status, comp;
+	struct estat **list_A, **list_B;
+
+
+	status=0;
+	DEBUGP("correlating %s and %s", dir_A->name, dir_B->name);
+
+	/* We compare the sorted list of entries. */
+	STOPIF( dir__sortbyname(dir_A), NULL);
+	STOPIF( dir__sortbyname(dir_B), NULL);
+
+	list_A=dir_A->by_name;
+	list_B=dir_B->by_name;
+
+	while (*list_A)
+	{
+		if (!*list_B) goto a_only;
+
+		comp=dir___f_sort_by_name( list_A, list_B );
+		DEBUGP("comp %s, %s => %d", 
+				(*list_A)->name,
+				(*list_B)->name, comp);
+
+		if (comp == 0)
+		{
+			/* Identical names */
+			if (both) 
+				STOPIF( both(*list_A, *list_B), NULL);
+			if (for_every) 
+				STOPIF( for_every(*list_A, *list_B), NULL);
+
+			list_A++;
+			list_B++;
+		}
+		else if (comp > 0)
+		{
+			/* *list_B > *list_A; entry is additional in list_B. */
+			if (only_B) 
+				STOPIF( only_B(*list_B, list_B), NULL);
+			if (for_every) 
+				STOPIF( for_every(NULL, *list_B), NULL);
+
+			list_B++;
+		}
+		else
+		{
+a_only:
+			/* *list_A < *list_B; so this entry does not exist in dir_B. */
+			if (only_A) 
+				STOPIF( only_A(*list_A, list_A), NULL);
+			if (for_every) 
+				STOPIF( for_every(*list_A, NULL), NULL);
+
+			list_A++;
+		}
+	}
+
+	/* Do remaining list_B entries, if necessary. */
+	if (only_B || for_every)
+	{
+	  while (*list_B)
+		{
+			if (only_B) 
+				STOPIF( only_B(*list_B, list_B), NULL);
+			if (for_every) 
+				STOPIF( for_every(NULL, *list_B), NULL);
+
+			list_B++;
+		}
+	}
+
+ex:
 	return status;
 }
 

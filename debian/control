@@ -3,7 +3,7 @@ Section: admin
 Priority: optional
 Maintainer: Sheldon Hearn <sheldonh@starjuice.net>
 Build-Depends: debhelper (>= 5), dpatch, autotools-dev, libsvn-dev, libgdbm-dev, ctags, libaprutil1-dev, libpcre3-dev
-Standards-Version: 3.7.2
+Standards-Version: 3.7.3
 
 Package: fsvs
 Architecture: any

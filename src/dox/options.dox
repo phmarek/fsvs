@@ -12,8 +12,8 @@ These are read from the configuration files \c $FSVS_CONF/fsvs.conf and (if
 \c -o.
 
 The (planned) priorities are
-- command line \e (highest)
-- environment variables. These are named as <tt>FSVS_<i>{uppercase option 
+- Command line \e (highest)
+- Environment variables. These are named as <tt>FSVS_<i>{upper-case option 
 	name}</i></tt>.
 - \c $HOME/.fsvs/wc-dir/config
 - \c $FSVS_CONF/wc-dir/config
@@ -23,6 +23,10 @@ The (planned) priorities are
 \note The \c $HOME-dependent configuration files are not implemented 
 currently. Volunteers?
 
+Furthermore there are "intelligent" run-time dependent settings, 
+like turning off colour output when the output is redirected. Their
+priority is just below the command line - so they can always be 
+overridden if necessary.
 
 Example for the commandline:
 \code
@@ -147,18 +151,18 @@ The diff is not done internally in FSVS, but some other program is called,
 to get the highest flexibility.
 
 There are several option values:
-- <tt>diff_prg</tt>: The executable name, default "<tt>diff</tt>".
-- <tt>diff_opt</tt>: The default options, default "<tt>-pu</tt>".
+- <tt>diff_prg</tt>: The executable name, default <tt>"diff"</tt>.
+- <tt>diff_opt</tt>: The default options, default <tt>"-pu"</tt>.
 - <tt>diff_extra</tt>: Extra options, no default.
 
 The call is done as
 \code
-	$diff_prg $diff_opt $file1 --label "$label1" $file2 --label "$label2" $diff_extra
+	$ diff_prg $diff_opt $file1 --label "$label1" $file2 --label "$label2" diff_extra
 \endcode
 
 \note In \c diff_opt you should use only use command line flags without 
 parameters; in \c diff_extra you can encode a single flag with parameter 
-(like "<tt>-U5</tt>").
+(like <tt>"-U5"</tt>).
 If you need more flexibility, write a shell script and pass its name as \c 
 diff_prg.
 
@@ -181,14 +185,22 @@ The default value is \c auto.
 
 \section o_filter Filtering entries
 
-Please see the command line parameter \ref glob_opt_filter, which is 
-identical.
+Please see the command line parameter for \ref glob_opt_filter "-f", which 
+is identical.
+
+\code
+	fsvs -o filter=mtime
+\endcode
 
 
 \section o_warnings Setting warning behaviour
 
-Please see the command line parameter \ref glob_opt_warnings, which is 
+Please see the command line parameter \ref glob_opt_warnings "-W", which is 
 identical.
+
+\code
+	fsvs -o warning=diff-status=ignore
+\endcode
 
 
 \section o_softroot Using an alternate root directory
@@ -220,7 +232,7 @@ So how does this work?
 	generated names match the situation after rebooting.
 
 Previously you'd have to \ref export your data back to the filesystem and 
-call \ref urls "<tt>fsvs urls</tt>" and \c fsvs \ref sync-repos 
+call \ref urls <tt>"fsvs urls"</tt> and \c fsvs \ref sync-repos 
 "sync-repos" again, to get the WAA data back.
 
 \note A plain \c chroot() would not work, as some needed programs (eg. 
@@ -291,7 +303,7 @@ example:
 
 \section o_debug_output Destination for debug output
 
-See \ref glob_opt_deb.
+See \ref glob_opt_deb "-d".
 
 */
 // vi: filetype=doxygen spell spelllang=en_us formatoptions+=ta : 

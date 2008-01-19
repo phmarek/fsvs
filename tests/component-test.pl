@@ -9,7 +9,7 @@ $|=1;
 $pid = open2(RDR, WTR, 'gdb ' . $ENV{"BINdflt"} . ' 2>&1');
 $gdb_prompt_delimiter = "GDB-delim-$$-" . time;
 
-$ign=Exch("set prompt $gdb_prompt_delimiter\\n");
+$ign=Exch("set pagination off\nset prompt $gdb_prompt_delimiter\\n");
 
 $match="";
 $err=0;

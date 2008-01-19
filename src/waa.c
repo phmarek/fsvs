@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -343,6 +343,7 @@ int waa__get_waa_directory(char *path,
 	int status, len, plen, wdlen;
 	char *cp;
 	unsigned char digest[APR_MD5_DIGESTSIZE], *p2dig;
+	const char root[]= { PATH_SEPARATOR, 0};
 
 	status=0;
 	cp=NULL;
@@ -386,6 +387,10 @@ int waa__get_waa_directory(char *path,
 		/* We need to be sure that the path starts with a PATH_SEPARATOR.
 		 * That is achieved in waa__init(); the softroot path gets normalized 
 		 * there. */
+		/* In case both the argument and the softroot are identical, 
+		 * we end up with *path==0. Change that to the root directory. */
+		if (!*path)
+			path=(char*)root;
 
 		plen=strlen(path);
 	}
@@ -1267,17 +1272,23 @@ ex:
 
 
 /** Checks for new entries in this directory, and updates the
- * directory information. */
+ * directory information. 
+ *
+ * Gets called after all \b expected (known) entries of this directory have 
+ * been (shallowly!) read - so subdirectories might not yet be up-to-date 
+ * yet.
+ *
+ * The estat::do_this_entry and estat::do_tree flags are set, and depending 
+ * on them (and opt_recursive) estat::entry_status is set.
+ * */
 int waa__update_dir(struct estat *old, char *path)
 {
 	int dir_hdl, status;
-	struct estat current, *sts;
-	int i_old, i_cur, nr_cur, ignore;
-	int string_space;
-	struct estat tmp;
+	struct estat current;
+	int nr_new, i;
 
 
-	status=nr_cur=0;
+	status=nr_new=0;
 	dir_hdl=-1;
 
 	current=*old;
@@ -1304,135 +1315,94 @@ int waa__update_dir(struct estat *old, char *path)
 	/* No entries means no new entries; but not old entries deleted! */
 	if (current.entry_count == 0) goto ex;
 
-	/* Get a sorted list from the old entry, so we can compare */
-	STOPIF( dir__sortbyname(old), NULL);
 
-
-	/* Now go through the lists.
+	/* Now the directories get compared.
 	 * Every element found in old will be dropped from current;
-	 * only elements left behind in current are new. 
+	 * only new elements are added to old, by temporarily using 
+	 * current.by_inode.
 	 *
-	 * But instead of moving memory around (the pointers), we put the 
-	 * *unequal* elements in front of the list. 
+	 * Example:
 	 *
-	 * The elements we don't want (we already have them, or they are ignored) 
-	 * are left at the end of the list - to be freed after the loop. 
+	 * Old has these elements.
+	 *    b   c   e   g   h
 	 *
-	 * Before the loop:
+	 * current gets these entries in by_name before the correlation
+	 * (by_inode has just another order):
 	 *    A   b   c   D   e   F   g   h   NULL
 	 * Now we need A, D, and F.
 	 * 
-	 * We see that we don't need b; so when the next element D is taken, it 
-	 * is exchanged with the first to-be-discarded:
-	 *    A   D   c   b   e   F   g   h   NULL
-	 * c and F get swapped, too.
+	 * After the loop current has:
+	 *   by_inode   A   D   F
+	 *   by_name    NULL   b   c   NULL   e   NULL   g   h   NULL
+	 * with nr_new=3.
 	 *
-	 * So after the loop we have
-	 *    A   D   F   b   e   c   g   h   NULL
-	 *                ^
-	 * with     nr_cur=3
 	 * */
-	i_cur=i_old=0;
-	nr_cur=0;
-	string_space=0;
-	while (1)
+	int new_entry(struct estat *sts, struct estat **sts_p)
 	{
-		status=(i_cur >= current.entry_count ? 2 : 0) |
-			(i_old >= old->entry_count ? 1 : 0);
-		DEBUGP("update_dir: loop %d %d = %d", i_cur, i_old, status);
+		int status;
+		int ignore;
+		struct estat tmp;
 
-		/* Current list (and maybe old, too) finished. 
-		 * No further new entries. */
-		if (status >= 2) break; 
-
-		sts=current.by_name[i_cur];
-
-		/* If both lists have elements left ... */
-		if (!status)
-		{
-			status=dir___f_sort_by_name(
-					old->by_name+i_old, &sts);
-			DEBUGP("comparing %s, %s = %d",
-					old->by_name[i_old]->name,
-					sts->name,
-					status);
-		}
-
-
-		if (status == 0)
-		{
-			/* Identical. Ignore. */
-			i_cur++;
-			i_old++;
-		}
-		else if (status > 0)
-		{
-			/* the "old" name is bigger, ie. this one does 
-			 * not exist in old. => new entry. */
-			STOPIF( ign__is_ignore(sts, &ignore), NULL);
-			if (ignore>0)
-				DEBUGP("ignoring entry %s", sts->name);
-			else
-			{
-				sts->parent=old;
-
-				/* Swap elements */
-				if (nr_cur != i_cur)
-				{
-					current.by_name[i_cur]=current.by_name[nr_cur];
-					current.by_name[nr_cur]=sts;
-				}
-
-				nr_cur++;
-				DEBUGP("found a new one!");
-				sts->entry_status=FS_NEW;
-				STOPIF( ac__dispatch(sts, NULL), NULL);
-				approx_entry_count++;
-
-				STOPIF( ops__set_to_handle_bits(sts), NULL);
-
-				/* if it's a directory, add all subentries, too. */
-				/* Use the temporary variable to see whether child-entries are 
-				 * interesting to us. */
-				tmp.parent=sts;
-				tmp.do_full_child=tmp.do_full=0;
-				STOPIF( ops__set_to_handle_bits(&tmp), NULL);
-				if (S_ISDIR(sts->st.mode) && tmp.do_full_child)
-				{
-					STOPIF_CODE_ERR( chdir(sts->name) == -1, errno,
-							"chdir(%s)", sts->name);
-
-					STOPIF( waa__build_tree(sts), NULL);
-
-					STOPIF_CODE_ERR( chdir("..") == -1, errno,
-							"parent went away");
-				}
-
-			}
-
-			i_cur++;
-		}
+		STOPIF( ign__is_ignore(sts, &ignore), NULL);
+		if (ignore>0)
+			DEBUGP("ignoring entry %s", sts->name);
 		else
 		{
-			/* Deleted entry. Simply ignore, will be found later or
-			 * has already been found. */
-			i_old++;
+			sts->parent=old;
+
+			*sts_p=NULL;
+			current.by_inode[nr_new]=sts;
+			nr_new++;
+
+			DEBUGP("found a new one!");
+			sts->entry_status=FS_NEW;
+			STOPIF( ac__dispatch(sts, NULL), NULL);
+			approx_entry_count++;
+
+			STOPIF( ops__set_to_handle_bits(sts), NULL);
+
+			/* if it's a directory, add all subentries, too. */
+			/* Use the temporary variable to see whether child-entries are 
+			 * interesting to us. */
+			tmp.parent=sts;
+			tmp.do_this_entry=tmp.do_tree=0;
+			STOPIF( ops__set_to_handle_bits(&tmp), NULL);
+			if (S_ISDIR(sts->st.mode) && tmp.do_this_entry)
+			{
+				STOPIF_CODE_ERR( chdir(sts->name) == -1, errno,
+						"chdir(%s)", sts->name);
+
+				STOPIF( waa__build_tree(sts), NULL);
+
+				STOPIF_CODE_ERR( chdir("..") == -1, errno,
+						"parent went away");
+			}
+
 		}
+
+ex:
+		return status;
 	}
 
-	DEBUGP("%d new entries", nr_cur);
+	nr_new=0;
+	STOPIF( ops__correlate_dirs( old, &current, 
+				NULL, NULL, new_entry, NULL), NULL);
+
+
+	DEBUGP("%d new entries", nr_new);
 	/* no new entries ?*/
 	status=0;
-	if (nr_cur)
+	if (nr_new)
 	{
-		STOPIF( ops__new_entries(old, nr_cur, current.by_name), 
-				"adding %d new entries", nr_cur);
+		STOPIF( ops__new_entries(old, nr_new, current.by_inode), 
+				"adding %d new entries", nr_new);
 	}
 
 	/* Free unused struct estats. */
 	/* We use by_name - there the pointers are sorted by usage. */
-	for(i_cur=nr_cur; i_cur < current.entry_count; i_cur++)
-		STOPIF( ops__free_entry( current.by_name+i_cur ), NULL);
+	for(i=0; i < current.entry_count; i++)
+		if (current.by_name[i] )
+			STOPIF( ops__free_entry( current.by_name+i ), NULL);
 
 	/* Current is allocated on the stack, so we don't free it. */
 	IF_FREE(current.by_inode);
@@ -1449,20 +1419,20 @@ ex:
 	old->entry_status &= ~FS_LIKELY;
 
 	/* If we find a new entry, we know that this directory has changed. */
-	if (nr_cur)
+	if (nr_new)
 		old->entry_status |= FS_CHANGED | FS_CHILD_CHANGED;
 
 
 	if (dir_hdl!=-1) 
 	{
-		i_cur=fchdir(dir_hdl);
-		STOPIF_CODE_ERR(i_cur == -1 && !status, errno,
+		i=fchdir(dir_hdl);
+		STOPIF_CODE_ERR(i == -1 && !status, errno,
 				"cannot fchdir() back");
-		i_cur=close(dir_hdl);
-		STOPIF_CODE_ERR(i_cur == -1 && !status, errno,
+		i=close(dir_hdl);
+		STOPIF_CODE_ERR(i == -1 && !status, errno,
 				"cannot close dirhandle");
 	}
-	DEBUGP("update_dir reports %d new found, status %d", nr_cur, status);
+	DEBUGP("update_dir reports %d new found, status %d", nr_new, status);
 	return status;
 }
 
@@ -1718,7 +1688,7 @@ inline int waa___check_dir_for_update(struct estat *sts, char *fullpath)
 
 	status=0;
 
-	if (!sts->do_full_child) goto ex;
+	if (!sts->do_this_entry) goto ex;
 
 	/* If we have only do_a_child set, we don't update the directory - 
 	 * so the changes will be found on the next commit. */
@@ -1746,7 +1716,8 @@ inline int waa___check_dir_for_update(struct estat *sts, char *fullpath)
 
 	/* Whether to do something with this directory or not shall not be 
 	 * decided here. Just pass it on. */
-	STOPIF( ac__dispatch(sts, fullpath), NULL);
+	/* The path may not be valid here anymore. */
+	STOPIF( ac__dispatch(sts, NULL), NULL);
 
 ex:
 	return status;
@@ -1783,11 +1754,11 @@ int waa__update_tree(struct estat *root,
 	char *fullpath;
 
 
-	if (! (root->do_full || root->do_a_child) )
+	if (! (root->do_tree || root->do_a_child) )
 	{
 		/* If neither is set, waa__partial_update() wasn't called, so
 		 * we start from the root. */
-		root->do_full=root->do_full_child=1;
+		root->do_tree=root->do_this_entry=1;
 		DEBUGP("Full tree update");
 	}
 
@@ -1819,12 +1790,12 @@ int waa__update_tree(struct estat *root,
 			}
 		}
 
-		if (!(sts->do_full_child || sts->do_a_child))
+		if (!(sts->do_this_entry || sts->do_a_child))
 			goto next;
 
 
 		STOPIF( ops__build_path(&fullpath, sts), NULL);
-		if (sts->do_full_child)
+		if (sts->do_this_entry)
 			STOPIF( ops__update_single_entry(sts, fullpath), NULL);
 
 		/* If this entry is removed, the parent has changed. */
@@ -1879,7 +1850,7 @@ next:
 
 			/* If we did the last child of a directory ... */
 			if (sts->parent->child_index >= sts->parent->entry_count 
-					&& sts->parent->do_full_child)
+					&& sts->parent->do_this_entry)
 			{
 				DEBUGP("checking parent %s/%s", sts->parent->name, sts->name);
 				/* Check the parent for added entries. 
@@ -1895,7 +1866,7 @@ next_noparent:
 		/* If this is a normal entry, we print it now.
 		 * Directories are shown after all child nodes have been checked. */
 		if ((sts->entry_status & FS_REMOVED) || 
-				(sts->do_full_child && !S_ISDIR(sts->st.mode)))
+				(sts->do_this_entry && !S_ISDIR(sts->st.mode)))
 			STOPIF( ac__dispatch(sts, NULL), NULL);
 
 		/* How is a "continue" block from perl named in C??  TODO */
@@ -2029,6 +2000,7 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 	char *cp, *confname;
 	char *paths[argc], *space, *base_copy;
 	char **norm;
+	char *nullp[2];
 
 
 	status=0;
@@ -2041,7 +2013,9 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 	if (argc == 0)
 	{
 		argc=1;
-		*args=start_path;
+		nullp[0]=start_path;
+		nullp[1]=NULL;
+		args=nullp;
 		DEBUGP("faked a single parameter to %s", *args);
 	}
 
@@ -2264,7 +2238,8 @@ ex:
 	else 
 	{
 		/* No problems, return pointers. */
-		*normalized=norm;
+		if (normalized)
+			*normalized=norm;
 	}
 
 	return status;
@@ -2331,7 +2306,7 @@ int waa__partial_update(struct estat *root,
 		 * they'd get wrong information. */
 
 		/* This is marked as full, parents as "look below". */
-		sts->do_full=sts->do_full_child=1;
+		sts->do_tree=sts->do_this_entry=1;
 		while (sts)
 		{
 			sts->do_a_child = 1;
@@ -2422,6 +2397,8 @@ int waa__do_sorted_tree(struct estat *root, action_t handler)
 	struct estat **list, *sts;
 
 
+  status=0;
+
 	if ( !root->by_name)
 		STOPIF( dir__sortbyname(root), NULL);
 
@@ -2431,10 +2408,10 @@ int waa__do_sorted_tree(struct estat *root, action_t handler)
 	list=root->by_name;
 	while ( (sts=*list) )
 	{
-		if (sts->do_full_child)
+		if (sts->do_this_entry)
 			STOPIF( handler(sts, NULL), NULL);
 
-		if (sts->do_full && sts->entry_type==FT_DIR)
+		if (sts->do_tree && sts->entry_type==FT_DIR)
 			STOPIF( waa__do_sorted_tree(sts, handler), NULL);
 		list++;
 	}
@@ -2478,3 +2455,80 @@ int waa__dir_enum(struct estat *this,
 ex:
 	return status;
 }
+
+
+/** -.
+ *
+ * \a dest must already exist; its name is \b not overwritten, as it is 
+ * (usually) different for the copy base entry.
+ *
+ * Existing entries of \a dest are not replaced or deleted;
+ * other entries are appended, with a status of \c FS_REMOVED. 
+ *
+ * This works for both directory and non-directory entries. */
+int waa__copy_entries(struct estat *src, struct estat *dest)
+{
+	int status;
+	struct estat *newdata, **to_append, **tmp;
+	int append_count, left, space;
+
+
+	to_append=NULL;
+	status=0;
+
+	if (!S_ISDIR(src->st.mode))
+	{
+		ops__copy_single_entry(src, dest);
+		goto ex;
+	}
+
+
+	append_count=0;
+	to_append=calloc(src->entry_count+1, sizeof(src->by_name[0]));
+	STOPIF_ENOMEM(!to_append);
+
+	int remember_to_copy(struct estat *sts, struct estat **sts_p)
+	{
+		to_append[append_count]=sts;
+		append_count++;
+		return 0;
+	}
+
+	STOPIF( ops__correlate_dirs( src, dest, 
+				remember_to_copy, 
+				waa__copy_entries, 
+				NULL, NULL), NULL);
+
+	/* Now we know how many new entries there are. */
+
+
+	/* Now the data in to_append gets switched from old entry to newly 
+	 * allocated entry; we count in reverse direction, to know how many 
+	 * entries are left and must be allocated.  */
+	/* We re-use the name string. */
+	space=0;
+	for( tmp=to_append, left=append_count; left>0; left--, tmp++)
+	{
+		if (space)
+			newdata++;
+		else
+			STOPIF( ops__allocate( left, &newdata, &space), NULL);
+
+		newdata->parent=dest;
+		newdata->name=(*tmp)->name;
+		/* Copy old data, and change what's needed. */
+		STOPIF( waa__copy_entries(*tmp, newdata), NULL);
+
+		/* Remember new address. */
+		(*tmp) = newdata;
+	}
+
+	STOPIF( ops__new_entries(dest, append_count, to_append), NULL);
+
+
+ex:
+	IF_FREE(to_append);
+	return status;
+}
+
+

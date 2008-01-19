@@ -76,7 +76,7 @@
 	Now you have to say what should be ignored - that'll differ depending on 
 	your needs/wishes.
 	\code
-		 fsvs ignore ./ **~ ./ **.tmp ./ **.bak
+		 fsvs ignore ./§**~ ./§**.tmp ./§**.bak
 		 fsvs ignore ./proc/ ./sys/ ./tmp/
 		 fsvs ignore ./var/tmp/ ./var/spool/lpd/
 		 fsvs ignore ./var/log/*.gz
@@ -154,7 +154,7 @@
 		$ fsvs checkout -o softroot=/mnt
 	\endcode
 
-	If somebody asks really nice I'd possible even create a \c recovery 
+	If somebody asks really nice I'd possibly even create a \c recovery 
 	command that deduces the \c softroot parameter from the current working 
 	directory.
 

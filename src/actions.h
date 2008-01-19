@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -33,6 +33,7 @@ action_t ac__dispatch;
 work_t ac__Usage;
 /** For convenience: general help, and help for the current action. */
 #define ac__Usage_dflt() do { ac__Usage(NULL, 0, NULL); } while (0)
+/** Print help for the current action. */
 #define ac__Usage_this() do { ac__Usage(NULL, 1, (char**)action->name); } while (0)
 
 
@@ -88,13 +89,19 @@ struct actionlist_t
 };
 
 
-/** Find the action structure by name */
+/** Find the action structure by name.
+ *
+ * Returns in \c * \a action_p the action matching (a prefix of) \a cmd.
+ * */
 int act__find_action_by_name(const char *cmd, 
 		struct actionlist_t **action_p);
 
 
+/** Array of all known actions. */
 extern struct actionlist_t action_list[];
+/** Gets set to the \e current action after commandline parsing. */
 extern struct actionlist_t *action;
+/** How many actions we know. */
 extern const int action_list_count;
 
 

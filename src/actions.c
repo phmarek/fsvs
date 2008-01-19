@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -21,8 +21,9 @@
  * Common functions for action (name) handling. */
 
 
-/** This wrapper-callback for the current action callback calculates 
- * the \a path and fills in the \c entry_type, if necessary. */
+/** This wrapper-callback for the current action callback calculates the \a 
+ * path and fills in the \c entry_type for the current \a sts, if 
+ * necessary.  */
 int ac__dispatch(struct estat *sts, char *path)
 {
 	int status;

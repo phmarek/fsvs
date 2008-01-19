@@ -65,13 +65,29 @@ $BINq ps fsvs:update-pipe "$decoder" $filename
 
 
 $BINq ci -m "some entries"
-$BINq st
+if [[ `$BINdflt st` == "" ]]
+then
+  $SUCCESS "No status after commit"
+else
+  $ERROR "Status after commit?"
+fi
+sleep 1
+
+for f in empty-file tree tree/b tree/c/2 tree/a/3/file-x
+do
+	if ! $BINdflt info $f | egrep 'Revision:[[:space:]]+4$' > /dev/null
+	then
+		$ERROR "Wrong revision number on '$f'"
+	fi
+done
 
 echo new file > newfile1
 echo new file > newfile2
 $BINq ci -m "newfile"
+sleep 1
 rm newfile2
 $BINq ci -m "rm newfile"
+sleep 1
 
 cat long_name_dir/chars > copied
 $BINq cp long_name_dir/chars copied

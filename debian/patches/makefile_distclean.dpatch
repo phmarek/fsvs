@@ -6,8 +6,8 @@
 
 @DPATCH@
 
---- fsvs-1.1.11.orig/Makefile
-+++ fsvs-1.1.11/Makefile
+--- fsvs-1.1.12.orig/Makefile
++++ fsvs-1.1.12/Makefile
 @@ -16,3 +16,8 @@
  configure:	configure.in
  	@echo Generating configure.

@@ -1,3 +1,13 @@
+fsvs (1.1.12-1) unstable; urgency=low
+
+  * New upstream release
+  * Add vendor fix for tree copies, accidentally ommitted from release
+  * Tidy up and use upstream's manpage.
+  * Updated copyright (now licensed under GPL-3)
+  * Updated Standards-Version to 3.7.3 (no changes required)
+
+ -- Sheldon Hearn <sheldonh@starjuice.net>  Sat, 19 Jan 2008 11:49:43 +0200
+
 fsvs (1.1.11-2) unstable; urgency=low
 
   * Fix typo in package description (Closes: #458994)

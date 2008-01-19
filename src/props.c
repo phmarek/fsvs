@@ -2,7 +2,7 @@
  * Copyright (C) 2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -315,69 +315,7 @@ char propname_mtime[]=SVN_PROP_TEXT_TIME,
 		 propval_orig_md5  []=FSVS_PROP_ORIG_MD5;
 /** @} */
 
-
 /* \todo check for existance of entries we'd like to store entries for */
-
-
-/** -.
- *
- * We cannot use temporary files, as we have to be able to append 
- * properties; but we hope that the db layer gives some sort of atomicity.
- *
- * \a flags should have the usual values - O_CREAT, O_RDWR, ...
- * \a name has the name the file should have in the WAA.
- *
- * \c ENOENT is returned silently; other errors are printed. */
-int prp__db_open_byname(char *wcfile, int flags, char *name, 
-		hash_t *db)
-{
-	int status;
-	char *cp, *eos;
-	int gdbflags;
-
-
-	STOPIF( waa__get_waa_directory(wcfile, &cp, &eos, NULL,
-				( (flags & (O_RDWR | O_CREAT | O_TRUNC)) ? GWD_MKDIR : 0)  
-				| waa__get_gwd_flag(name)), NULL);
-	strcpy(eos, name);
-
-#if 0
-	if (remove)
-	{
-		status=unlink(cp) == -1 ? errno : 0;
-		if (status == ENOENT)
-			DEBUGP("%s didn't exist", cp);
-		else
-			STOPIF(status, "Cannot remove %s", cp);
-	}
-#endif
-	if (flags & O_TRUNC) 
-	{
-		gdbflags=GDBM_NEWDB;
-		/* libgdbm3=1.8.3-3 has a bug - with GDBM_NEWDB an existing database is 
-		 * not truncated. Only the O_CREAT, not the O_TRUNC flag is used.
-		 * debian #447981. */
-		/** STOPIF_CODE_ERR\todo remove this bugfix sometime ... */
-		/* No error, and ENOENT are both ok. */
-		STOPIF_CODE_ERR( (unlink(cp) == -1) && (errno != ENOENT), errno,
-				"Removing database file '%s'", cp);
-		status=0;
-	}
-	else if (flags & O_CREAT) gdbflags=GDBM_WRCREAT;
-	else if (flags & (O_WRONLY | O_RDWR)) gdbflags=GDBM_WRITER;
-	else gdbflags=GDBM_READER;
-
-	*db = gdbm_open(cp, 0, gdbflags, 0777, NULL);
-	if (!*db)
-	{
-		status=errno;
-		if (status != ENOENT)
-			STOPIF(status, "Cannot open database file %s", cp);
-	}
-
-ex:
-	return status;
-}
 
 
 /** -.
@@ -540,7 +478,7 @@ int prp__set_from_aprhash(struct estat *sts,
 	{
 		DEBUGP("%d properties stored", count);
 		BUG_ON(! (db && count) );
-		STOPIF( hsh__close(db), NULL);
+		STOPIF( hsh__close(db, status), NULL);
 	}
 
 ex:
@@ -552,7 +490,7 @@ ex:
  * */
 int prp__g_work(struct estat *root, int argc, char *argv[])
 {
-	int status;
+	int status, st2;
 	datum key, value;
 	hash_t db;
 	FILE *output;
@@ -576,7 +514,7 @@ int prp__g_work(struct estat *root, int argc, char *argv[])
 	{
 		STOPIF( prp__open_byname( *normalized, GDBM_WRCREAT, &db), NULL);
 
-		value=gdbm_fetch(db, key);
+		STOPIF( hsh__fetch(db, key, &value), NULL);
 		if (value.dptr)
 		{
 			status=fputs(value.dptr, output);
@@ -584,12 +522,20 @@ int prp__g_work(struct estat *root, int argc, char *argv[])
 			if (status <0) break;
 		}
 
-		STOPIF( hsh__close(db), NULL);
+		STOPIF( hsh__close(db, status), NULL);
+		db=NULL;
 	}
 
 	status=0;
 
 ex:
+	if (db)
+	{
+		st2=hsh__close(db, status);
+		db=NULL;
+		if (!status && st2)
+			STOPIF( st2, NULL);
+	}
 	return status;
 }
 
@@ -600,7 +546,7 @@ ex:
  * */
 int prp__s_work(struct estat *root, int argc, char *argv[])
 {
-	int status;
+	int status, st2;
 	datum key, value, rv;
 	hash_t db;
 	char **normalized;
@@ -686,12 +632,20 @@ int prp__s_work(struct estat *root, int argc, char *argv[])
 			sts->flags |= RF_PUSHPROPS;
 		}
 
-		STOPIF( hsh__close(db), NULL);
+		STOPIF( hsh__close(db, status), NULL);
+		db=NULL;
 	}
 
 	STOPIF( waa__output_tree(root), NULL);
 
 ex:
+if (db)
+	{
+		st2=hsh__close(db, status);
+		db=NULL;
+		if (!status && st2)
+			STOPIF( st2, NULL);
+	}
 	return status;
 }
 
@@ -747,7 +701,7 @@ int prp__l_work(struct estat *root, int argc, char *argv[])
 
 			if (opt_verbose>0)
 			{
-				data=gdbm_fetch(db, key);
+				STOPIF( hsh__fetch(db, key, &data), NULL);
 
 				fputc('=',output);
 				i|=hlp__safe_print(output, data.dptr, data.dsize-1);
@@ -757,8 +711,7 @@ int prp__l_work(struct estat *root, int argc, char *argv[])
 
 			fputc('\n', output);
 
-			free(key.dptr);
-			status=prp__next(db, &key, key);
+			status=prp__next(db, &key, &key);
 
 			/* SIGPIPE or similar? */
 			if (i<0) break;
@@ -773,10 +726,12 @@ noprops:
 		}
 
 
-		STOPIF( hsh__close(db), NULL);
+		STOPIF( hsh__close(db, status), NULL);
+		db=NULL;
 	}
 
 ex:
+	hsh__close(db, status);
 	return status;
 }
 

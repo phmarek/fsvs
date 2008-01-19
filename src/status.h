@@ -2,7 +2,7 @@
  * Copyright (C) 2005-2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -28,7 +28,7 @@ action_t st__progress;
 action_uninit_t st__progress_uninit;
 
 /** Shows detailed information about the entry. */
-int st__print_entry_info(const struct estat *const sts, int with_type);
+int st__print_entry_info(struct estat *sts, int with_type);
 
 /** Returns a string describing the \a entry_status bits of struct \a 
  * estat. */

@@ -1,115 +1,127 @@
+# :-) vim (-:
+# :4,$g/</exec "normal C   X" line(".") ""
+# :g/^[-=]/normal dd
+
 {
-   sup1
+   X 2 
    Memcheck:Cond
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   fun:_dl_open
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+}
+{
+   X 11 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+}
+{
+   X 20 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+}
+{
+   X 29 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+}
+{
+   X 38 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+}
+{
+   X 47 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+}
+{
+   X 56 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/libc-2.7.so
+   obj:/lib/ld-2.7.so
    fun:__libc_dlopen_mode
    fun:__nss_lookup_function
-   obj:/lib/tls/libc-2.3.6.so
+   obj:/lib/libc-2.7.so
    fun:__nss_passwd_lookup
    fun:getpwuid_r
    fun:apr_uid_name_get
 }
 {
-   sup2
+   X 72 
    Memcheck:Cond
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   fun:_dl_open
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/libc-2.7.so
+   obj:/lib/ld-2.7.so
    fun:__libc_dlopen_mode
    fun:__nss_lookup_function
-   obj:/lib/tls/libc-2.3.6.so
+   obj:/lib/libc-2.7.so
    fun:__nss_passwd_lookup
+   fun:getpwuid_r
+   fun:apr_uid_name_get
 }
 {
-   sup3
+   X 88 
    Memcheck:Addr4
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   fun:_dl_open
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/libc-2.7.so
+   obj:/lib/ld-2.7.so
    fun:__libc_dlopen_mode
    fun:__nss_lookup_function
-   obj:/lib/tls/libnss_compat-2.3.6.so
+   obj:/lib/libnss_compat-2.7.so
    fun:_nss_compat_getpwuid_r
 }
 {
-   sup4
+   X 104 
    Memcheck:Addr4
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
-   fun:_dl_open
-   obj:/lib/tls/libc-2.3.6.so
-   obj:/lib/ld-2.3.6.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/libc-2.7.so
+   obj:/lib/ld-2.7.so
    fun:__libc_dlopen_mode
 }
 {
-	 freelist
-   Memcheck:Addr4
-   fun:ops___freelist_check
-   fun:ops__free_entry
-   fun:waa__update_dir
-   fun:waa___check_dir_for_update
-   fun:waa__update_tree
-   fun:waa__partial_update
-   fun:waa__read_or_build_tree
-   fun:st__work
-   fun:main
-}
-{
-   dlopen
-   Memcheck:Addr4
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/libc-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   fun:__libc_dlopen_mode
-   fun:__nss_lookup_function
-   obj:/lib/libnss_compat-2.6.1.so
-   fun:_nss_compat_getpwuid_r
-}
-{
-   dlopen2
-   Memcheck:Addr4
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/libc-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   fun:__libc_dlopen_mode
-}
-
-{
-   <insert a suppression name here>
+   X 120 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -125,7 +137,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 136 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -141,7 +153,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 152 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -157,7 +169,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 168 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -173,7 +185,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 184 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -189,7 +201,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 200 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -205,7 +217,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 216 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -221,7 +233,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 232 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -237,7 +249,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 248 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -253,7 +265,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 264 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -269,7 +281,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 280 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -285,7 +297,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 296 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -301,7 +313,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 312 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -317,7 +329,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 328 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -333,7 +345,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 344 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -349,7 +361,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 360 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    obj:/usr/lib/libz.so.1.2.3.3
@@ -365,7 +377,7 @@
    obj:/usr/lib/libsvn_fs_fs-1.so.1.0.0
 }
 {
-   <insert a suppression name here>
+   X 376 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -381,7 +393,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 392 
    Memcheck:Param
    write(buf)
    fun:write
@@ -398,7 +410,7 @@
    obj:/usr/lib/libsvn_fs_fs-1.so.1.0.0
 }
 {
-   <insert a suppression name here>
+   X 409 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -414,7 +426,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 425 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -430,7 +442,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 441 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -446,7 +458,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   <insert a suppression name here>
+   X 457 
    Memcheck:Param
    write(buf)
    fun:write
@@ -462,20 +474,52 @@
    fun:ci__nondir
    fun:ci__directory
 }
-
 {
-   <insert a suppression name here>
-   Memcheck:Addr4
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/ld-2.6.1.so
-   obj:/lib/libc-2.6.1.so
-   obj:/lib/ld-2.6.1.so
+   X 478 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/libc-2.7.so
+   obj:/lib/ld-2.7.so
    fun:__libc_dlopen_mode
    fun:__nss_lookup_function
-   obj:/lib/libnss_compat-2.6.1.so
+   obj:/lib/libc-2.7.so
+   fun:__nss_passwd_lookup
+   fun:getpwnam_r
+   obj:/usr/lib/libapr-1.so.0.2.11
+}
+{
+   X 494 
+   Memcheck:Cond
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+   fun:__nss_lookup_function
+   obj:/lib/libc-2.7.so
+   fun:__nss_passwd_lookup
+   fun:getpwnam_r
+   obj:/usr/lib/libapr-1.so.0.2.11
+}
+{
+   X 510 
+   Memcheck:Addr4
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+   fun:__nss_lookup_function
+   obj:/lib/libnss_compat-2.7.so
    fun:_nss_compat_getpwnam_r
 }
+

@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -71,20 +71,46 @@ extern struct waa__entry_blocks_t waa__entry_block;
  *   reconstructed on restore and would only give conflicts with old 
  *   versions.
  *
+ * Generally a path can be of (nearly) arbitrary length, and have every 
+ * character (except \c NUL [\c \\0]) in it.
+ * 
+ * So wherever pathnames or similar things are stored (eg. patterns), they 
+ * are \c NUL -terminated; for addressing specific files the MD5 hash over 
+ * the filename is used. \n
+ * 
+ * The written data sets normally have linefeeds (\c \\n) in them, to ease 
+ * inspection in an editor.
+ * 
+ * Please see waa.c for more details.
  * @{ */
 
 /** \anchor waa_wc \name Per working copy
  * These are stored in a subdirectory of the WAA, named by the MD5-sum of 
  * the WC-path.
  * @{ */
-/** \anchor urls List of URLs. */
+/** \anchor urls List of URLs.
+ * They consist of a header with the number of URLs, followed by the URLs 
+ * themselves; \c NUL -terminated, \c LF -separated.  */
 #define WAA__URLLIST_EXT		"Urls"
 /** \anchor dir List of files/subdirs/devices/symlinks in and below this
  * working copy directory. 
+ *
+ * The filelists remember the last committed state of entries. That 
+ * includes the ctime, mtime, unix-mode (with flags for 
+ * directory/device/symlink/file), MD5 sum, size in bytes, inode, tree 
+ * relation, number of child nodes, user and group, and filename.  The path 
+ * can be recreated from the tree-structure and the filenames.
+ *
+ * The header includes fields such as header version, header length, number 
+ * of entries, needed space for the filenames, and the length of the 
+ * longest path - most of that for memory allocation.
+ * 
  * See also \a waa__output_tree().
- * This file is an small exception - it is stored in \c /etc/fsvs. */
+ * */
 #define WAA__DIR_EXT		"dir"
-/** \anchor ign List of ignored patterns */
+/** \anchor ign List of ignored patterns.
+ * They consist of a header with the number of ignore entries, followed by 
+ * he ignore patterns; \c NUL -terminated, \c LF -separated. */
 #define WAA__IGNORE_EXT		"Ign"
 /** \anchor copy Hash of copyfrom relations.
  * The key is the destination-, the value is the source-path; they are 
@@ -98,8 +124,15 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * subdirectory of the WAA; two subdirectory levels are created below that.  
  *
  * @{ */
-/** \anchor md5s List of MD5s of the manber blocks of a file -
- * for faster change detection on large files.
+/** \anchor md5s List of MD5s of the manber blocks of a file.
+ *
+ * To speed up comparing and committing large files, these files hold a 
+ * list of MD5 hashes for the manber blocks. \n
+ * This way big files don't have to be hashed in full to check whether 
+ * they've changed; and the manber blocks can be used for the delta algorithm.
+ *
+ * Maybe the parameters for manber hashing should be stored there, too - 
+ * currently they're hardcoded.
  *
  * Furthermore in the WAA directory of the working copy we store a 
  * (temporary) file as an index for all entries' MD5 checksums. */
@@ -117,6 +150,16 @@ extern struct waa__entry_blocks_t waa__entry_block;
 #define WAA__FILE_INODE_EXT		"fino"
 /** For directories */
 #define WAA__DIR_INODE_EXT		"dino"
+/** @} */
+
+/** \anchor name
+ * \name Temporary copy/move detection database
+ * Entries are addressed by name.
+ * @{ */
+/** For files */
+#define WAA__FILE_NAME_EXT		"fname"
+/** For directories */
+#define WAA__DIR_NAME_EXT		"dname"
 /** @} */
 
 /** @} */
@@ -247,6 +290,8 @@ int waa__dir_enum(struct estat *this,
 		int est_count,
 		int by_name);
 
+/** Copies all sub-entries of \a src to \a dest. */
+int waa__copy_entries(struct estat *src, struct estat *dest);
 
 /** How many bytes the \ref dir file header has. */
 #define HEADER_LEN (64)

@@ -107,16 +107,25 @@ AC_CHECK_LIB([gdbm], [gdbm_firstkey], [],
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h stddef.h stdlib.h string.h sys/time.h unistd.h pcre.h ])
+AC_CHECK_HEADERS([fcntl.h stddef.h stdlib.h string.h sys/time.h unistd.h pcre.h ],
+		[],
+		[AC_MSG_FAILURE([Needed header file not found.])])
+
 #apr_file_io.h subversion-1/svn_md5.h])
 AC_HEADER_DIRENT
 
 AC_CHECK_MEMBERS([struct stat.st_mtim])
 
-AC_CHECK_HEADERS([valgrind/valgrind.h],
-	[],
-	[AC_MSG_WARN([Sorry, can't find valgrind headers.])])
-AC_SUBST(HAVE_VALGRIND_H)
+AC_COMPILE_IFELSE(
+	[AC_LANG_PROGRAM(
+		[[ #include <valgrind/memcheck.h> ]], 
+		[[ VALGRIND_MAKE_MEM_DEFINED(0, 2); ]] )],
+		[have_valgrind=yes], [have_valgrind=no])
+if test x$have_valgrind = xyes ; then
+	AC_DEFINE(HAVE_VALGRIND, 1, compatible valgrind version found)
+else
+  AC_MSG_NOTICE([No compatible valgrind version.])
+fi
 
 AC_CHECK_HEADERS([linux/kdev_t.h], 
 	[],
@@ -158,7 +167,7 @@ AC_SUBST(HAVE_O_DIRECTORY)
 
 if locale -a > /dev/null 2>&1
 then
-AC_DEFINE([HAVE_LOCALES],[1])
+	AC_DEFINE([HAVE_LOCALES],[1])
 fi
 AC_SUBST(HAVE_LOCALES)
 
@@ -189,8 +198,8 @@ AC_SUBST(ENABLE_RELEASE)
 
 if [[ "$ENABLE_RELEASE$ENABLE_DEBUG" == "11" ]]
 then
-  AC_MSG_ERROR([[--enable-debug and --enable-release are incompatibel.
-  Use one or the other.]])
+	AC_MSG_ERROR([[--enable-debug and --enable-release are incompatibel.
+	Use one or the other.]])
 fi
 
 AC_CHECK_FUNCS([getdents64])
@@ -213,7 +222,7 @@ AC_SUBST(HAS_FASTCALL)
 # Only i386 (32bit) has fastcall.
 if [[ `uname -m` == i?86 ]]
 then
-	 HAS_FASTCALL=1
+	HAS_FASTCALL=1
 fi
 
 AC_TYPE_UINT32_T
@@ -221,7 +230,7 @@ AC_SUBST(HAVE_UINT32_T)
 # See config.h for an explanation.
 if [[ "$ac_cv_c_uint32_t" == "yes" ]]
 then
-  ac_cv_c_uint32_t=uint32_t
+	ac_cv_c_uint32_t=uint32_t
 fi
 AC_DEFINE_UNQUOTED(AC_CV_C_UINT32_T, [$ac_cv_c_uint32_t])
 
@@ -229,7 +238,7 @@ AC_TYPE_UINT64_T
 AC_SUBST(HAVE_UINT64_T)
 if [[ "$ac_cv_c_uint64_t" == "yes" ]]
 then
-  ac_cv_c_uint64_t=uint64_t
+	ac_cv_c_uint64_t=uint64_t
 fi
 AC_DEFINE_UNQUOTED(AC_CV_C_UINT64_T, [$ac_cv_c_uint64_t])
 
@@ -254,4 +263,4 @@ AC_OUTPUT
 # Cause a recompile
 touch src/config.h
 
-# vi: ts=8 sw=8
+# vi: ts=3 sw=3

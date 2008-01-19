@@ -49,6 +49,9 @@ else
 	$ERROR "fsvs log -v doesn't work."
 fi
 
+# Test empty file
+> $file
+$BIN ci -F $file
 
 # Test warning messages
 if ! $BIN -Wunknown-warning-string-346246262=ignore st > $logfile 2>&1
@@ -177,8 +180,13 @@ else
 fi
 
 # make a wc, and retry
-( cd / ; FSVS_CONF=$WC $BINq ignore './*' )
-if FSVS_CONF=$WC $BINdflt status -N -N /sbin /bin > $logfile 2>&1
+( 
+	export FSVS_CONF=$WC FSVS_WAA=$WC 
+	cd / 
+	echo file:/// | $BINq urls load 
+	echo './*' | $BINq ignore load 
+)
+if FSVS_CONF=$WC FSVS_WAA=$WC $BINdflt status -N -N /sbin /bin > $logfile 2>&1
 then
 	if ! grep '^N\.\.\. \+dir \+/s\?bin$' $logfile > $logfile.2
 	then

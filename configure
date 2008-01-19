@@ -662,7 +662,6 @@ OBJEXT
 CPP
 GREP
 EGREP
-HAVE_VALGRIND_H
 ENABLE_DEBUG
 ENABLE_GCOV
 HAVE_O_DIRECTORY
@@ -3843,9 +3842,16 @@ if test `eval echo '${'$as_ac_Header'}'` = yes; then
 #define `echo "HAVE_$ac_header" | $as_tr_cpp` 1
 _ACEOF
 
+else
+  { { echo "$as_me:$LINENO: error: Needed header file not found.
+See \`config.log' for more details." >&5
+echo "$as_me: error: Needed header file not found.
+See \`config.log' for more details." >&2;}
+   { (exit 1); exit 1; }; }
 fi
 
 done
+
 
 #apr_file_io.h subversion-1/svn_md5.h])
 
@@ -4193,31 +4199,20 @@ _ACEOF
 fi
 
 
-
-for ac_header in valgrind/valgrind.h
-do
-as_ac_Header=`echo "ac_cv_header_$ac_header" | $as_tr_sh`
-if { as_var=$as_ac_Header; eval "test \"\${$as_var+set}\" = set"; }; then
-  { echo "$as_me:$LINENO: checking for $ac_header" >&5
-echo $ECHO_N "checking for $ac_header... $ECHO_C" >&6; }
-if { as_var=$as_ac_Header; eval "test \"\${$as_var+set}\" = set"; }; then
-  echo $ECHO_N "(cached) $ECHO_C" >&6
-fi
-ac_res=`eval echo '${'$as_ac_Header'}'`
-	       { echo "$as_me:$LINENO: result: $ac_res" >&5
-echo "${ECHO_T}$ac_res" >&6; }
-else
-  # Is the header compilable?
-{ echo "$as_me:$LINENO: checking $ac_header usability" >&5
-echo $ECHO_N "checking $ac_header usability... $ECHO_C" >&6; }
 cat >conftest.$ac_ext <<_ACEOF
 /* confdefs.h.  */
 _ACEOF
 cat confdefs.h >>conftest.$ac_ext
 cat >>conftest.$ac_ext <<_ACEOF
 /* end confdefs.h.  */
-$ac_includes_default
-#include <$ac_header>
+ #include <valgrind/memcheck.h>
+int
+main ()
+{
+ VALGRIND_MAKE_MEM_DEFINED(0, 2);
+  ;
+  return 0;
+}
 _ACEOF
 rm -f conftest.$ac_objext
 if { (ac_try="$ac_compile"
@@ -4236,112 +4231,25 @@ eval "echo \"\$as_me:$LINENO: $ac_try_echo\"") >&5
 	 test -z "$ac_c_werror_flag" ||
 	 test ! -s conftest.err
        } && test -s conftest.$ac_objext; then
-  ac_header_compiler=yes
+  have_valgrind=yes
 else
   echo "$as_me: failed program was:" >&5
 sed 's/^/| /' conftest.$ac_ext >&5
 
-	ac_header_compiler=no
+	have_valgrind=no
 fi
 
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-{ echo "$as_me:$LINENO: result: $ac_header_compiler" >&5
-echo "${ECHO_T}$ac_header_compiler" >&6; }
+if test x$have_valgrind = xyes ; then
 
-# Is the header present?
-{ echo "$as_me:$LINENO: checking $ac_header presence" >&5
-echo $ECHO_N "checking $ac_header presence... $ECHO_C" >&6; }
-cat >conftest.$ac_ext <<_ACEOF
-/* confdefs.h.  */
-_ACEOF
-cat confdefs.h >>conftest.$ac_ext
-cat >>conftest.$ac_ext <<_ACEOF
-/* end confdefs.h.  */
-#include <$ac_header>
-_ACEOF
-if { (ac_try="$ac_cpp conftest.$ac_ext"
-case "(($ac_try" in
-  *\"* | *\`* | *\\*) ac_try_echo=\$ac_try;;
-  *) ac_try_echo=$ac_try;;
-esac
-eval "echo \"\$as_me:$LINENO: $ac_try_echo\"") >&5
-  (eval "$ac_cpp conftest.$ac_ext") 2>conftest.er1
-  ac_status=$?
-  grep -v '^ *+' conftest.er1 >conftest.err
-  rm -f conftest.er1
-  cat conftest.err >&5
-  echo "$as_me:$LINENO: \$? = $ac_status" >&5
-  (exit $ac_status); } >/dev/null && {
-	 test -z "$ac_c_preproc_warn_flag$ac_c_werror_flag" ||
-	 test ! -s conftest.err
-       }; then
-  ac_header_preproc=yes
-else
-  echo "$as_me: failed program was:" >&5
-sed 's/^/| /' conftest.$ac_ext >&5
-
-  ac_header_preproc=no
-fi
-
-rm -f conftest.err conftest.$ac_ext
-{ echo "$as_me:$LINENO: result: $ac_header_preproc" >&5
-echo "${ECHO_T}$ac_header_preproc" >&6; }
-
-# So?  What about this header?
-case $ac_header_compiler:$ac_header_preproc:$ac_c_preproc_warn_flag in
-  yes:no: )
-    { echo "$as_me:$LINENO: WARNING: $ac_header: accepted by the compiler, rejected by the preprocessor!" >&5
-echo "$as_me: WARNING: $ac_header: accepted by the compiler, rejected by the preprocessor!" >&2;}
-    { echo "$as_me:$LINENO: WARNING: $ac_header: proceeding with the compiler's result" >&5
-echo "$as_me: WARNING: $ac_header: proceeding with the compiler's result" >&2;}
-    ac_header_preproc=yes
-    ;;
-  no:yes:* )
-    { echo "$as_me:$LINENO: WARNING: $ac_header: present but cannot be compiled" >&5
-echo "$as_me: WARNING: $ac_header: present but cannot be compiled" >&2;}
-    { echo "$as_me:$LINENO: WARNING: $ac_header:     check for missing prerequisite headers?" >&5
-echo "$as_me: WARNING: $ac_header:     check for missing prerequisite headers?" >&2;}
-    { echo "$as_me:$LINENO: WARNING: $ac_header: see the Autoconf documentation" >&5
-echo "$as_me: WARNING: $ac_header: see the Autoconf documentation" >&2;}
-    { echo "$as_me:$LINENO: WARNING: $ac_header:     section \"Present But Cannot Be Compiled\"" >&5
-echo "$as_me: WARNING: $ac_header:     section \"Present But Cannot Be Compiled\"" >&2;}
-    { echo "$as_me:$LINENO: WARNING: $ac_header: proceeding with the preprocessor's result" >&5
-echo "$as_me: WARNING: $ac_header: proceeding with the preprocessor's result" >&2;}
-    { echo "$as_me:$LINENO: WARNING: $ac_header: in the future, the compiler will take precedence" >&5
-echo "$as_me: WARNING: $ac_header: in the future, the compiler will take precedence" >&2;}
-    ( cat <<\_ASBOX
-## -------------------------------------- ##
-## Report this to http://fsvs.tigris.org/ ##
-## -------------------------------------- ##
-_ASBOX
-     ) | sed "s/^/$as_me: WARNING:     /" >&2
-    ;;
-esac
-{ echo "$as_me:$LINENO: checking for $ac_header" >&5
-echo $ECHO_N "checking for $ac_header... $ECHO_C" >&6; }
-if { as_var=$as_ac_Header; eval "test \"\${$as_var+set}\" = set"; }; then
-  echo $ECHO_N "(cached) $ECHO_C" >&6
-else
-  eval "$as_ac_Header=\$ac_header_preproc"
-fi
-ac_res=`eval echo '${'$as_ac_Header'}'`
-	       { echo "$as_me:$LINENO: result: $ac_res" >&5
-echo "${ECHO_T}$ac_res" >&6; }
-
-fi
-if test `eval echo '${'$as_ac_Header'}'` = yes; then
-  cat >>confdefs.h <<_ACEOF
-#define `echo "HAVE_$ac_header" | $as_tr_cpp` 1
+cat >>confdefs.h <<\_ACEOF
+#define HAVE_VALGRIND 1
 _ACEOF
 
 else
-  { echo "$as_me:$LINENO: WARNING: Sorry, can't find valgrind headers." >&5
-echo "$as_me: WARNING: Sorry, can't find valgrind headers." >&2;}
+  { echo "$as_me:$LINENO: No compatible valgrind version." >&5
+echo "$as_me: No compatible valgrind version." >&6;}
 fi
-
-done
-
-
 
 
 for ac_header in linux/kdev_t.h
@@ -4582,7 +4490,7 @@ fi
 
 if locale -a > /dev/null 2>&1
 then
-cat >>confdefs.h <<\_ACEOF
+	cat >>confdefs.h <<\_ACEOF
 #define HAVE_LOCALES 1
 _ACEOF
 
@@ -4625,10 +4533,10 @@ fi
 
 if [ "$ENABLE_RELEASE$ENABLE_DEBUG" == "11" ]
 then
-  { { echo "$as_me:$LINENO: error: --enable-debug and --enable-release are incompatibel.
-  Use one or the other." >&5
+	{ { echo "$as_me:$LINENO: error: --enable-debug and --enable-release are incompatibel.
+	Use one or the other." >&5
 echo "$as_me: error: --enable-debug and --enable-release are incompatibel.
-  Use one or the other." >&2;}
+	Use one or the other." >&2;}
    { (exit 1); exit 1; }; }
 fi
 
@@ -5840,7 +5748,7 @@ _ACEOF
 # Only i386 (32bit) has fastcall.
 if [ `uname -m` == i?86 ]
 then
-	 HAS_FASTCALL=1
+	HAS_FASTCALL=1
 fi
 
 
@@ -5923,7 +5831,7 @@ _ACEOF
 # See config.h for an explanation.
 if [ "$ac_cv_c_uint32_t" == "yes" ]
 then
-  ac_cv_c_uint32_t=uint32_t
+	ac_cv_c_uint32_t=uint32_t
 fi
 cat >>confdefs.h <<_ACEOF
 #define AC_CV_C_UINT32_T $ac_cv_c_uint32_t
@@ -6009,7 +5917,7 @@ _ACEOF
 
 if [ "$ac_cv_c_uint64_t" == "yes" ]
 then
-  ac_cv_c_uint64_t=uint64_t
+	ac_cv_c_uint64_t=uint64_t
 fi
 cat >>confdefs.h <<_ACEOF
 #define AC_CV_C_UINT64_T $ac_cv_c_uint64_t
@@ -8843,7 +8751,6 @@ OBJEXT!$OBJEXT$ac_delim
 CPP!$CPP$ac_delim
 GREP!$GREP$ac_delim
 EGREP!$EGREP$ac_delim
-HAVE_VALGRIND_H!$HAVE_VALGRIND_H$ac_delim
 ENABLE_DEBUG!$ENABLE_DEBUG$ac_delim
 ENABLE_GCOV!$ENABLE_GCOV$ac_delim
 HAVE_O_DIRECTORY!$HAVE_O_DIRECTORY$ac_delim
@@ -8857,7 +8764,7 @@ LIBOBJS!$LIBOBJS$ac_delim
 LTLIBOBJS!$LTLIBOBJS$ac_delim
 _ACEOF
 
-  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 59; then
+  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 58; then
     break
   elif $ac_last_try; then
     { { echo "$as_me:$LINENO: error: could not make $CONFIG_STATUS" >&5
@@ -9285,4 +9192,4 @@ fi
 # Cause a recompile
 touch src/config.h
 
-# vi: ts=8 sw=8
+# vi: ts=3 sw=3

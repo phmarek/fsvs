@@ -1,0 +1,86 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+logfile=$LOGDIR/046.detect
+
+cd $WC
+
+for a in `seq 1 50`
+do
+  p=dir-$a/dir1
+  mkdir -p $p
+	echo $WC > $p/wcpath
+	echo $a > $p/other-$a
+done
+
+$BINq ci -m 1
+sleep 1
+
+mkdir dir2
+echo $WC2 > dir2/wcpath
+
+$BINdflt copyfrom-detect > $logfile
+if [[ `wc -l < $logfile` -ne 33 ]]
+then
+  $ERROR "Wrong number of output lines"
+fi
+if [[ `grep name: $logfile | wc -l` -ne 31 ]]
+then
+  $ERROR "Filename didn't match?"
+fi
+if egrep -q '^  \.\.\.$' $logfile
+then
+  $SUCCESS "'Too many matches' found"
+else
+  $ERROR "'too many' indication missing"
+fi
+
+
+$PREPARE_DEFAULT > /dev/null
+cd $WC
+cp -r tree tree-2
+cp -r tree/a tree-a
+cp -r tree/a/1 tree-a-1
+$BINdflt copyfrom-detect -v > $logfile
+
+function MatchBlock
+{
+	dest=$1
+	shift
+
+  if not_found=`perl -e '
+	$dest=shift;
+	while (<STDIN>)
+	{
+		s#\s+$##;
+		$inblk=1,next if $_ eq $dest;
+		last if $inblk && m#^\S#;
+
+		s#^\s+##,push(@block,$_) if $inblk;
+	}
+	for $q (grep(/\w/,@ARGV))
+	{
+	  if (!grep($q eq $_, @block))
+		{
+			print $q,"\n";
+			exit 1;
+		}
+	}
+	exit 0;
+	' "$dest" "$@" < $logfile`
+	then
+	  $SUCCESS "$dest matched"
+	else
+	  $ERROR "$dest didn't have '$not_found'"
+	fi
+}
+
+MatchBlock tree-2 "dirlist=100.0%:tree"
+MatchBlock tree-2/c "name,dirlist=100.0%:tree/c" "dirlist=100.0%:tree/a" "dirlist=100.0%:tree/b"
+MatchBlock tree-2/c/3 "name,dirlist=100.0%:tree/a/3" "name,dirlist=100.0%:tree/b/3" "name,dirlist=100.0%:tree/c/3" "dirlist=100.0%:tree/b/1" "dirlist=100.0%:tree/a/1" 
+MatchBlock tree-2/a "name,dirlist=100.0%:tree/a" "dirlist=100.0%:tree/c" "dirlist=100.0%:tree/b"
+MatchBlock tree-a "dirlist=100.0%:tree/a" "dirlist=100.0%:tree/b" "dirlist=100.0%:tree/c"
+MatchBlock tree-a-1 "dirlist=100.0%:tree/a/1" "dirlist=100.0%:tree/a/2" "dirlist=100.0%:tree/a/3" "dirlist=100.0%:tree/b/1" "dirlist=100.0%:tree/c/1"

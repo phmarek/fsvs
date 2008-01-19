@@ -5,12 +5,12 @@ It was downloaded from http://fsvs.tigris.org/
 
 Upstream Author: Philipp Marek <philipp@marek.priv.at>
 
-Copyright: 2005-2007 Philipp Marek
+Copyright: 2005-2008 Philipp Marek
 
 License:
 
    This package is free software; you can redistribute it and/or modify
-   it under the terms of the  GNU  General Public License  version 2 as
+   it under the terms of the  GNU  General Public License  version 3 as
    published by the Free Software Foundation.
 
    This package is distributed in the hope that it will be useful,
@@ -23,7 +23,7 @@ License:
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA.
 
 On Debian systems, the complete text of the GNU General
-Public License can be found in `/usr/share/common-licenses/GPL-2'.
+Public License can be found in `/usr/share/common-licenses/GPL-3'.
 
 The Debian packaging is (C) 2007, Sheldon Hearn <sheldonh@starjuice.net> and
 is licensed under the GPL, see above.

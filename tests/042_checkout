@@ -60,3 +60,9 @@ $BINq update -r 3 -o softroot=/./$WC2/.// /./$CODIR//
 $BINq update -r HEAD -o softroot=/././$WC2/././ /./$CODIR// 
 $COMPAREWITH $CODIR
 
+# Try a commit
+touch $CODIR/softroot
+$BINq commit -o softroot=$WC2 $CODIR -m 1
+$BINq up $WC
+$COMPAREWITH $CODIR
+

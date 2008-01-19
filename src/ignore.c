@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -24,6 +24,13 @@
 /** \file
  * \ref ignore command and functions.
  * */
+
+/* \note Due to restriction in C-comment syntax the above 
+ * cases have to separate \c * and \c / to avoid breaking 
+ * the code. \c * and \c / would belong together.
+ * 
+ * As a fix I wrote /§* and *§/, which get changed by a perl 
+ * script after generation. */
 
 /**
  * \addtogroup cmds
@@ -62,7 +69,7 @@
  * "fsvs unversion".
  * Normally it's better to use
  * \code
- *     fsvs ignore ./tmp/ **
+ *     fsvs ignore ./tmp/§**
  * \endcode
  * as that takes the directory itself (which might be needed after restore
  * as a mount point), but ignore \b all entries below.
@@ -74,20 +81,16 @@
  * \code
  *     fsvs ignore ./proc
  *     fsvs ignore ./dev/pts
- *     fsvs ignore './var/log/ *-*'
- *     fsvs ignore './ **~'
- *     fsvs ignore './ ** / *.bak'
- *     fsvs ignore prepend 't./ **.txt'
- *     fsvs ignore append 't./ **.svg'
- *     fsvs ignore at=1 './ **.tmp'
+ *     fsvs ignore './var/log/§*-*'
+ *     fsvs ignore './§**~'
+ *     fsvs ignore './§**§/§*.bak'
+ *     fsvs ignore prepend 't./§**.txt'
+ *     fsvs ignore append 't./§**.svg'
+ *     fsvs ignore at=1 './§**.tmp'
  *     fsvs ignore dump
  *     fsvs ignore dump -v
- *     echo "./ **.doc" | fsvs ignore load
+ *     echo "./§**.doc" | fsvs ignore load
  * \endcode
- *
- * \note Due to restriction in C-comment syntax the above 
- * cases have to separate \c * and \c / to avoid breaking 
- * the code. \c * and \c / would belong together.
  *
  * \note Please take care that your wildcard patterns are not expanded
  * by the shell!
@@ -119,24 +122,21 @@
  *        *.tmp
  *        **~
  *        dirA/tmp*.lst
- *        dirB / ** / *.o
+ *        dirB/§**§/§*.o
  * \endcode
  * would result in
  * \code
  *     root:               *.tmp, **~
  *       +-- dirA          **~, tmp*.lst
- *       +-- dirB          ** / *.o
- *             +-- dirB1   ** / *.o
+ *       +-- dirB          **§/§*.o
+ *             +-- dirB1   **§/§*.o
  * \endcode
- * As in the \ref ignore command documentation, the spaces 
- * between \c * and \c / are due to C-comment-syntax.
- *  
  *
  * Ignore patterns apply only to \b new entries, ie. entries already
  * in the \c .waa-dir file get done as usual.
  * That's why we need an "add" command:
  * \code
- *     $ fsvs ignore '/proc/ *'
+ *     $ fsvs ignore '/proc/§*'
  *     $ fsvs add /proc/stat
  * \endcode
  * would version \c /proc/stat , but nothing else from \c /proc .
@@ -157,7 +157,7 @@
  *     pattern\0\n
  * \endcode
  * 
- * Whitespace are not allowed at the start of a pattern; use <c>./ *</c>
+ * Whitespace are not allowed at the start of a pattern; use <c>./§*</c>
  * or something similar.
  * 
  * As low-level library pcre is used, the given shell-patterns are 
@@ -211,8 +211,8 @@
  * \code
  *     ./[oa]pt
  *     ./sys
- *     ./proc/ *
- *     ./home/ **~
+ *     ./proc/§*
+ *     ./home/§**~
  * \endcode
  *
  * This would ignore files and directories called \c apt or \c opt in the
@@ -227,7 +227,7 @@
  * \note The patterns are anchored at the beginning and the end. So a 
  * pattern <tt>./sys</tt> will match \b only a file or directory named \c 
  * sys. If you want to exclude a directories' files, but not the directory 
- * itself, use something like <tt>./dir/ *</tt> or <tt>./dir/ **</tt>
+ * itself, use something like <tt>./dir/§*</tt> or <tt>./dir/§**</tt>
  * 
  * 
  * \section ignpat_pcre PCRE-patterns
@@ -243,7 +243,7 @@
  * \code
  *     PCRE:./home/.*~
  * \endcode
- * This one achieves exactly the same as <tt>./home/ **~</tt> .
+ * This one achieves exactly the same as <tt>./home/§**~</tt> .
  * 
  * Another example:
  * \code
@@ -282,7 +282,7 @@
  * Examples:
  * \code
  *     tDEVICE:3
- *     ./ *
+ *     ./§*
  * \endcode
  * This patterns would define that all filesystems on IDE-devices (with 
  * major number 3) are \e taken , and all other files are	ignored.
@@ -746,7 +746,7 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 		STOPIF_CODE_ERR( strlen(pattern)<3, EINVAL,
 			"pattern %s too short!", ignore->pattern);
 
-		/* count number of / */
+		/* count number of PATH_SEPARATORs */
 		cp=strchr(pattern, PATH_SEPARATOR);
 		for(ignore->path_level=0;
 				cp;
@@ -872,8 +872,8 @@ inline int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
 /* Searches this entry for a take/ignore
  *
  * If a parent directory has an ignore entry which might be valid 
- * for this directory (like ** / *~), it is mentioned in this
- * directory, too - in case of something like dir / a* / b* / * 
+ * for this directory (like **§/§*~), it is mentioned in this
+ * directory, too - in case of something like dir/a*§/b*§/§* 
  * a path level value is given.
  *
  * As we need to preserve the _order_ of the ignore/take statements,
@@ -1176,6 +1176,9 @@ int ign__new_pattern(unsigned count, char *pattern[],
 	status=0;
 	for(i=0; i<count; i++)
 	{
+		/* This prints the newline, so debug output is a bit mangled.
+		 * Doesn't matter much, and whitespace gets removed in 
+		 * ign___init_pattern_into(). */
 		DEBUGP("new pattern %s", *pattern);
 		ign=ignore_list+i+position;
 
@@ -1204,12 +1207,19 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 	char *cp, *copy;
 
 
+	status=0;
+
 	/* A STOPIF_CODE_ERR( argc==0, 0, ...) is possible, but not very nice -
 	 * the message is not really user-friendly. */
 	if (argc==0)
 		ac__Usage_this();
 
 	/* Now we can be sure to have at least 1 argument. */
+
+	/* Goto correct base. */
+	status=waa__find_common_base(0, NULL, NULL);
+	if (status == ENOENT)
+
 
 	DEBUGP("first argument is %s", argv[0]);
 

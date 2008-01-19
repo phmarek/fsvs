@@ -2,7 +2,7 @@
  * Copyright (C) 2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -21,9 +21,25 @@
 
 
 
+/** A convenience type. */
+typedef struct hash_s *hash_t;
+/** The abstract hash type. */
+struct hash_s
+{
 /** We use a GDBM file as a hash, so we don't have to have all data in 
  * memory.  */
-typedef GDBM_FILE hash_t;
+	GDBM_FILE db;
+	/** Storage for transactional \c DELETE.
+	 * 
+	 * Eg on commit only when everything was ok we may remove the used 
+	 * copyfrom entries; here we store the keys to remove. */
+	/* Should that simply be a hash_t? We'd get a bit cleaner code, but would 
+	 * waste a few bytes. */
+	GDBM_FILE to_delete;
+	/** Allocated copy of the filename, if HASH_REMEMBER_FILENAME was set. */
+	char *filename;
+};
+
 
 
 /** Create a new hash for \a wcfile with the given \a name.
@@ -35,11 +51,14 @@ int hsh__new(char *wcfile, char *name, int gdbm_mode,
  * together give -1, this is a distinct value. */
 #define HASH_TEMPORARY ((GDBM_NEWDB | GDBM_READER | \
 			GDBM_WRCREAT | GDBM_WRITER) +1)
+/** This flag tells hsh__new() to remember the filename, for later 
+ * cleaning-up. */
+#define HASH_REMEMBER_FILENAME (0x40000000)
 
 /** \section hsh__lists Lists addressed by some hash.
  * @{ */
 /** Number of slots reserved. */
-#define HASH__LIST_MAX (10)
+#define HASH__LIST_MAX (32)
 
 /** For short-time storage (single program run): Insert the pointer \a 
  * value into the \a hash at \a key. */
@@ -70,10 +89,13 @@ int hsh__fetch(hash_t db, datum key, datum *value);
 /** Find first \a key. */
 int hsh__first(hash_t db, datum *key);
 /** Find next \a key. */
-int hsh__next(hash_t db, datum *key, datum oldkey);
+int hsh__next(hash_t db, datum *key, const datum *oldkey);
+
+/** Registers some key for deletion on database close. */
+int hsh__register_delete(hash_t db, datum key);
 
 /** Close a property file. */
-int hsh__close(hash_t db);
+int hsh__close(hash_t db, int has_failed);
 /** @} */
 
 

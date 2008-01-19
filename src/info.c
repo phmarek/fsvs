@@ -2,7 +2,7 @@
  * Copyright (C) 2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -56,6 +56,7 @@
 
 #include "global.h"
 #include "est_ops.h"
+#include "cp_mv.h"
 #include "url.h"
 #include "status.h"
 #include "waa.h"
@@ -115,6 +116,8 @@ int info__work(struct estat *root, int argc, char *argv[])
 
 	only_check_status=0;
 
+	STOPIF( cm__get_source(NULL, NULL, NULL, NULL, NULL, NULL, status), 
+			NULL);
 
 ex:
 	return status;

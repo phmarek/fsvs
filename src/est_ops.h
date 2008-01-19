@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -86,17 +86,36 @@ int ops__link_to_string(struct estat *sts, char *filename,
 		char **erg);
 
 /** Returns the filename. */
-const char *ops___get_filename(const char *path);
+const char *ops__get_filename(const char *path);
 
+/** Copies the data of a single struct estat. */
+void ops__copy_single_entry(struct estat *src, struct estat *dest);
 
 /** Create or find an entry below parent. */
 int ops__traverse(struct estat *parent, char *relative_path, 
 		int flags, int sts_flags,
 		struct estat **ret);
 
-/** Set the \ref estat::do_full and \ref estat::do_full_child attributes 
+/** Set the \ref estat::do_tree and \ref estat::do_this_entry attributes 
  * depending on \ref opt_recursive and the parent's bits. */
 int ops__set_to_handle_bits(struct estat *sts);
+
+
+/** Correlating entries from two directories \a dir_a and \a dir_B.
+ * @{ */
+/** Callback function type for A-only and B-only elements.
+ * The first parameter is a pointer to the current struct estat; the other 
+ * is the pointer to the pointer in the directory structure.
+ * Not often needed ... could be done by var_args. */
+typedef int (*ops__correlate_fn1_t)(struct estat *, struct estat **);
+typedef int (*ops__correlate_fn2_t)(struct estat *, struct estat *);
+/** The function to go through the lists. */
+int ops__correlate_dirs(struct estat *dir_A, struct estat *dir_B,
+		ops__correlate_fn1_t only_A,
+		ops__correlate_fn2_t both,
+		ops__correlate_fn1_t only_B,
+		ops__correlate_fn2_t for_every);
+/** @} */
 
 #endif
 
