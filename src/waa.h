@@ -10,6 +10,7 @@
 #define __WAA_H__
 
 #include <ctype.h>
+#include <fcntl.h>
 
 #include "global.h"
 #include "actions.h"
@@ -140,6 +141,9 @@ extern struct waa__entry_blocks_t waa__entry_block;
 /** \anchor prop List of other properties.
  * These are properties not converted to meta-data. */
 #define WAA__PROP_EXT		"prop"
+/** \anchor cflct List of other conflict files.
+ * Defined as <tt>filename\\0\\nfilename\\0\\n...</tt> */
+#define WAA__CONFLICT_EXT	"cflct"
 /** @} */
 
 /** \anchor ino
@@ -162,25 +166,30 @@ extern struct waa__entry_blocks_t waa__entry_block;
 #define WAA__DIR_NAME_EXT		"dname"
 /** @} */
 
+/** \name Short names for the open modes.
+ * @{ */
+#define WAA__WRITE (O_WRONLY | O_CREAT | O_TRUNC)
+#define WAA__READ (O_RDONLY)
+#define WAA__APPEND (O_APPEND | O_CREAT)
 /** @} */
-
+/** @} */
 
 
 /* this should be optimized into a constant.
  * verified for gcc (debian 4.0.0-7ubuntu2) */
 #define WAA__MAX_EXT_LENGTH max(																\
 		max( max(strlen(WAA__DIR_EXT), strlen(WAA__PROP_EXT) ),			\
-			strlen(WAA__FILE_MD5s_EXT) ),	\
+			strlen(WAA__FILE_MD5s_EXT) ),															\
 		max(strlen(WAA__IGNORE_EXT), strlen(WAA__URLLIST_EXT) )			\
 	)
 
 
 /** Store the current working directory. */
-int waa__save_cwd(char **where, int *len, int *buffer_size);
+int waa__save_cwd(char **where, int *len, int additional);
 /** Initialize WAA operations. */
 int waa__init(void);
 /** Create a directory; ignore \c EEXIST. */
-int waa__mkdir(char *dir);
+int waa__mkdir(char *dir, int including_last);
 /* Given an \a path and an \a extension, this function returns a 
  * \a filehandle that was opened for this entry in the WAA with \a flags. */
 int waa__open(char *path,

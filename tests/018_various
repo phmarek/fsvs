@@ -5,14 +5,20 @@ $PREPARE_CLEAN > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
-file=x
-msg=xxtestxxWörstCäseTäßt
+# If the filename and the message overlap, the "log -v" test
+# "grep"s the wrong data.
+file=x-commit-msg-file-$RANDOM-$RANDOM-$RANDOM-x
+# Date in a german locale gives "Jän", in the locale codeset - to verify 
+# the correct en/deconding!
+# We don't use the 1st - depending on the timezone settings this might give  
+# us December.
+msg="$STG_UTF8.$STG_LOC"
 
 logfile=$LOGDIR/018.log
 
 # Exercise the commit msg editor code
 echo $msg > $file
-EDITOR="cp $file" $BIN ci 
+EDITOR="cp $file" $BINdflt ci 
 
 if svn log $REPURL -rHEAD | grep $msg > $logfile 2>&1
 then
@@ -21,17 +27,50 @@ else
 	$ERROR "message not fetched from editor!"
 fi
 
-$BIN log -rHEAD > $logfile 2>&1
+$BINdflt log -rHEAD > $logfile 2>&1
 if grep $msg < $logfile > /dev/null
 then
-	$SUCCESS "fsvs log works."
+	$SUCCESS "'fsvs log -rX' works."
 else
-	$ERROR "fsvs log doesn't work."
+	$ERROR "'fsvs log -rX' doesn't work."
 fi
 
-# Test -F for commit message
-echo $msg$msg > $file
-$BIN ci -F $file
+
+# For the just created file there should be only a single revision.
+$BINdflt log $file > $logfile 2>&1
+if grep $msg < $logfile > /dev/null
+then
+	$SUCCESS "'fsvs log file' works."
+else
+	$ERROR "'fsvs log file' doesn't work."
+fi
+
+# Test log output options
+$BINdflt log -o log_output=normal $file > $logfile
+if grep "^$msg" < $logfile > /dev/null
+then
+	$SUCCESS "Normal log output works"
+else
+	$ERROR "Normal log output wrong"
+fi
+
+$BINdflt log -o log_output=indent,color $file > $logfile
+# I cannot make grep and egrep understand \x1b.
+# Double reverse logic - if 0 lines found, return non-zero.
+if grep "^  $msg" < $logfile > /dev/null &&
+	perl -e 'exit (0 == grep(/\x1b\[0;0m/, <STDIN>))' < $logfile
+then
+	$SUCCESS "Indented, colorized log output works"
+else
+	$ERROR "Indented, colorized log output wrong"
+fi
+
+
+# Test -F for commit message, with a very long line.
+# That can fail for non-UTF8-characters, if one would get cut in the 
+# middle. (That's why there are so many strange things in the above line!)
+for a in `seq 1 200` ; do echo -n $msg$msg ; done > $file
+$BINdflt ci -F $file
 
 if svn log $REPURL -rHEAD | grep $msg$msg > $logfile 2>&1
 then
@@ -41,90 +80,44 @@ else
 fi
 
 # Test log -v
-$BIN log -rHEAD -v > $logfile 2>&1
+$BINdflt log -rHEAD:HEAD -v > $logfile 2>&1
 if grep $file < $logfile > /dev/null
 then
-	$SUCCESS "fsvs log -v works."
+	$SUCCESS "'fsvs log -v -rX:Y' works."
 else
-	$ERROR "fsvs log -v doesn't work."
+	$ERROR "'fsvs log -v -rX:Y' doesn't work."
 fi
 
 # Test empty file
 > $file
-$BIN ci -F $file
+$BINdflt ci -F $file
 
-# Test warning messages
-if ! $BIN -Wunknown-warning-string-346246262=ignore st > $logfile 2>&1
+
+# Test EPIPE handling.
+# I could reproduce it with "strace -o /dev/null $BINdflt log | head -1",
+# but only in 1 of 10 cases without the strace.
+# Any error code $BINdflt would give is overwritten by "head"; so we use a 
+# perl loop here.
+strace_bin=`which strace || true`
+strace_cmd=${strace_bin:+$strace_bin -o /dev/null}
+cmd="$strace_cmd $BINdflt log"
+if perl -e '$cmd=shift(); for(1 .. 10) { open(F, $cmd . " |") || die $!; close(F) || die $!; }' "$cmd" > $logfile 2>&1
 then
-	$SUCCESS "unknown warnings are rejected"
+	# No errors on STDOUT allowed.
+  if [[ `wc -l < $logfile` -eq 0 ]]
+	then
+		$SUCCESS "EPIPE handled correctly"
+	else
+		$ERROR "wrong number of output lines on EPIPE test"
+	fi
 else
-	$ERROR "unknown warnings are NOT rejected!"
-fi
-
-if ! $BIN -Wmeta-user=UNKNOWN-action st > $logfile 2>&1
-then
-	$SUCCESS "unknown warning actions are rejected"
-else
-	$ERROR "unknown warning actions are NOT rejected!"
-fi
- 
-if [[ 1$opt_DEBUG == 11 ]]
-then
-	# We need a sub-shell, as we expect an error returned and have to remove
-	# the error trap.
-	# Simply remembering the error trap doesn't work here; bash doesn't 
-	# print the needed " in "trap -p ERR".
-	# There's no easy way to return values from the sub-shell; but
-	# as the complete output of fsvs is written to a file we simply
-	# take STDOUT as the error code.
-	el=$(
-		trap '' ERR ;
-		set +e ;
-		$BINdflt -W_test-warning=stop > $logfile 2>&1 ;
-		echo $?
-	)
-
-	if [[ $el -ne 0 && `grep WARNING: $logfile` ]]
-	then
-		$SUCCESS "test-warning can stop fsvs"
-	else
-		$ERROR "Doesn't break for test-warning!"
-	fi
-
-
-	$BIN -W_test-warning=once st > $logfile 2>&1
-	el=$?
-	if [[ $el -eq 0 && `grep test-warning $logfile` ]]
-	then
-		$SUCCESS "test-warning can be set to non-fatal"
-	else
-		$ERROR "non-fatal test-warning failed"
-	fi
-
-	# Check whether the config file is respected
-	echo 'warning=_test-warning=stop' > $FSVS_CONF/config
-	if $BIN -d st > $logfile 2>&1
-	then
-		$ERROR "Warning levels NOT read from config file."
-	else
-		$SUCCESS "Warning levels read from config"
-	fi
-
-	if $BIN -W_test-warning=ignore st > $logfile 2>&1
-	then
-		$SUCCESS "Commandline overrides config file."
-	else
-		$ERROR "Commandline does NOT override config file."
-	fi
-	echo '' > $FSVS_CONF/config
-else
-	$INFO "Cannot test test-warning for non-debug builds."
+	$ERROR "Error code on EPIPE"
 fi
 
 
 # Test whether / at the end of an URL are removed
 $BINq init $REPURL/////
-if $BIN st > $logfile
+if $BINdflt st > $logfile
 then
 	$SUCCESS "slashes at end of URLs are ignored."
 else
@@ -143,7 +136,7 @@ fi
 if [[ "$opt_DEBUG" == "1" ]]
 then
 	if FSVS_DEBUGLEVEL=1 $BINdflt -v -D main | grep LC_ALL > $logfile &&
-		test `$BINdflt -v -d -D main | egrep "^[^ ]+ +main" | wc -l` -ge 4
+		test `$BINdflt -v -d -D main | egrep "^[^ ]+ +main" | wc -l` -ge 3
 	then
 		$SUCCESS "Debug messages seem to work"
 	else
@@ -206,7 +199,7 @@ fi
 
 
 # Test whether an invalid/not existing $FSVS_WAA allows "help" to work
-if FSVS_WAA=/tmp/not-existing-$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM $BIN help status > $logfile 2>&1
+if FSVS_WAA=/tmp/not-existing-$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM $BINdflt help status > $logfile 2>&1
 then
 	$SUCCESS 'help needs no $FSVS_WAA'
 else
@@ -220,7 +213,7 @@ else
   $ERROR "Version printing error"
 fi
 
-if $BINdflt -v -V | grep "compile options" > /dev/null
+if $BINdflt -v -V | grep "compiled .*, with options" > /dev/null
 then
   $SUCCESS "Compile options are printed"
 else

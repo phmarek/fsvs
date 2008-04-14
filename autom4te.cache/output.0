@@ -662,6 +662,7 @@ OBJEXT
 CPP
 GREP
 EGREP
+ENABLE_DEV_FAKE
 ENABLE_DEBUG
 ENABLE_GCOV
 HAVE_O_DIRECTORY
@@ -1253,6 +1254,8 @@ if test -n "$ac_init_help"; then
 Optional Features:
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --enable-dev-fake       Include fake definitions for MAJOR(), MINOR() and
+                          MKDEV(). Needed if none found.
   --enable-debug          compile some extra debug checks in (valgrind, gdb)
                           (default is no)
   --enable-gcov           whether to compile with instrumentation for gcov
@@ -2900,7 +2903,7 @@ if test "${with_aprinc+set}" = set; then
 		
 else
   
-			if APR=`apr-config --includedir`
+			if APR=`apr-1-config --includedir || apr-config --includedir`
 			then
 				INCDIRS="$INCDIRS $APR"
 			fi
@@ -4392,27 +4395,22 @@ if test `eval echo '${'$as_ac_Header'}'` = yes; then
 @%:@define `echo "HAVE_$ac_header" | $as_tr_cpp` 1
 _ACEOF
  
-else
-  { { echo "$as_me:$LINENO: error: 
-*** MAJOR(), MINOR() and MAKEDEV() definitions not found.
-*** I'll fake a definition, but that could make problems for ignore patterns
-*** and commits/updates of device nodes.
-*** Please contact dev@fsvs.tigris.org for help, or, if you know your 
-*** systems' way, to report the correct header name.
-See \`config.log' for more details." >&5
-echo "$as_me: error: 
-*** MAJOR(), MINOR() and MAKEDEV() definitions not found.
-*** I'll fake a definition, but that could make problems for ignore patterns
-*** and commits/updates of device nodes.
-*** Please contact dev@fsvs.tigris.org for help, or, if you know your 
-*** systems' way, to report the correct header name.
-See \`config.log' for more details." >&2;}
-   { (exit 1); exit 1; }; }
 fi
 
 done
 
-		
+
+# Check whether --enable-dev-fake was given.
+if test "${enable_dev_fake+set}" = set; then
+  enableval=$enable_dev_fake; cat >>confdefs.h <<\_ACEOF
+@%:@define ENABLE_DEV_FAKE 1
+_ACEOF
+
+	 ENABLE_DEV_FAKE=1
+fi
+
+
+
 
 # Check whether --enable-debug was given.
 if test "${enable_debug+set}" = set; then
@@ -4434,6 +4432,10 @@ _ACEOF
 
 	 ENABLE_GCOV=1
 fi
+
+cat >>confdefs.h <<\_ACEOF
+@%:@define ENABLE_GCOV 1
+_ACEOF
 
 
 
@@ -8751,6 +8753,7 @@ OBJEXT!$OBJEXT$ac_delim
 CPP!$CPP$ac_delim
 GREP!$GREP$ac_delim
 EGREP!$EGREP$ac_delim
+ENABLE_DEV_FAKE!$ENABLE_DEV_FAKE$ac_delim
 ENABLE_DEBUG!$ENABLE_DEBUG$ac_delim
 ENABLE_GCOV!$ENABLE_GCOV$ac_delim
 HAVE_O_DIRECTORY!$HAVE_O_DIRECTORY$ac_delim
@@ -8764,7 +8767,7 @@ LIB@&t@OBJS!$LIB@&t@OBJS$ac_delim
 LTLIBOBJS!$LTLIBOBJS$ac_delim
 _ACEOF
 
-  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 58; then
+  if test `sed -n "s/.*$ac_delim\$/X/p" conf$$subs.sed | grep -c X` = 59; then
     break
   elif $ac_last_try; then
     { { echo "$as_me:$LINENO: error: could not make $CONFIG_STATUS" >&5
@@ -9191,5 +9194,27 @@ fi
 
 # Cause a recompile
 touch src/config.h
+
+if [ "$ac_cv_header_linux_kdev_t_h" == "no" ]
+then
+	{ echo "$as_me:$LINENO: WARNING: 
+  * MAJOR(), MINOR() and MAKEDEV() definitions not found.
+  * Fake a definition, but that could make problems for ignore patterns
+  * and commits/updates of device nodes, so these will be disabled.
+  * Please contact dev@fsvs.tigris.org for help, or, if you know your 
+  * systems' way, to report the correct header name.
+  *
+  * If you *really* need to use device compares, and have *no* other way, 
+  * you could try using the --enable-dev-fake option on ./configure." >&5
+echo "$as_me: WARNING: 
+  * MAJOR(), MINOR() and MAKEDEV() definitions not found.
+  * Fake a definition, but that could make problems for ignore patterns
+  * and commits/updates of device nodes, so these will be disabled.
+  * Please contact dev@fsvs.tigris.org for help, or, if you know your 
+  * systems' way, to report the correct header name.
+  *
+  * If you *really* need to use device compares, and have *no* other way, 
+  * you could try using the --enable-dev-fake option on ./configure." >&2;}
+fi
 
 # vi: ts=3 sw=3

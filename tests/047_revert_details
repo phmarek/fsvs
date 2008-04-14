@@ -1,0 +1,121 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+src=file1
+dest=file2
+src_d=dir-x
+dest_d=dir-y
+
+logfile=$LOGDIR/047.log
+
+# I had "date > $src" here, but the german "Jän" for January
+# has different lengths for de_AT and de_AT.UTF8 ...
+echo aaeadaaaaacaaaaaaaaaaaaabaaaa > $src
+mkdir -p $src_d/sub
+touch $src_d/sub/file
+$BINq ci -m1 -o delay=yes
+
+
+failed=0
+function Check
+{
+  name="$1"
+  exp="$2"
+	msg="$3"
+
+	if [[ `$BINdflt st -C "$name" | grep "$name"'$'` == "$exp "*" $name" ]]
+	then
+		$SUCCESS "Got $exp for $name - $msg"
+	else
+		$BINdflt st -C "$name"
+		$ERROR "Expected $exp for $name - $msg"
+		failed=1
+	fi
+}
+
+
+cp $src $dest
+cp -r $src_d $dest_d
+
+# A while loop doesn't stop the shell for a failed command?
+# We have to remember whether everything's ok.
+set -- $src $dest $src_d $dest_d 
+while [[ $# -ge 2 ]]
+do
+	cur_src="$1"
+	cur_dest="$2"
+	shift 2
+
+  echo $cur_src $cur_dest
+# Revert shouldn't do anything. 
+	Check "$cur_dest" "N..." "unversioned"
+	$BINq revert $cur_dest
+	Check "$cur_dest" "N..." "unversioned after revert"
+
+# Test reverting a copied entry
+	$BINq cp $cur_src $cur_dest
+	Check "$cur_dest" ".m.+" "copied"
+	if test -d "$cur_dest"
+	then
+	  echo aasdgasgasgdga > "$cur_dest/sdfh"
+	else
+		echo aafadaaaaacaaaaaaaaaaaaabaaaa > "$cur_dest"
+	fi
+	Check "$cur_dest" ".mC+" "changed copy"
+	$BINq revert $cur_dest
+	# This revert won't delete the new file, so it would cause the directory 
+	# to be "changed" again.
+	if test -d "$cur_dest"
+	then
+	  rm "$cur_dest/sdfh"
+		# Now the mtime has changed again - do a revert once more.
+		$BINq revert $cur_dest
+	fi
+	Check "$cur_dest" "...+" "revert on copied"
+	$BINq revert $cur_dest
+	Check "$cur_dest" "N..." "revert*2 on copied"
+	$BINq revert $cur_dest
+	Check "$cur_dest" "N..." "revert*3 on copied"
+done
+
+if [[ "$failed" == "1" ]]
+then
+  $ERROR "Tests failed."
+fi
+
+# Check for reverting a directory
+
+# TODO: test reverting a branch in a copied directory tree
+# $BINq unversion $dest
+
+
+dir=directory
+mkdir -m 0777 $dir
+$BINq ci -m2
+
+ls -lad $dir $dest > $logfile
+
+# Test reverting meta-data
+if [[ $UID != 0 ]]
+then
+  $WARN "Cannot test owner/group reverting"
+else
+  chown bin.bin $dir $dest
+fi
+chmod 000 $dir $dest
+$BINq revert $dir
+$BINq revert $dest
+
+if ls -lad $dir $dest | diff -u - $logfile
+then
+  $SUCCESS "Meta-data reverted"
+else
+  $ERROR "Meta-data not reverted"
+fi
+
+exit

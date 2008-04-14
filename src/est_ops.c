@@ -124,7 +124,11 @@ int ops__string_to_dev(struct estat *sts, char *data, char **info)
 				(type != 'c' && type != 'b'), EINVAL,
 				"'%s' is not parseable as a special description", data);
 
+#ifdef DEVICE_NODES_DISABLED
+		DEVICE_NODES_DISABLED();
+#else
 		sts->st.rdev=MKDEV(maj, min);
+#endif
 		mode = type == 'c' ? S_IFCHR : S_IFBLK;
 		ft = type == 'c' ? FT_CDEV : FT_BDEV;
 	}
@@ -181,11 +185,15 @@ char *ops___dev_to_string(struct estat *sts, char delimiter)
 			sts->name, 
 			sts->entry_type, sts->st.mode);
 
+#ifdef DEVICE_NODES_DISABLED
+	DEVICE_NODES_DISABLED();
+#else
 	sprintf(buffer, "%s%c0x%x:0x%x",
 			S_ISBLK(sts->st.mode) ? "bdev" : "cdev",
 			delimiter,
 			(int)MAJOR(sts->st.rdev),
 			(int)MINOR(sts->st.rdev));
+#endif
 
 	return buffer;
 }
@@ -358,6 +366,7 @@ int ops__load_1entry(char **mem_pos, struct estat *sts, char **filename,
 	sts->st.ino=this_ino;
 	sts->st.size=size;
 	sts->st.mode=mode;
+	sts->old_rev = sts->repos_rev;
 
 	/* The %n are not counted on glibc.
 	 * "man sscanf" warns:
@@ -754,6 +763,8 @@ ex:
 }
 
 
+#if 0
+// Currently unused
 /** -.
  * */
 int ops__find_entry_byinode(struct estat *dir, 
@@ -786,6 +797,7 @@ int ops__find_entry_byinode(struct estat *dir,
 ex:
 	return status;
 }
+#endif
 
 
 /** Inline function to abstract a move. */
@@ -1018,7 +1030,9 @@ int ops__delete_entry(struct estat *dir,
 	{
 		if (index_byinode == UNKNOWN_INDEX)
 		{
-			/* Maybe use ops__find_entry_byinode ? Faster for large arrays. */
+			/* Maybe use ops__find_entry_byinode ? Would be faster for large 
+			 * arrays - but the bsearch wouldn't return an index, only a pointer.  
+			 * */
 			for(index_byinode=dir->entry_count-1; 
 					index_byinode>=0; 
 					index_byinode--)
@@ -1036,7 +1050,8 @@ int ops__delete_entry(struct estat *dir,
 	{
 		if (index_byname == UNKNOWN_INDEX)
 		{
-			/* Maybe use ops__find_entry_byinode ? Faster for large arrays. */
+			/* Maybe use ops__find_entry_byname? Would do a binary search, but 
+			 * using string compares. */
 			for(index_byname=dir->entry_count-1; 
 					index_byname>=0; 
 					index_byname--)
@@ -1063,8 +1078,11 @@ ex:
 
 /** -.
  * An entry is marked by having \c entry_type==FT_IGNORE; and such entries 
- * are removed here. */
-int ops__free_marked(struct estat *dir)
+ * are removed here.
+ *
+ * If \a fast_mode is set, the entries are get removed from the list are 
+ * not free()d, nor do the pointer arrays get resized. */
+int ops__free_marked(struct estat *dir, int fast_mode)
 {
 	struct estat **src, **dst;
 	int i, new_count;
@@ -1087,17 +1105,23 @@ int ops__free_marked(struct estat *dir)
 			new_count++;
 		}
 		else
-			STOPIF( ops__free_entry(src), NULL);
+		{
+			if (!fast_mode)
+				STOPIF( ops__free_entry(src), NULL);
+		}
 
 		src++;
 	}
 
 	if (new_count != dir->entry_count)
 	{
-		/* resize by_inode - should never give NULL. */
-		dir->by_inode=realloc(dir->by_inode, 
-				sizeof(*(dir->by_inode)) * (new_count+1) );
-		BUG_ON(!dir->by_inode);
+		if (!fast_mode)
+		{
+			/* resize by_inode - should never give NULL. */
+			dir->by_inode=realloc(dir->by_inode, 
+					sizeof(*(dir->by_inode)) * (new_count+1) );
+			BUG_ON(!dir->by_inode);
+		}
 
 		dir->by_inode[new_count]=NULL;
 		dir->entry_count=new_count;
@@ -1159,6 +1183,7 @@ int ops__traverse(struct estat *current, char *fullpath,
 		if (path[0] == '.' && 
 				path[1] == '\0')
 		{
+			/* This happens for the start of a wc-relative path: ./dir/file */
 			path=next_part;
 			continue;
 		}
@@ -1167,15 +1192,9 @@ int ops__traverse(struct estat *current, char *fullpath,
 				path[1] == '.' &&
 				path[2] == '\0')
 		{
-			if (!current->parent)
-			{
-				status=ENOENT;
-				goto ex;
-			}
-
-			current = current->parent;
-			path=next_part;
-			continue;
+			/* This shouldn't happen; the paths being worked on here should be 
+			 * normalized.  */
+			BUG("Path '%s' includes '..'!", fullpath);
 		}
 
 
@@ -1318,7 +1337,7 @@ removed:
 			sts->st=st;
 	}
 
-	DEBUGP("existing %s: action=%X, flags=%X, status=%d",
+	DEBUGP("known %s: action=%X, flags=%X, status=%d",
 			fullpath, sts->entry_status, sts->flags, status);
 
 ex:
@@ -1408,7 +1427,6 @@ void ops__copy_single_entry(struct estat *src, struct estat *dest)
 #endif
 
 	dest->flags=RF_ISNEW | RF_COPY_SUB;
-	dest->copyfrom_src=NULL;
 
 	/* Gets recalculated on next using */
 	dest->path_len=0;

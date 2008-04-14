@@ -39,14 +39,14 @@ rm $dir_path
 # re-set the URL, so that we start empty.
 echo $REPURL | $BINq urls load
 
-$BIN up -r $REV
+$BINq up -r $REV
 ls -lad tree/b
 cp -a $dir_path $TMP_UP-ORIG
 copy_dir < $dir_path > $TMP_UP
 up_md5=`md5sum < $TMP_UP`
 
 echo "step 2: update from already-up-to-date."
-$BIN up -r $REV
+$BINq up -r $REV
 cp -a $dir_path $TMP_UP-ORIG2
 copy_dir < $dir_path > $TMP_UP0
 up0_md5=`md5sum < $TMP_UP0`
@@ -61,7 +61,7 @@ echo "step 4: sync"
 # Do the sync at last, so that a correct list is left
 # for other tests.
 rm $dir_path
-$BIN sync-repos -r $REV
+$BINq sync-repos -r $REV
 # As the RF_CHECK flag is set, we need to normalize:
 # - Header is taken unchanged
 # - Keep the whitespace separator, to get the line as identical as possible.
@@ -102,27 +102,27 @@ else
 fi
 
 # Update to HEAD
-$BIN up 
+$BINq up 
 
 REV=3
 # Now go down, sync with older revision, and go up again
-$BIN up -r $REV
-$BIN sync-repos -r $REV
-$BIN up -r HEAD
+$BINq up -r $REV
+$BINq sync-repos -r $REV
+$BINq up -r HEAD
 
 
 $INFO "Updating entries without meta-data"
 # Now do some other entries *without* the meta-data properties, and look.
 # We have to get rid of special devices ... svn would bail out.
 find . -not -type f -and -not -type d -exec rm {} \;
-$BIN ci -m "no more special nodes"
+$BINq ci -m "no more special nodes"
 
 svn import --no-ignore --no-auto-props -m no-meta . $REPURL/no-meta > /dev/null
 
 # We'd like to fake some device entry; but that's not easily possible, as 
 # there's no "svn propset URL" currently.
 
-$BIN up
+$BINq up
 if [[ `$BINdflt st | wc -l` -eq 0 ]]
 then
 	$SUCCESS "No status output after meta-data less update"

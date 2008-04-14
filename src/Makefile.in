@@ -11,8 +11,8 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.12/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 1345 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.14/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 1496 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
 CFLAGS	:= @CFLAGS@
@@ -65,6 +65,7 @@ version-nnl:
 	@perl -e '$$_=shift; s/\s+$$//; print;' $(VERSION)
 
 .SILENT: version.nnl version
+.PHONY: version-nnl version 
 
 
 ################################ Distribution ###############################
@@ -74,23 +75,24 @@ version-nnl:
 #.PHONY: ../doc/USAGE
 DOXDIR=../../www/doxygen/html/
 MANDIR=../../www/doxygen/man/man1/
-MANDEST=../doc/man/
+MANDEST=../doc/
 DOXFLAG=../../www/doxygen/html/index.html
 $(DOXFLAG):
 	( cat doxygen-data/Doxyfile ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
+	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
 	# Change the /§* to the correct /*
 	cd $(DOXDIR) && perl -i.bak -pe '1 while s#([/*])\xc2?\xa7([/*])#\1\2#;' *.html
-	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
-#	cd $(DOXDIR)/.. && zip -rq9 html-doc.zip html -x 'html/.svn/*' && tar -cf html-doc.tar --exclude .svn html && bzip2 -vkf9 html-doc.tar && gzip -vf9 html-doc.tar
-	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
-#	cd $(DOXDIR)/.. && zip -rq9 html-doc.zip html -x 'html/.svn/*' && tar -cf html-doc.tar --exclude .svn html && bzip2 -vkf9 html-doc.tar && gzip -vf9 html-doc.tar
+	cd $(DOXDIR)/.. && zip -rq9 html-doc.zip html -x 'html/.svn/*' && tar -cf html-doc.tar --exclude .svn html && bzip2 -vkf9 html-doc.tar && gzip -vf9 html-doc.tar
 $(DOXDIR)/group__cmds.html: $(DOXFLAG)
 	touch $@
 $(DOXDIR)/group__ignpat.html: $(DOXFLAG)
 	touch $@
 
+# Fix for badly generated man page (Doxygen)
+# Some other idea? Is there some other workarount?
 $(MANDEST)/fsvs.1: $(MANDIR)/cmds.1
-	cp -a $< $@
+	perl -pe 's#^Commands and .*\\- (.SH "SYNOPSIS")#fsvs - fast versioning tool\n\1#' $< > $@
+#	cp -a $< $@
 $(MANDEST)/fsvs-options.5: $(MANDIR)/options.1
 	cp -a $< $@
 $(MANDEST)/fsvs-howto-backup.5: $(MANDIR)/howto_backup.1
@@ -105,8 +107,8 @@ $(MANDEST)/fsvs-howto-master_local.5: $(MANDIR)/howto_master_local.1
 doc.g-c: ../doc/USAGE
 	# Generate static text strings
 	( cat $< ; echo "end" ) | dev/make_doc.pl > $@
-docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c $(MANDEST)/fsvs.1 
-# $(MANDEST)/fsvs-options.5 $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
+docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c $(MANDEST)/fsvs.1 $(MANDEST)/fsvs-options.5 
+# $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 .PHONY: docs $(DOXFLAG)
 
 
@@ -143,44 +145,18 @@ include $(D_FILES)
 tools/fsvs-chrooter: tools/fsvs-chrooter.c
 tools/fsvs-chrooter: interface.h config.h
 
-############################### Benchmarking ################################
-tts:	$(DEST) 
-	time ./$< st -B $(DIR) > /dev/null || true
-tt:	$(DEST) 
-	time ./$< st $(DIR) > /dev/null || true
-ft:
-	time find $(DIR) -mtime +1 > /dev/null || true
-cgt:
-	time callgrind --collect-systime=yes --collect-jumps=yes --dump-instr=yes fsvs st $(DIR)
-
-oom:
-	@echo doing oom ...
-	@sysctl -q -n -e -w kernel.printk=0 || true
-	@perl -e '$$a="01234567" x 1024; $$b.=$$b.$$a while 1' 2>/dev/null || true
-	@sysctl -q -n -e -w kernel.printk=7 || true
-
-waaclean:
-	@( test -n "$(FSVS_WAA)" && rm $(FSVS_WAA)/*/*/* ) || true
-
-benchmark:
-	@$(MAKE) --no-print-directory oom DIR=$(DIR)
-	@$(MAKE) --no-print-directory ft DIR=$(DIR)
-	@$(MAKE) --no-print-directory oom DIR=$(DIR)
-	@$(MAKE) --no-print-directory tts DIR=$(DIR)
-	@$(MAKE) --no-print-directory oom DIR=$(DIR)
-	@$(MAKE) --no-print-directory tt DIR=$(DIR)
-
-
+############################### GCov Usage ################################
 ifeq (@ENABLE_GCOV@, 1)
 GCOV_FILES := $(C_FILES:%.c=%.c.gcov)
 GCOV_SMRY_FILES := $(GCOV_FILES:%.gcov=%.gcov.smry)
 GCOV_DATA := $(C_FILES:%.c=%.gcda) $(C_FILES:%.c=%.gcno)
 
 gcov:  $(GCOV_FILES)
-	dev/gcov-summary.pl $(GCOV_SMRY_FILES)
+	@dev/gcov-summary.pl $(GCOV_SMRY_FILES)
 
 %.c.gcov:	%.c
-	gcov -f $< > $<.gcov.smry
+	@gcov -f $< > $<.gcov.smry
+# -b -c
 
 gcov-clean:
 	rm -f *.gcov *.gcov.smry *.gcda 2> /dev/null || true
@@ -190,10 +166,6 @@ gcov-unused-funcs:
 
 .PHONY: gcov gcov-clean
 endif
-
-
-
-.PHONY: waaclean oom ft tt tts benchmark version version-nnl
 
 
 ################################ Statistics #################################
@@ -219,7 +191,10 @@ ifeq (@ENABLE_GCOV@, 1)
 # If the tests are run as root (which is currently necessary because
 # of the devices and device-tests), the normal user who compiled
 # the sources will not be allowed to open this files ...
-	@chmod 777 $(GCOV_DATA)
+#
+# Not all files have code .. and so not all files (of the generated list) 
+# will exist; therefore "true".
+	-@chmod 777 $(GCOV_DATA) > /dev/null 2>&1
 endif
 
 ext-tests: $(DEST)

@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -79,6 +79,7 @@
  *   changes, ie. the entries filesystem meta-data is unchanged.
  * - A \c '+' is printed for files with a copy-from history; to see the URL 
  *   of the copyfrom source, use \c -v twice.
+ * - A \c 'x' signifies a conflict.
  *
  * 
  * Here's a table with the characters and their positions:
@@ -86,7 +87,7 @@
  *   Without -v    With -v
  *     ....         ......
  *     NmC?         NtpPC?
- *     DP !         D    !
+ *     DPx!         D   x!
  *     R  +         R    +
  *     d            d
  *     n            n
@@ -194,16 +195,20 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
       (flags & ~RF_CHECK))
   {
 		copyfrom=NULL;
+		copy_inherited=0;
+
 		/* Go to copied parent when RF_COPY_SUB is set, and re-construct the 
 		 * entire copyfrom-URL?  */
-		copy_inherited= (flags & RF_COPY_SUB);
-		if (opt_verbose > 1 &&
-				(flags & RF_COPY_BASE))
+		if (opt_verbose > 1)
 		{
-			status=cm__get_source(sts, NULL, NULL, NULL, NULL, NULL, 0);
-			BUG_ON(status == ENOENT, "Marked as copied, but no info?");
-			STOPIF(status, NULL);
-			STOPIF( urls__full_url( sts->copyfrom_src, NULL, &copyfrom), NULL);
+			copy_inherited= (flags & RF_COPY_SUB);
+
+			if (flags & RF_COPY_BASE)
+			{
+				status=cm__get_source(sts, NULL, &copyfrom, NULL, 0);
+				BUG_ON(status == ENOENT, "Marked as copied, but no info?");
+				STOPIF(status, NULL);
+			}
 		}
 
     /* We do this here, so that the debug output is not disturbed by the 
@@ -223,9 +228,10 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
 
           st___meta_string(status_bits, flags),
 
-          status_bits & FS_CHANGED ? 'C' : '.',
+					flags & RF_CONFLICT ? 'x' : 
+					status_bits & FS_CHANGED ? 'C' : '.',
 
-					flags & (RF_COPY_BASE | RF_COPY_SUB) ? '+' : 
+					flags & RF___IS_COPY ? '+' : 
 					status_bits & FS_LIKELY ? '?' : 
 					/* An entry marked for unversioning or adding, 
 					 * which does not exist, gets a '!' */
@@ -253,14 +259,15 @@ ex:
 
 /** -.
  * */
-int st__status(struct estat *sts, char *path)
+int st__status(struct estat *sts)
 {
   int status;
 	int e_stat, flags;
+	char *path;
 
 
   status=0;
-  if (!path) STOPIF( ops__build_path(&path, sts), NULL);
+  STOPIF( ops__build_path(&path, sts), NULL);
 
   /* Is this entry already done? */
   if (sts->was_output) 
@@ -295,13 +302,14 @@ ex:
 
 /** -.
  * */
-int st__rm_status(struct estat *sts, char *path)
+int st__rm_status(struct estat *sts)
 {
 	int status;
+	char *path;
 
 
 	status=0;
-	if (!path) STOPIF( ops__build_path(&path, sts), NULL);
+	STOPIF( ops__build_path(&path, sts), NULL);
 
 	STOPIF( st__print_status(path, 
 				sts->remote_status, 0,
@@ -362,7 +370,7 @@ ex:
  *
  * Commit and update themselves print the information send to/received from
  * the repository. */
-int st__progress(struct estat *sts, char *path)
+int st__progress(struct estat *sts)
 {
 	static unsigned int counter=0;
 	static int is_tty=0;
@@ -373,7 +381,7 @@ int st__progress(struct estat *sts, char *path)
 	time_t now;
 	int print;
 	const int bar_chart_width=20;
-	const char bar_chart[bar_chart_width+1]="###################>";
+	static const char bar_chart[bar_chart_width+1]="###################>";
 	float pct;
 
 
@@ -478,7 +486,7 @@ ex:
  * progress line mixed with some other output. */ 
 int st__progress_uninit(void)
 {
-	const char err[]="Clearing the progress space";
+	static const char err[]="Clearing the progress space";
 	int status;
 	char buff[max_progress_len+3];
 
@@ -517,7 +525,7 @@ volatile char *_st___string_from_bits(int value,
 		const struct st___bit_info data[], int max,
 		char *text_for_none)
 {
-	const char sep[]=", ";
+	static const char sep[]=", ";
 	static char *string=NULL;
 	static int len=0;
 	int i;
@@ -576,6 +584,7 @@ inline volatile char* st__flags_string_fromint(int mask)
 		BIT_INFO( RF_CHECK,			"check"),
 		BIT_INFO( RF_COPY_BASE,	"copy_base"),
 		BIT_INFO( RF_COPY_SUB,	"copy_sub"),
+		BIT_INFO( RF_CONFLICT,	"conflict"),
 		BIT_INFO( RF_PUSHPROPS,	"push_props"),
 	};	
 
@@ -626,14 +635,12 @@ int st__print_entry_info(struct estat *sts, int with_type)
 
 	status=errno=0;
 	STOPIF( ops__build_path(&path, (struct estat*)sts), NULL);
-	STOPIF( urls__full_url((struct estat*)sts, path, &url), NULL);
+	STOPIF( url__full_url((struct estat*)sts, path, &url), NULL);
 
 	copyfrom=NULL;
-	if (opt_verbose && (sts->flags & (RF_COPY_SUB | RF_COPY_BASE)) )
+	if (opt_verbose && (sts->flags & RF___IS_COPY))
 	{
-		STOPIF( cm__get_source(sts, path, NULL, NULL, 
-					NULL, &copy_rev, 0), NULL);
-		STOPIF( urls__full_url(sts->copyfrom_src, NULL, &copyfrom), NULL);
+		STOPIF( cm__get_source(sts, path, &copyfrom, &copy_rev, 0), NULL);
 	}
 
 	if (with_type)
@@ -682,9 +689,13 @@ int st__print_entry_info(struct estat *sts, int with_type)
 				cs__md52hex(sts->md5));
 
 	if (sts->entry_type==FT_BDEV || sts->entry_type==FT_CDEV)
+#ifdef DEVICE_NODES_DISABLED
+		DEVICE_NODES_DISABLED();
+#else
 		status |= printf("\tDevice number:\t%llu:%llu\n", 
 				(t_ull)MAJOR(sts->st.rdev),
 				(t_ull)MINOR(sts->st.rdev));
+#endif
 	else
 		status |= printf("\tSize:\t\t%llu\n", (t_ull)sts->st.size);
 

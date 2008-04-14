@@ -62,8 +62,8 @@ a description of the change, and there's a good chance to have it
 integrated into the fsvs code-base.
 
 \note How to generate such a diff? \n
-If you're using svn or svk to track fsvs usage, the <tt>"svn diff"<tt> or 
-<tt>"svk diff"<tt> commands should do what you want.
+If you're using svn or svk to track fsvs usage, the <tt>"svn diff"</tt> or 
+<tt>"svk diff"</tt> commands should do what you want.
 
 If you downloaded a \c .tar.gz or \c .tar.bz2, keep a pristine version in 
 some directory and make your changes in another copy. \n
@@ -203,7 +203,7 @@ Typical function layout is like this (taken from waa.c):
 
 When a function gets called by subversion libraries, we have to use
 their return type.
-Here an example from commit.c:
+Here an example from \c commit.c:
 \code
 svn_error_t *ci___set_props(void *baton, 
     struct estat *sts,
@@ -252,7 +252,7 @@ such internal documentation uses the normal C-style comments
 (<tt>"/§* ... *§/"</tt>).
 
 
-\subsection dev_des_ /§* in documentation
+\subsection dev_des_slash_star /§* in documentation
 
 In cases where a slash \c / and a star \c * have to be used in the 
 documentation, there's a hack by putting a paragraph symbol (\c \\c2\\xa7 in  
@@ -264,6 +264,25 @@ There's a perl hack for documentation generation, where these get removed.
 putting a <tt># if 0</tt> block around that comment block. Doxygen doesn't 
 allow this; even if using a shell script (with comments indicated by \c #) 
 doxygen doesn't allow "<tt>/§*</tt> or <tt>*§/</tt>.
+
+
+\section dev_tests About the tests
+
+\subsection dev_tests_delay Delays after commit
+
+There have been a lot of <tt>"sleep 1"</tt> commands in the tests, 
+to get directories' mtime to change for new entries.
+
+Now they are mostly changed to a simple <tt>"-o delay=yes"</tt> on the commit
+just above, which should give us about half a second on average.
+
+\note If FSVS has to be run for the check, it must wait until the other 
+instance has finished - else the dir-list file and so on won't be written; 
+so parallel checking via \c & and \c wait doesn't really work.
+
+Simply putting delay=yes in the FSVS configuration file more than 
+doubled the run time of the tests - this was unacceptable to me.
+
 
 */
 // vi: filetype=doxygen spell spelllang=en_us

@@ -13,7 +13,7 @@
  *
  * Please see the \ref howto_chroot documentation for details.  */
 
-/** \defgroup howto_chroot About chroots and running fsvs on older systems
+/** \defgroup howto_chroot HOWTO: About running fsvs on older systems
  * \ingroup howto
  *
  * This document explains how the chroot-wrapper for \c fsvs works, and how 

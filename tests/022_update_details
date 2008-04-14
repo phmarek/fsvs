@@ -23,10 +23,8 @@ echo "now at rev. $rev"
 touch empty-file
 $BIN ci -m "new file"
 # Goto old revision
-$BIN up -r$rev
+$BIN up -r$rev -o delay=yes
 
-# as to detect WC changes ...
-sleep 1
 
 # Modify WC
 mkdir $dir

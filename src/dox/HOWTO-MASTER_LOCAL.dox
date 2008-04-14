@@ -1,5 +1,5 @@
 /**
-\defgroup howto_master_local Master/Local repositories
+\defgroup howto_master_local HOWTO: Master/Local repositories
 \ingroup howto
 
 This HOWTO describes how to use a single working copy with multiple 

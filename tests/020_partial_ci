@@ -39,16 +39,35 @@ function ChangeData
 			echo "A testline $RANDOM $RANDOM" > $dir/$file
 		done
 	done
-
-	sleep 2
 }
 
 
 mkdir $dir1
 $BINq ci -m "def dir"
 
-ChangeData
+# Test empty_commit option.
+# We cannot use $REPURL, as that includes subdirectories within the 
+# repository, which don't get touched - we see the revision only at the 
+# repository root.
+msg="EMPTY_COMMIT"
+if $BINdflt ci -m "$msg" -o empty_commit=no | grep "Avoiding empty commit as requested." &&
+	! ( svn log $REPURLBASE | grep "$msg" )
+then
+	$SUCCESS "Empty commit avoided"
+else
+  $ERROR "Always commits?"
+fi
 
+if $BINdflt ci -m "$msg" -o empty_commit=yes &&
+	svn log -r HEAD $REPURLBASE | grep "$msg"
+then
+	$SUCCESS "Empty commit done"
+else
+  $ERROR "Doesn't commit when empty?"
+fi
+
+
+ChangeData
 
 $BINdflt ci -m "new file" $file11 > $log
 # file, directory
@@ -63,7 +82,7 @@ else
 	exit 1
 fi
 
-$BINdflt ci -m "new file2" $dir1 > $log
+$BINdflt ci -m "new file2" $dir1 -o delay=yes > $log
 if [[ `grep $dir1 < $log | wc -l` -eq 2 ]]
 then
   $SUCCESS "commit of a file beneath a committed file works"
@@ -107,9 +126,7 @@ fi
 
 # This time the directory gets committed, too - so it will be stored
 # with correct values and won't show as changed.
-$BINdflt ci -m "new dir" $dir2 > $log
-#cat $log
-#exit 1
+$BINdflt ci -m "new dir" $dir2 -o delay=yes > $log
 if [[ `grep $dir2 $log | wc -l` -eq 2 ]]
 then
   $SUCCESS "commit of a single directory works"

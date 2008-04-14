@@ -15,6 +15,7 @@
 #include "est_ops.h"
 #include "url.h"
 #include "checksum.h"
+#include "options.h"
 #include "props.h"
 #include "cache.h"
 #include "helper.h"
@@ -40,13 +41,17 @@
  * \section cp
  *
  * \code
- * fsvs cp SRC DEST
+ * fsvs cp [-r rev] SRC DEST
  * fsvs cp dump
  * fsvs cp load
  * \endcode
  *
- * This command marks \c DEST as a copy of \c SRC, so that on the next 
- * commit of \c DEST the corresponding source path is sent as copy source.
+ * This command marks \c DEST as a copy of \c SRC at revision \c rev, so 
+ * that on the next commit of \c DEST the corresponding source path is sent 
+ * as copy source.
+ *
+ * The default value for \c rev is \c BASE, ie. the revision the \c SRC 
+ * (locally) is at.
  *
  * Please note that this command works \b always on a directory \b 
  * structure - if you say to copy a directory, the \b whole structure is 
@@ -82,6 +87,11 @@
  *
  * \todo -0 like for xargs?
  *
+ * \todo Are different revision numbers for \c load necessary? Should \c 
+ * dump print the source revision number?
+ *
+ * \todo Copying from URLs means update from there
+ *
  * \note As subversion currently treats a rename as copy+delete, the \ref 
  * mv command is an alias to \ref cp.
  *
@@ -89,13 +99,27 @@
  * parameter for copyfrom relations, give some path, too, as in 
  * <tt>./dump</tt>.
  *
- * \todo Filter for dump (patterns?). */
+ * \note The source is internally stored as URL with revision number, 
+ * because else an operation like \code
+ *   $ fsvs cp a b
+ *   $ rm a/1
+ *   $ fsvs ci a
+ *   $ fsvs ci b
+ * \endcode
+ * would fail - FSVS would send the wrong (too recent!) revision number as 
+ * source, and so the local filelist would get inconsistent with the 
+ * repository. \n But it is not implementd to give an URL as copyfrom 
+ * source directly - we'd have to fetch a list (and possibly the data!) 
+ * from the repository.
+ *
+ * \todo Filter for dump (patterns?).
+ * */
 
 
 /**
  * \addtogroup cmds
  *
- * \section copyfrom-detect
+ * \section cpfd copyfrom-detect
  *
  * \code
  * fsvs copyfrom-detect [paths...]
@@ -319,7 +343,7 @@ struct cm___match_t;
 typedef int (cm___register_fn)(struct estat *, struct cm___match_t *);
 /** Queries the database for the given entry.
  *
- * Output is (the address of) an array of \ref candidates, and the number 
+ * Output is (the address of) an array of cm___candidates_t, and the number 
  * of elements. */
 typedef int (cm___get_list_fn)(struct estat *, struct cm___match_t *,
 		struct cm___candidate_t **, int *count);
@@ -346,6 +370,8 @@ struct cm___match_t {
 	char name[8];
 	/** Which entry types are allowed? */
 	int entry_types;
+	/** Whether this can be avoided by an option. */
+	int is_expensive;
 
 	/** Callback function for inserting elements */
 	cm___register_fn *insert;
@@ -391,7 +417,7 @@ struct cm___match_t cm___match_array[]=
 	[CM___DIRLIST] = { .name="dirlist", 
 		.get_list=cm___match_children, .format=cm___output_pct,
 		.entry_types=FT_DIR, },
-	{ .name="md5", .to_key=cm___md5_datum, 
+	{ .name="md5", .to_key=cm___md5_datum, .is_expensive=1,
 		.insert=cm___hash_register, .get_list=cm___hash_list,
 		.entry_types=FT_FILE, .filename=WAA__FILE_MD5s_EXT},
 	{ .name="inode", .to_key=cm___inode_datum, 
@@ -623,7 +649,7 @@ char* cm___output_pct(struct cm___match_t *match,
 
 
 /** Inserts the given entry in all allowed matching databases. */
-int cm___register_entry(struct estat *sts, char *path)
+int cm___register_entry(struct estat *sts)
 {
 	int status;
 	int i;
@@ -914,6 +940,10 @@ int cm__detect(struct estat *root, int argc, char *argv[])
 	for(i=0; i<CM___MATCH_NUM; i++)
 	{
 		match=cm___match_array+i;
+
+		if (match->is_expensive && !opt__get_int(OPT__COPYFROM_EXP))
+			match->entry_types=0;
+
 		if (!match->filename[0]) continue;
 
 		DEBUGP("open hash for %s as %s", match->name, match->filename);
@@ -954,6 +984,65 @@ ex:
 		}
 	}
 
+	return status;
+}
+
+
+/** Converts the (internally stored) string into revision/URL.
+ *
+ * The \a string is not freed; that has to be done by the caller. */
+int cm___string_to_rev_path(char *string, char **out_url, svn_revnum_t *orev)
+{
+	char *path;
+	svn_revnum_t rev;
+
+	/* Reserved for future use */
+	if (string[0] != '0' || 
+			string[1] != ' ') goto inval;
+	string+=2;
+
+	rev=strtol(string, &path, 10);
+	if (orev) *orev=rev;
+	if (string == path) goto inval;
+
+	if (!isspace(*path)) goto inval;
+
+	while (isspace(*path)) path++;
+	*out_url=path;
+
+	DEBUGP("string parsed to r%llu of %s", (t_ull)rev, path);
+	return 0;
+
+inval:
+	DEBUGP("cannot parse %s", string);
+	return EINVAL;
+}
+
+
+/** Formats the \a revision and \a url for storage in the hash table. 
+ *
+ * \a *string must not be free()ed by the caller. */
+int cm___rev_path_to_string(char *url, svn_revnum_t revision, char **string)
+{
+	int status;
+	static struct cache_entry_t *c=NULL;
+	int buflen, used;
+	char *buffer;
+
+
+	/* We need to prepend a revision number, and a space.
+	 * We could do a log10(), but I don't think that's necessary ...
+	 * even log2l() (which is a single instruction on some processors) uses 
+	 * floating point operations here. */
+	buflen=10 + 1 + strlen(url) + 1;
+	STOPIF( cch__entry_set( &c, 0, NULL, buflen, 0, &buffer), NULL);
+
+	used=snprintf(buffer, buflen, "0 %llu %s", (t_ull)revision, url);
+	BUG_ON(used >= buflen);
+
+	*string=buffer;
+
+ex:
 	return status;
 }
 
@@ -1012,6 +1101,8 @@ int cm___dump_list(FILE *output, int argc, char *normalized[])
 	hash_t db;
 	datum key, value;
 	int have;
+	char *path;
+	svn_revnum_t rev;
 
 
 	/* TODO: Use some filter, eg. by pathnames. */
@@ -1036,7 +1127,9 @@ int cm___dump_list(FILE *output, int argc, char *normalized[])
 		if (have)
 			status=fputs(".\n", output);
 
-		status |= fprintf(output, "%s\n%s\n", value.dptr, key.dptr);
+		STOPIF( cm___string_to_rev_path( value.dptr, &path, &rev), NULL);
+
+		status |= fprintf(output, "%s\n%s\n", path, key.dptr);
 		IF_FREE(value.dptr);
 
 		if (status < 0)
@@ -1078,6 +1171,9 @@ ex:
  * The destination must not already exist in the tree; it can exist in the 
  * filesystem.
  *
+ * If \a revision is not \c 0 (which corresponds to \c BASE), the correct 
+ * list of entries must be taken from the corresponding repository.
+ *
  * Uninitialization is done via \c root==NULL.
  *
  * If the flag \a paths_are_wc_relative is set, the paths \a cp_src and \a 
@@ -1086,15 +1182,17 @@ ex:
  * (eventually using \ref start_path as anchor), and cutting the wc-root 
  * off. */
 int cm___make_copy(struct estat *root, 
-		char *cp_src, char *cp_dest, 
+		char *cp_src, svn_revnum_t revision,
+		char *cp_dest, 
 		int paths_are_wc_relative)
 {
 	int status;
-	const char err[]="!The %s path \"%s\" is not below the wc base.";
+	static const char err[]="!The %s path \"%s\" is not below the wc base.";
 	struct estat *src, *dest;
 	static hash_t db=NULL;
 	char *abs_src, *abs_dest;
 	char *wc_src, *wc_dest;
+	char *buffer, *url;
 
 
 	if (!root)
@@ -1126,6 +1224,13 @@ int cm___make_copy(struct estat *root,
 
 
 	STOPIF( ops__traverse(root, cp_src, 0, 0, &src), NULL);
+
+	/* TODO: Make copying copied entries possible.
+	 * But as we only know the URL, we'd either have to do a checkout, or try 
+	 * to parse back to the original entry. */
+	STOPIF_CODE_ERR( src->flags & RF___IS_COPY, EINVAL,
+			"!Copied entries must be committed before using them as copyfrom source.");
+
 	/* The directories above must be added; the entries below get RF_COPY_SUB 
 	 * set (by waa__copy_entries), and this entry gets overridden to 
 	 * RF_COPY_BASE below.  */
@@ -1139,15 +1244,25 @@ int cm___make_copy(struct estat *root,
 	if (!db)
 		STOPIF( hsh__new(wc_path, WAA__COPYFROM_EXT, GDBM_WRCREAT, &db), NULL);
 
-	STOPIF( waa__copy_entries(src, dest), NULL);
+	if (revision)
+	{
+		BUG_ON(1, "fetch list of entries from the repository");
+	}
+	else
+	{
+		STOPIF( waa__copy_entries(src, dest), NULL);
+		revision=src->url->current_rev;
+	}
 
 	/* Mark as base entry for copy; the RF_ADD flag was removed by 
 	 * copy_entries above, but the entry really is *new*. */
 	dest->flags |= RF_COPY_BASE;
 	dest->flags &= ~RF_COPY_SUB;
 
-	STOPIF( hsh__store_charp(db, wc_dest, wc_src), NULL);
 
+	STOPIF( url__full_url( src, NULL, &url), NULL);
+	STOPIF( cm___rev_path_to_string(url, revision, &buffer), NULL);
+	STOPIF( hsh__store_charp(db, wc_dest, buffer), NULL);
 
 ex:
 	return status;
@@ -1164,6 +1279,7 @@ int cm__work(struct estat *root, int argc, char *argv[])
 	FILE *input=stdin;
 	char *src, *dest, *cp;
 	int is_dump, is_load;
+	svn_revnum_t revision;
 
 
 	status=0;
@@ -1196,6 +1312,19 @@ int cm__work(struct estat *root, int argc, char *argv[])
 		STOPIF( cm___dump_list(stdout, argc, normalized), NULL);
 		/* To avoid the indentation */
 		goto ex;
+	}
+
+
+	switch (opt_target_revisions_given)
+	{
+		case 0:
+			/* Default is \c BASE. */
+			revision=0;
+			break;
+		case 1:
+			revision=opt_target_revision;
+		default:
+			STOPIF( EINVAL, "!Only a single revision number may be given.");
 	}
 
 
@@ -1255,7 +1384,7 @@ int cm__work(struct estat *root, int argc, char *argv[])
 			/* These paths were given relative to the cwd, which is changed now, as 
 			 * we're in the wc base. Calculate correct names. */
 
-			STOPIF( cm___make_copy(root, src, dest, 0), NULL);
+			STOPIF( cm___make_copy(root, src, revision, dest, 0), NULL);
 			count++;
 
 			free(dest);
@@ -1272,10 +1401,13 @@ int cm__work(struct estat *root, int argc, char *argv[])
 				"or \"dump\" resp. \"load\" must be given.");
 
 		/* Create database file for WC root. */
-		STOPIF( cm___make_copy(root, normalized[0], normalized[1], 1), NULL);
+		STOPIF( cm___make_copy(root, 
+					normalized[0], revision, 
+					normalized[1], 1), 
+				NULL);
 	}
 
-	STOPIF( cm___make_copy(NULL, NULL, NULL, 0), NULL);
+	STOPIF( cm___make_copy(NULL, NULL, 0, NULL, 0), NULL);
 	STOPIF( waa__output_tree(root), NULL);
 
 ex:
@@ -1283,45 +1415,26 @@ ex:
 }
 
 
-/** -.
- * If \a name is not given, it has to be calculated.
- *
- * All of \a source, \a src_name and \a src_rev are optional; if \a root is 
- * given, it helps the searching performance a bit.\n
- * These are always set; if no source is defined, they're set to \c NULL, 
- * \c NULL and \c SVN_INVALID_REVNUM.
- *
- * If the \a src_name is returned, it must be \c free()ed after use.
- *
- * Uninitializing should be done via calling with \c sts==NULL; in this 
- * case the \a register_for_cleanup value is used as success flag.
- *
- * \a sts->copyfrom_src is always set; if no copyfrom source was found, it 
- * get set to \c NULL.
- *
- * If the entry \a sts has \c RF_COPY_BASE set, its copyfrom source is 
- * returned; if \c RF_COPY_SUB is set, the copyfrom URL is reconstructed 
- * via the parent with \c RF_COPY_BASE set; if neither is set, \c ENOENT is 
- * returned.
+
+/** Get the source of an entry with \c RF_COPY_BASE set.
+ * See cm__get_source() for details.
  * */
-int cm__get_source(struct estat *sts, char *name,
-		struct estat *root,
-		struct estat **src_sts, 
-		char **src_name, svn_revnum_t *src_rev,
+int cm___get_base_source(struct estat *sts, char *name,
+		char **src_url, svn_revnum_t *src_rev,
+		int alloc_extra,
 		int register_for_cleanup)
 {
 	int status;
-	static hash_t hash;
-	static int init;
 	datum key, value;
-	struct estat *src;
-	char *source_path;
+	static hash_t hash;
+	static int init=0;
+	char *url;
 
 
-	status=0;
-	src=NULL;
 	value.dptr=NULL;
-	source_path=NULL;
+	status=0;
+	if (src_url) *src_url=NULL;
+	if (src_rev) *src_rev=SVN_INVALID_REVNUM;
 
 	if (!sts)
 	{
@@ -1349,135 +1462,202 @@ int cm__get_source(struct estat *sts, char *name,
 			STOPIF( status, NULL);
 	}
 
-	if (src_name) *src_name=NULL;
-	/* svn+ssh has an assertion -- 0 is invalid, SVN_INVALID_REVNUM must be 
-	 * used. */
-	if (src_rev) *src_rev=SVN_INVALID_REVNUM;
-	if (src_sts) *src_sts=NULL;
+	/* Normal proceedings, this is a direct target of a copy definition. */
+	if (!name)
+		STOPIF( ops__build_path( &name, sts), NULL);
 
-	if (!hash)
+	if (name[0]=='.' && name[1]==PATH_SEPARATOR)
+		name+=2;
+
+	key.dptr=name;
+	key.dsize=strlen(name)+1;
+	status=hsh__fetch(hash, key, &value);
+	if (status) 
 	{
-		DEBUGP("No database found");
-		/* No database open => no database found. */
+		DEBUGP("no source for %s found",
+				name);
+		goto ex;
+	}
+
+	if (register_for_cleanup)
+		STOPIF( hsh__register_delete(hash, key), NULL);
+
+	/* Extract the revision number. */
+	STOPIF( cm___string_to_rev_path( value.dptr, 
+				&url, src_rev), NULL);
+
+	if (src_url)
+	{
+		BUG_ON(!url);
+
+		status=strlen(url);
+		/* In case the caller wants to do something with this buffer, we return 
+		 * more. We need at least the additional \0; and we give a few byte 
+		 * extra, gratis, free for nothing (and that's cutting my own throat)!  
+		 * */
+		*src_url=malloc(status + 1 +alloc_extra + 4);
+		STOPIF_ENOMEM(!*src_url);
+
+		strcpy(*src_url, url);
+		status=0;
+	}
+
+ex:
+	IF_FREE(value.dptr);
+	return status;
+}
+
+
+/** Recursively creating the URL.
+ * As most of the parameters are constant, we could store them statically 
+ * ... don't know whether it would make much difference, this function 
+ * doesn't get called very often.
+ * \a length_to_add is increased while going up the tree; \a eobuffer gets 
+ * handed back down. */
+int cm___get_sub_source_rek(struct estat *cur, int length_to_add,
+		char **dest_buffer, svn_revnum_t *src_rev,
+		char **eobuffer)
+{
+	int status;
+	struct estat *copied;
+	int len;
+
+
+	/* Get source of parent.
+	 * Just because this entry should be removed from the copyfrom database 
+	 * that isn't automatically true for the corresponding parent. */
+	copied=cur->parent;
+	BUG_ON(!copied, "Copy-sub but no base?");
+	len=strlen(cur->name);
+
+	length_to_add+=len+1;
+
+	if (copied->flags & RF_COPY_BASE)
+	{
+		/* Silent error return. */
+		status=cm___get_base_source(copied, NULL, 
+				dest_buffer, src_rev, 
+				length_to_add, 0);
+		if (status) goto ex;
+
+		*eobuffer=*dest_buffer+strlen(*dest_buffer);
+		DEBUGP("after base eob-5=%s", *eobuffer-5);
+	}
+	else
+	{
+		/* Maybe better do (sts->path_len - copied->path_len))?
+		 * Would be faster. */
+		status=cm___get_sub_source_rek(copied, length_to_add,
+				dest_buffer, src_rev, eobuffer);
+		if (status) goto ex;
+	}
+
+	/* Now we have the parent's URL ... put cur->name after it. */
+	/* Not PATH_SEPARATOR, it's an URL and not a pathname. */
+	**eobuffer = '/';
+	strcpy( *eobuffer +1, cur->name );
+	*eobuffer += len+1;
+
+	DEBUGP("sub source of %s is %s", cur->name, *dest_buffer);
+
+ex:
+	return status;
+}
+
+
+/** Get the source of an entry with \c RF_COPY_SUB set.
+ * See cm__get_source() for details.
+ *
+ * This function needs no cleanup.
+ * */
+int cm___get_sub_source(struct estat *sts, char *name,
+		char **src_url, svn_revnum_t *src_rev)
+{
+	int status;
+	char *eob;
+
+
+	/* As we only store the URL in the hash database, we have to proceed as 
+	 * follows:
+	 * - Look which parent is the copy source,
+	 * - Get its URL
+	 * - Append the path after that to the URL of the copy source:
+	 *     root / dir1 / dir2 / <copied_dest> / dir3 / <sts>
+	 *   and
+	 *     root / dir1 / dir3 / <src>
+	 * Disadvantage: 
+	 * - we have to traverse the entries, and make the estat::by_name 
+	 *   arrays for all intermediate nodes.
+	 *
+	 * We do that as a recursive sub-function, to make bookkeeping easier. */
+	STOPIF( cm___get_sub_source_rek(sts, 0, src_url, src_rev, &eob), NULL);
+
+ex:
+	return status;
+}
+
+
+/** -.
+ *
+ * Wrapper around cm___get_base_source() and cm___get_sub_source().
+ * 
+ * If \c *src_url is needed, it is allocated and must be \c free()ed after 
+ * use.
+ *
+ * If \a name is not given, it has to be calculated.
+ *
+ * Both \a src_name and \a src_rev are optional.
+ * These are always set; if no source is defined, they're set to \c NULL, 
+ * \c NULL and \c SVN_INVALID_REVNUM.
+ *
+ * Uninitializing should be done via calling with \c sts==NULL; in this 
+ * case the \a register_for_cleanup value is used as success flag.
+ *
+ * If no source could be found, \c ENOENT is returned. */
+int cm__get_source(struct estat *sts, char *name,
+		char **src_url, svn_revnum_t *src_rev,
+		int register_for_cleanup)
+{
+	int status;
+
+
+	if (!sts)
+	{
+		status=cm___get_base_source(NULL, NULL, NULL, NULL, 0, 0);
+		goto ex;
+	}
+
+	if (sts->flags & RF_COPY_BASE)
+	{
+		status= cm___get_base_source(sts, name, 
+				src_url, src_rev, 0,
+				register_for_cleanup);
+	}
+	else if (sts->flags & RF_COPY_SUB)
+	{
+		status= cm___get_sub_source(sts, name, 
+				src_url, src_rev);
+	}
+	else
+	{
 		status=ENOENT;
 		goto ex;
 	}
 
+	if (src_url)
+		DEBUGP("source of %s is %s", sts->name, *src_url);
 
-	if (!(sts->flags & (RF_COPY_BASE | RF_COPY_SUB)))
+	if (status)
 	{
-		DEBUGP("No copy bit set");
-		status=ENOENT;
+		/* That's a bug ... the bit is set, but no source was found?
+		 * Could some stale entry cause that? Don't error out now; perhaps at a 
+		 * later time. */
+		DEBUGP("bit set, no source!");
+		/* BUG_ON(1,"bit set, no source!"); */
+		goto ex;
 	}
-	else if (sts->flags & RF_COPY_SUB)
-	{
-		/* There are two strategies:
-		 * - Look which parent is the copy source, get its URL, and append the 
-		 *   path after that to the URL of the copy source:
-		 *     root / dir1 / dir2 / <copied_dest> / dir3 / <sts>
-		 *   and
-		 *     root / dir1 / dir3 / <src>
-		 *   Disadvantage: estat::copyfrom_src wouldn't be set; we'd have to 
-		 *   traverse the entries, and make the estat::by_name arrays for that.
-		 *   As estat::copyfrom_src is defined as output parameter, that 
-		 *   doesn't quite work.
-		 * - Current implementation: Recurse the parents up, and build the 
-		 *   paths down. */
-
-		/* We go for root once, to avoid doing that over and over again. */
-		if (!root)
-		{
-			root=sts;
-			while (root->parent) root=root->parent;
-		}
-
-		/* Get source of parent. */
-		status=cm__get_source(sts->parent, NULL, root, 
-				NULL, NULL, src_rev, register_for_cleanup);
-
-		if (status)
-		{
-			/* That's a bug ... the bit is set, but no source was found?
-			 * Could some stale entry cause that? Don't error out now; perhaps at a 
-			 * later time. */
-			DEBUGP("bit set, no source!");
-			/* BUG_ON(1,"bit set, no source!"); */
-			goto ex;
-		}
-
-		/* Now we know the copyfrom source of the parent; we look for the entry  
-		 * with the same name below there.  */
-		STOPIF( ops__traverse(sts->parent->copyfrom_src, sts->name, 
-					0, 0, &src), NULL);
-		sts->copyfrom_src=src;
-		/* The src_rev of a copy_sub is the same as of the copied parent, and 
-		 * that was already set by the recursive calls.  */
-		if (src_sts) *src_sts=src;
-		if (src_name)
-			STOPIF( ops__build_path(&source_path, src), NULL);
-	}
-	else
-	{
-		/* Normal proceedings, this is a direct target of a copy definition. */
-		if (!name)
-			STOPIF( ops__build_path( &name, sts), NULL);
-
-		if (name[0]=='.' && name[1]==PATH_SEPARATOR)
-			name+=2;
-
-		key.dptr=name;
-		key.dsize=strlen(name)+1;
-		status=hsh__fetch(hash, key, &value);
-		if (status) 
-		{
-			DEBUGP("no source for %s found",
-					name);
-			goto ex;
-		}
-
-		if (register_for_cleanup)
-			STOPIF( hsh__register_delete(hash, key), NULL);
-
-		if (!root)
-		{
-			root=sts;
-			while (root->parent) root=root->parent;
-		}
-
-		status=ops__traverse( root, value.dptr, 0, 0, &src);
-		if (status == ENOENT)
-		{
-			DEBUGP("Source entry %s for %s doesn't exist; might be stale.",
-					value.dptr, name);
-			goto ex;
-		}
-		STOPIF( status, NULL);
-
-
-		if (sts)
-			sts->copyfrom_src=src;
-
-		if (src_rev) *src_rev=src->url->current_rev;
-		if (src_sts) *src_sts=src;
-
-		source_path=value.dptr;
-	}
-
-	if (src_name)
-	{
-		BUG_ON(!source_path);
-
-		*src_name=strdup(source_path);
-		STOPIF_ENOMEM(!src_name);
-	}
-
-	DEBUGP("source of %s found as %s",
-			name, value.dptr);
 
 ex:
-	IF_FREE( value.dptr );
-
 	return status;
 }
-
 

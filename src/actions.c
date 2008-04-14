@@ -24,18 +24,12 @@
 /** This wrapper-callback for the current action callback calculates the \a 
  * path and fills in the \c entry_type for the current \a sts, if 
  * necessary.  */
-int ac__dispatch(struct estat *sts, char *path)
+int ac__dispatch(struct estat *sts)
 {
 	int status;
 
 	status=0;
 	if (!action->local_callback) goto ex;
-
-	if (!path)
-	{
-		status=ops__build_path(&path, sts);
-		if (status) return status;
-	}
 
 	/* remove all variables */
 	switch (sts->entry_type)
@@ -51,10 +45,10 @@ int ac__dispatch(struct estat *sts, char *path)
 	if (opt__get_int(OPT__FILTER) == FILTER__ALL ||
 			/* or it's an interesting entry. */
 			(sts->entry_status & opt__get_int(OPT__FILTER)))
-		STOPIF( action->local_callback(sts, path), NULL);
+		STOPIF( action->local_callback(sts), NULL);
 	else 
 	{
-		DEBUGP("%s is not the entry you're looking for", path);
+		DEBUGP("%s is not the entry you're looking for", sts->name);
 		/* We have to keep the removed flag for directories, so that children 
 		 * know that they don't exist anymore. */
 		if (S_ISDIR(sts->st.mode) && (sts->entry_status & FS_REMOVED))

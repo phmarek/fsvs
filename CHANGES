@@ -1,3 +1,59 @@
+Changes since 1.1.13
+- New option for conflict handling; allows "stop" (historical default), 
+	"local", "remote", "both" or "merge".
+- New "resolve" action.
+- Filter option "text" now means removed entries, too.
+- Verbose "urls dump".
+- Checkout now prints the entries as they're checked out.
+- Small fixes and cleanups.
+- Bugfix - option "filter" wasn't taken from config files.
+- Bugfix for "st -N -N" printing all deleted entries.
+- Fix for "svn log | head -1" sometimes erroring out (EPIPE).
+- Bugfix for eg. diff - querying the URL of entries could cause a buffer to be 
+	overwritten.
+- opt_parse() now only optionally silent; the user gets better messages on 
+	wrong options.
+- Bugfix for revert - would save the dir-list, even when an error occurs.
+- update can now be restricted to an arbitrary subset of URLs.
+- Tried to get compatibility with systems that don't expose MAJOR, MINOR 
+	and MKDEV (eg. Solaris).
+
+Changes since 1.1.12
+- Small changes, cleanups and optimizations
+- Some documentation updates
+- Bugfix for directory structure copying committed -- that should have been 
+  in 1.1.12.
+- Fix the "(inherited)" output in non-verbose status.
+- Fix the copyfrom bug (source directory changed between copy and commit).
+- "revert" now reverts add/unversion/copy commands.
+- "diff" of copied entries diffs against the copyfrom source.
+- "info" printed the data twice; with small cleanups it doesn't anymore.
+- Bugfixes for "revert" of added/unversioned/copied entries; see "statii" 
+	document.
+- New option to avoid the expensive MD5 copyfrom matcher.
+- Bugfix for "log" for very long lines and non-UTF8-locales.
+- A fair bit more testing for locale-dependent code paths.
+- New option to avoid empty commits.
+- Bugfix for "diff" - a new version of ssh doesn't close all unknown 
+	handles, or something like that. Cleaned up handling of colordiff pipe.
+- Bugfix - "unversion" worked only in the wc base, not somewhere below.
+- Bugfix for order of entry handling (last child before parent) - now it 
+	works as documented.
+- Fix for premature free() of the decoder structure on export - just 
+	cleanup; found via valgrind, was no real problem.
+- FSVS_WARNING can now parse multiple warning options.
+- New option "delay" - delays until a second wrap, used for scripts.
+	Can be "yes", "no", or any combination of (some) action names.
+- Workaround for copying copied, uncommitted entry - not so easy.
+- Bugfix for commit logic on copied files; do a local manber-hash if file 
+	data hasn't changed.
+- Bugfix for revert of meta-data for directories. Thank you, Christopher.
+- Ignore pattern "./**/" made into a special case.
+- Verbose version ("fsvs -v -V") now prints the compile time, too.
+- Support for absolute ignore patterns; they ease expanding the wc area 
+	later. Warning if they don't match the wc base.
+- FSVS_WARNINGS is deprecated. Use FSVS_WARNING.
+
 Changes since 1.1.11
 - Licence change to GPLv3.
 - Some cleanups

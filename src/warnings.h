@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2007 Philipp Marek.
+ * Copyright (C) 2006-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -103,6 +103,9 @@ typedef enum {
 	 * (But there are filesystems that destroy themselves ...) */
 	WRN__LOCAL_VANISHED,
 
+	/** Absolute ignore pattern doesn't match wc base. */
+	WRN__IGNPAT_WCBASE,
+
 	/** Test warning - for debugging and automated testing. */
 	WRN__TEST_WARNING,
 	/** Maximum index - keep this at the end! */
@@ -121,6 +124,9 @@ int wa__set_warn_option(char *stg, enum opt__prio_e prio);
 
 /** Print the warning summary as debug messages.  */
 int wa__summary(void);
+
+/** Splits a string on whitespace, and sets warning options. */
+int wa__split_process(char *warn, int prio);
 
 
 #endif

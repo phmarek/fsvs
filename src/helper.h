@@ -11,6 +11,7 @@
 
 
 #include "global.h"
+#include "options.h"
 
 /** \file
  * Helper functions header file. */
@@ -100,14 +101,14 @@ struct encoder_t {
 	int eof;
 	/** The un-encoded data digest (context). */ 
 	apr_md5_ctx_t md5_ctx;
-	/** The un-encoded data MD5 digest. */ 
-	md5_digest_t md5;
 	/** How many bytes are left to send in this buffer. */
 	apr_size_t bytes_left;
 	/** Where unsent data starts. */
 	int data_pos;
 	/** The buffer. */
 	char buffer[ENCODE_BLOCKSIZE];
+	/** Where to put the final md5. */
+	md5_digest_t *output_md5;
 };
 
 
@@ -148,5 +149,13 @@ int hlp__is_special_property_name(const char *name);
 /** Reads all data from \a stream and drops it. */
 int hlp__stream_md5(svn_stream_t *stream, 
 		unsigned char md5[APR_MD5_DIGESTSIZE]);
+
+/** Delay until time wraps. */
+int hlp__delay(time_t start, enum opt__delay_e which);
+
+/** Renames a local file to something like .mine. */
+int hlp__rename_to_unique(char *fn, char *extension, 
+		const char **unique_name, 
+		apr_pool_t *pool);
 
 #endif

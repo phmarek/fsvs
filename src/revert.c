@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2007 Philipp Marek.
+ * Copyright (C) 2006-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -7,6 +7,7 @@
  ************************************************************************/
 #include <unistd.h>
 #include <stdio.h>
+#include <fcntl.h>
 
 #include <subversion-1/svn_delta.h>
 #include <subversion-1/svn_ra.h>
@@ -16,12 +17,14 @@
 #include "est_ops.h"
 #include "racallback.h"
 #include "warnings.h"
+#include "resolve.h"
 #include "checksum.h"
 #include "props.h"
 #include "cache.h"
 #include "helper.h"
 #include "url.h"
 #include "update.h"
+#include "cp_mv.h"
 #include "status.h"
 
 
@@ -39,17 +42,34 @@
  * fsvs revert [-rRev] [-R] PATH [PATH...]
  * \endcode
  * 
- * This command replaces a local entry with its repository version.
+ * This command undoes local modifications:
+ * - An entry that is marked to be unversioned gets this flag removed.
+ * - For a already versioned entry (existing in the repository), the local 
+ *   entry is replaced with its repository version, and its status and 
+ *   flags are cleared.
+ * - An entry that is a copy destination, but modified, gets reverted to 
+ *   the copy source data.
+ * - An unmodified direct copy destination entry, and other uncommitted 
+ *   entries with special flags (manually added, or defined as copied), are 
+ *   changed back to "<i>N</i>"ew -- the copy definition and the special 
+ *   status is removed. \n
+ *   Please note that on implicitly copied entries (entries that are marked 
+ *   as copied because some parent directory is the base of a copy) \b 
+ *   cannot be un-copied; they can only be reverted to their original 
+ *   (copied-from) data, or removed.
+ *
+ * See also \ref howto_entry_statii.
  * 
- * If a directory is given on the command line \b all known entries <b>in 
- * this directory</b> are reverted to the old state; this behaviour can be 
+ * If a directory is given on the command line <b>all known entries in this 
+ * directory</b> are reverted to the old state; this behaviour can be 
  * modified with \ref glob_opt_rec "-R/-N", or see below.
  *
  * The reverted entries are printed, along with the status they had \b 
- * before the revert (because the new status is \e unchanged).
+ * before the revert (because the new status is per definition \e 
+ * unchanged).
  *
- * If a revision is given, its data is taken; furthermore, the \b new 
- * status of that entry is shown.
+ * If a revision is given, the entries' data is taken from this revision; 
+ * furthermore, the \b new status of that entry is shown.
  * \note Please note that mixed revision working copies are not possible; 
  * the \e BASE revision is not changed, and a simple \c revert without a 
  * revision arguments gives you that.
@@ -62,15 +82,19 @@
  * 
  * In contrast, if you \ref update "update" to an older version, you 
  * - cannot choose single entries (no mixed revision working copies),
- * - and you cannot commit the old version with changes, if later changes 
- *   would conflict in the repository.
+ * - and you cannot commit the old version with changes, as later changes 
+ *   will create conflicts in the repository.
  *
  *
- * \subsection rev_del Currently only known (already versioned) entries 
- * are handled.
+ * \subsection rev_del Currently only known entries are handled.
  * If you need a switch (like \c --delete in \c rsync(1) ) to remove 
  * unknown (new, not yet versioned) entries, to get the directory in  the 
  * exact state it is in the repository, say so.  
+ *
+ * \todo Another limitation is that just-deleted just-committed entries 
+ * cannot be fetched via \c revert, as FSVS no longer knows about them. \n
+ * TODO: If a revision is given, take a look there, and ignore the local 
+ * data?
  *
  *
  * \subsection rev_p If a path is specified whose parent is missing, \c 
@@ -91,7 +115,19 @@
  * <tr><td>none  <td> this directory, and direct children of the directory,
  * <tr><td>\c -R <td>  this directory, and the complete tree below.
  * </table>
+ *
+ * \subsection rev_copied Working with copied entries
+ * If an entry is marked as copied from another entry (and not committed!), 
+ * a \c revert will undo the copy setting - which will make the entry 
+ * unknown again, and reported as new on the next invocations.
+ *
+ * If a directory structure was copied, and the current entry is just a 
+ * implicitly copied entry, \c revert would take the copy source as 
+ * reference, and <b>get the file data</b> from there.
+ *
+ * Summary: <i>Only the base of a copy can be un-copied.</i> 
  * */
+
  
 /** A count of files reverted in \b this run. */
 static int number_reverted=0;
@@ -105,16 +141,21 @@ static svn_revnum_t last_rev;
  * Meta-data is set; an existing local entry gets atomically removed by \c 
  * rename().
  * The \c sts->entry_type \b must be correct.
- * The \c sts->url->session \b must already be opened.
+ * \c current_url \b must match, and be open.
  *
  * If \a only_tmp is not \c NULL, the temporary file is not renamed
  * to the real name; instead its path is returned, in a buffer which must
  * not be freed. There is a small number of such buffers used round-robin;
- * at least two slots are always valid. 
+ * at least two slots are always valid. \n
+ * No manber-hashes are done in this case.
+ *
+ * If \a url_to_use is not \c NULL, it is taken as source, and so must not 
+ * be a directory.
  */
 #define REV___GETFILE_MAX_CACHE (4)
 int rev__get_file(struct estat *sts, 
 		svn_revnum_t revision,
+		char *url_to_use,
 		svn_revnum_t *fetched,
 		char **only_tmp,
 		apr_pool_t *pool)
@@ -136,6 +177,7 @@ int rev__get_file(struct estat *sts,
 	svn_stringbuf_t *target_stringbuf;
 	const char *encoder_str;
 	struct encoder_t *encoder;
+	char *relative_to_url;
 
 
 	STOPIF( cch__new_cache(&cache, 8), NULL);
@@ -150,8 +192,30 @@ int rev__get_file(struct estat *sts,
 	 * length might not be addressible any more. */
 	STOPIF( cch__add(cache, 0, NULL, sts->path_len+16, &filename_tmp), NULL);
 
-	DEBUGP("getting file %s/%s@%llu into cache %d", 
-			sts->url->url, filename, (t_ull)revision, cache->lru);
+
+	if (!url_to_use)
+	{
+		/* Skip ./ in front. */
+		relative_to_url=filename+2;
+	}
+	else
+	{
+		/* Verify that the correct URL is taken. */
+		if (strncmp(current_url->url, url_to_use, current_url->urllen) == 0)
+		{
+			DEBUGP("%s matches current_url.", url_to_use);
+		}
+		else
+		{
+			STOPIF(EINVAL, "%s not below %s", url_to_use, current_url->url);
+		}
+
+		relative_to_url=url_to_use + current_url->urllen+1;
+	}
+
+	DEBUGP("getting file %s@%llu from %s",
+			relative_to_url, (t_ull)revision, current_url->url);
+
 
 	/* We could use a completely different mechanism for temp-file-names;
 	 * but keeping it close to the target lets us see if we're out of
@@ -198,13 +262,13 @@ int rev__get_file(struct estat *sts,
 	 * We need to get the MD5 anyway; there's svn_stream_checksummed(),
 	 * but that's just one chainlink more, and so we simply use our own
 	 * function. */
-	if (!action->is_import_export)
+	if (!action->is_import_export && !only_tmp)
 		STOPIF( cs__new_manber_filter(sts, stream, &stream, 
 					subpool),
 				NULL);	
 
 	/* We need to skip the ./ in front. */
-	STOPIF( hlp__local2utf8(filename+2, &utf8_path, -1), NULL);
+	STOPIF( hlp__local2utf8(relative_to_url, &utf8_path, -1), NULL);
 
 
 	/* If there's a fsvs:update-pipe, we would know when we have the file 
@@ -248,7 +312,7 @@ int rev__get_file(struct estat *sts,
 	{
 		/* Get the correct value for the update-pipe. */
 		STOPIF_SVNERR( svn_ra_get_file,
-				(sts->url->session,
+				(current_url->session,
 				 utf8_path,
 				 revision,
 				 NULL,
@@ -264,15 +328,18 @@ int rev__get_file(struct estat *sts,
 	/* First decode, then do manber-hashing. As the filters are prepended, we 
 	 * have to do that after the manber-filter. */
 	if (encoder_str)
+	{
 		STOPIF( hlp__encode_filter(stream, encoder_str, 1, 
 					&stream, &encoder, subpool), NULL);
+		encoder->output_md5= &(sts->md5);
+	}
 
 
 	if (!fetched) fetched=&revision;
 	/* \a fetched only gets set for \c SVN_INVALID_REVNUM , so set a default. */
 	*fetched=revision;
 	STOPIF_SVNERR( svn_ra_get_file,
-			(sts->url->session,
+			(current_url->session,
 			 utf8_path,
 			 revision,
 			 stream,
@@ -292,18 +359,14 @@ int rev__get_file(struct estat *sts,
 					target_stringbuf->data, subpool), NULL);
 	}
 
-	/* If the file got decoded, use the original MD5 for comparision. */
-	if (encoder)
-	  memcpy(sts->md5, encoder->md5, sizeof(sts->md5));
-
 
 	STOPIF( prp__set_from_aprhash(sts, props, subpool), NULL);
 
 
-	/* We unconditionally set the meta-data we have - either it's been read 
-	 * via the properties just above, it will have been read when getting the 
-	 * file, or we take the values it had. */
-	sts->remote_status |= FS_META_CHANGED;
+	/* We write all meta-data. If we got no values from the repository, we just
+	 * write what we have in the local filesystem back - the temporary file has
+	 * just some default values, after all. */
+	sts->entry_status |= FS_META_CHANGED;
 	DEBUGP("setting meta-data");
 	STOPIF( up__set_meta_data(sts, filename_tmp), NULL);
 
@@ -337,8 +400,112 @@ ex:
 	/* Return the original error. */
 	if (status)
 		unlink(filename_tmp);
-	IF_FREE(encoder);
 
+	return status;
+}
+
+
+/** -.
+ *
+ * The base name of the \a sts gets written to.
+ *
+ * If the merge gives no errors, the temporary files get deleted.
+ * */
+int rev__merge(struct estat *sts,
+		const char *file1, 
+		const char *common, 
+		const char *file2)
+{
+	int status;
+	pid_t pid;
+	char *output;
+	int hdl;
+	struct sstat_t stat;
+	int retval;
+
+
+	STOPIF( ops__build_path(&output, sts), NULL);
+
+	/* Remember the meta-data of the target */
+	STOPIF( hlp__lstat(file2, &stat), NULL);
+
+
+	pid=fork();
+	STOPIF_CODE_ERR( pid == -1, errno, "Cannot fork()" );
+	if (pid == 0)
+	{
+		/* Child. */
+		/* TODO: Is there some custom merge program defined?
+		 * We always use the currently defined property. */
+		/* TODO: how does that work if an update sends a wrong property? use 
+		 * both? */
+
+		/* Open the output file. */
+		hdl=open(output, O_WRONLY | O_CREAT, 0700);
+		STOPIF_CODE_ERR( hdl == -1, errno, 
+				"Cannot open merge output \"%s\"", output);
+		STOPIF_CODE_ERR( dup2(hdl, STDOUT_FILENO) == -1, errno,
+				"Cannot dup2");
+		/* No need to close hdl -- it's opened only for that process, and will 
+		 * be closed when it exec()s. */
+
+		STOPIF_CODE_ERR( execlp( opt__get_string(OPT__MERGE_PRG), 
+					opt__get_string(OPT__MERGE_PRG),
+					opt__get_string(OPT__MERGE_OPT),
+					"-p",
+					file1, common, file2,
+					NULL) == -1, errno,
+				"Starting the merge program \"%s\" failed",
+				opt__get_string(OPT__MERGE_PRG));
+
+	}
+
+	STOPIF_CODE_ERR( pid != waitpid(pid, &retval, 0), errno, "waitpid");
+
+	DEBUGP("merge returns %d (signal %d)", 
+			WEXITSTATUS(retval), WTERMSIG(retval));
+
+	/* Can that be? */
+	STOPIF_CODE_ERR( WIFSIGNALED(retval) || !WIFEXITED(retval), EINVAL, 
+			"\"%s\" quits by signal %d.", 
+			opt__get_string(OPT__MERGE_PRG),
+			WTERMSIG(retval));
+
+	if (WEXITSTATUS(retval) == 0)
+	{
+		DEBUGP("Remove temporary files.");
+
+		/* Ok, merge done. Remove temporary files, or at least try to. */
+		if (unlink(file1) == -1) status=errno;
+		if (unlink(file2) == -1) status=errno;
+		if (unlink(common) == -1) status=errno;
+		STOPIF(status, "Removing one or more temporary files "
+				"(merge of \"%s\") failed", output);
+	}
+	else
+	{
+		DEBUGP("non-zero return");
+		STOPIF_CODE_ERR( WEXITSTATUS(retval) != 1, EINVAL,
+				"\"%s\" exited with error code %d",
+				opt__get_string(OPT__MERGE_PRG),
+				WEXITSTATUS(retval));
+
+		STOPIF( res__mark_conflict(sts, 
+					file1, file2, common, NULL), NULL);
+
+		/* Means merge conflicts, but no error. */
+	}
+
+	/* As we've just changed the text, set the current mtime. */
+	sts->st.mtim.tv_sec=time(NULL);
+	/* Now set owner, group, and mode.
+	 * This does a lstat(), to get the current ctime and so on;
+	 * to make the changes visible, we use the meta-data of the target. */
+	STOPIF( up__set_meta_data(sts, NULL), NULL);
+	sts->st=stat;
+
+
+ex:
 	return status;
 }
 
@@ -363,7 +530,7 @@ int rev__get_props(struct estat *sts,
 	}
 
 	STOPIF_SVNERR( svn_ra_get_file,
-			(sts->url->session,
+			(current_url->session,
 			 utf8_path,
 			 revision,
 			 NULL, 
@@ -390,130 +557,204 @@ ex:
  * @a session from within the editing operations of @a update_editor.
  * \endcode
  * */
-int rev__action(struct estat *sts, char *path)
+int rev__action(struct estat *sts)
 {
 	int status;
 	svn_revnum_t fetched, wanted;
 	struct estat copy;
+	char *url_to_fetch;
+	char *path;
 
 
 	status=0;
-	DEBUGP("got %s", path);
-	/* If not seen as changed, but target is BASE, we don't need to do 
-	 * anything. */
-	if (!opt_target_revisions_given &&
-			!(sts->entry_status & FS__CHANGE_MASK))
-		goto ex;
+	STOPIF( ops__build_path(&path, sts), NULL);
 
+	/* Garbage collection for entries that should be ignored happens in 
+	 * waa__output_tree(); changing the tree while it's being traversed is 
+	 * a bit nasty. */
 
-	wanted=opt_target_revisions_given ? opt_target_revision : sts->repos_rev;
-	/* The base directory has no revision, and so can't have a meaningful 
-	 * value printed. */
-	/* In case we're doing a revert which concernes multiple URLs, they might 
-	 * have different BASE revisions.
-	 * Print the current revision. */
-	if (sts->parent && (!number_reverted || last_rev != wanted))
+	if ( (sts->flags & RF_UNVERSION))
 	{
-		printf("Reverting to revision %s:\n", hlp__rev_to_string(wanted));
-		last_rev=wanted;
+		/* Was marked as to-be-unversioned? Just keep it. */
+		sts->flags &= ~RF_UNVERSION;
+		DEBUGP("removing unversion on %s", path);
 	}
-	number_reverted++;
-
-
-	/* see below */
-	copy=*sts;
-
-	if (sts->entry_type & FT_NONDIR)
+	else if ( (sts->flags & RF_COPY_BASE) &&
+			!(sts->entry_status & (FS_META_CHANGED | FS_CHANGED) ) )
 	{
-		/* Parent directories might just have been created. */
-		STOPIF( !sts->url,
-				"The entry '%s' has no URL associated.", path);
-
-		/* We cannot give connection errors before stat()ing many thousand 
-		 * files, because we do not know which URL to open -- until here. */
-		current_url = sts->url;
-		STOPIF( url__open_session(NULL), NULL);
-
-		DEBUGP("file was changed, reverting");
-
-		/* \todo It would be nice if we could solve meta-data *for the current 
-		 * revision* only changes without going to the repository - after all, 
-		 * we know the old values.
-		 * \todo Maybe we'd need some kind of parameter, --meta-only? Keep 
-		 * data, reset rights.
-		 * */
-		/* TODO - opt_target_revision ? */
-		STOPIF( rev__get_file(sts, wanted,
-					&fetched, NULL, current_url->pool),
-				"Unable to revert entry '%s'", path);
+		/* Directly copied, unchanged entry.
+		 * Make it unknown - remove copy relation (ie. mark hash value for 
+		 * deletion), and remove entry from local list. */
+		STOPIF( cm__get_source(sts, path, NULL, NULL, 1), NULL);
+		sts->flags &= ~RF_COPY_BASE;
+		sts->entry_type = FT_IGNORE;
+		DEBUGP("unchanged copy, reverting %s", path);
+	}
+	else if ( sts->flags & RF_ADD )
+	{
+		/* Added entry just gets un-added ... ie. unknown. */
+		sts->entry_type = FT_IGNORE;
+		DEBUGP("removing add-flag on %s", path);
+	}
+	else if (!( (sts->flags & (RF_COPY_BASE | RF_COPY_SUB)) || sts->url ) )
+	{
+		/* We have no URL, and no copyfrom source ... this is an unknown entry.
+		 * Has to be given directly on the command line, but could have happened 
+		 * via a wildcard - so don't stop working.
+		 * Can't do anything about it. */
+		printf("Cannot revert unknown entry %s.", path);
+		status=0;
+		goto ex;
 	}
 	else
 	{
-		if (sts->entry_status & FS_REMOVED)
+		/* We know where to get that from. */
+		DEBUGP("have an URL for %s", path);
+
+		if ( sts->flags & RF_CONFLICT )
+			STOPIF( res__remove_aux_files(sts), NULL);
+
+		/* If not seen as changed, but target is BASE, we don't need to do 
+		 * anything. */
+		if (!opt_target_revisions_given &&
+				!(sts->entry_status & FS__CHANGE_MASK))
+			goto ex;
+
+
+		wanted=opt_target_revisions_given ? opt_target_revision : sts->repos_rev;
+		/* The base directory has no revision, and so can't have a meaningful 
+		 * value printed. */
+		/* In case we're doing a revert which concernes multiple URLs, they might 
+		 * have different BASE revisions.
+		 * Print the current revision. */
+
+
+		url_to_fetch=NULL;
+		if (sts->flags & RF___IS_COPY)
 		{
-			status = (mkdir(path, sts->st.mode & 07777) == -1) ? errno : 0;
-			DEBUGP("mkdir(%s) says %d", path, status);
-			STOPIF(status, "Cannot create directory '%s'", path);
+			/* No URL yet, but we can reconstruct it. */
+			/* We have to use the copyfrom */
+			STOPIF( cm__get_source(sts, NULL, &url_to_fetch, &wanted, 0), NULL);
+
+			/* \TODO: That doesn't work for unknown URLs. */
+			STOPIF( url__find(url_to_fetch, &current_url), NULL);
+		}
+		else
+		{
+			STOPIF( !sts->url,
+					"The entry '%s' has no URL associated.", path);
+			current_url = sts->url;
 		}
 
-		/* Code for directories.
-		 * As the children are handled by the recursive options and by \a 
-		 * ops__set_to_handle_bits(), we only have to restore the directories' 
-		 * meta-data here. */
-		STOPIF( up__set_meta_data(sts, NULL), NULL);
-		if (sts->entry_status)
-			sts->flags |= RF_CHECK;
-	}
+
+		if (sts->parent && (!number_reverted || last_rev != wanted))
+		{
+			printf("Reverting to revision %s:\n", hlp__rev_to_string(wanted));
+			last_rev=wanted;
+		}
+		number_reverted++;
 
 
-	/* We do not allow mixed revision working copies - we'd have to store an 
-	 * arbitrary number of revision/URL pairs for directories.
-	 * See cb__record_changes(). 
-	 *
-	 * What we *do* allow is to switch entries' *data* to other revisions; but 
-	 * for that we store the old values of BASE, so that the file is displayed 
-	 * as modified.
-	 * An revert without "-r" will restore BASE, and a commit will send the 
-	 * current (old :-) data.
-	 *
-	 * But we show that it's modified. */
-	if (opt_target_revisions_given)
-	{
-		copy.entry_status = ops__stat_to_action(&copy, & sts->st);
-		if (sts->entry_type != FT_DIR && copy.entry_type != FT_DIR)
-			/* Same MD5? => Same file. Not fully true, though. */
-			if (memcmp(sts->md5, copy.md5, sizeof(copy.md5)) == 0)
-				copy.entry_status &= ~FS_LIKELY;
-		*sts=copy;
-	}
-	else
-	{
-		/* There's no change anymore, we're at BASE.
-		 * But just printing "...." makes no sense ... show the old status. */
+		/* see below */
+		copy=*sts;
+
+		/* Parent directories might just have been created. */
+		if (sts->entry_type & FT_NONDIR)
+		{
+			/* We cannot give connection errors before stat()ing many thousand 
+			 * files, because we do not know which URL to open -- until here. */
+			STOPIF( url__open_session(NULL), NULL);
+
+			DEBUGP("file was changed, reverting");
+
+			/* \todo It would be nice if we could solve meta-data *for the current 
+			 * revision* only changes without going to the repository - after all, 
+			 * we know the old values.
+			 * \todo Maybe we'd need some kind of parameter, --meta-only? Keep 
+			 * data, reset rights.
+			 * */
+			/* TODO - opt_target_revision ? */
+			STOPIF( rev__get_file(sts, wanted, url_to_fetch,
+						&fetched, NULL, current_url->pool),
+					"Unable to revert entry '%s'", path);
+		}
+		else
+		{
+			if (sts->entry_status & FS_REMOVED)
+			{
+				status = (mkdir(path, sts->st.mode & 07777) == -1) ? errno : 0;
+				DEBUGP("mkdir(%s) says %d", path, status);
+				STOPIF(status, "Cannot create directory '%s'", path);
+			}
+
+			/* Code for directories.
+			 * As the children are handled by the recursive options and by \a 
+			 * ops__set_to_handle_bits(), we only have to restore the directories' 
+			 * meta-data here. */
+			/* up__set_meta_data() checks remote_status, while we here have 
+			 * entry_status set. */
+			sts->remote_status=sts->entry_status;
+			STOPIF( up__set_meta_data(sts, NULL), NULL);
+			if (sts->entry_status)
+				sts->flags |= RF_CHECK;
+		}
+
+
+		/* We do not allow mixed revision working copies - we'd have to store an 
+		 * arbitrary number of revision/URL pairs for directories.
+		 * See cb__record_changes(). 
+		 *
+		 * What we *do* allow is to switch entries' *data* to other revisions; but 
+		 * for that we store the old values of BASE, so that the file is displayed 
+		 * as modified.
+		 * An revert without "-r" will restore BASE, and a commit will send the 
+		 * current (old :-) data.
+		 *
+		 * But we show that it's modified. */
+		if (opt_target_revisions_given)
+		{
+			copy.entry_status = ops__stat_to_action(&copy, & sts->st);
+			if (sts->entry_type != FT_DIR && copy.entry_type != FT_DIR)
+				/* Same MD5? => Same file. Not fully true, though. */
+				if (memcmp(sts->md5, copy.md5, sizeof(copy.md5)) == 0)
+					copy.entry_status &= ~FS_LIKELY;
+			*sts=copy;
+		}
+		else
+		{
+			/* There's no change anymore, we're at BASE.
+			 * But just printing "...." makes no sense ... show the old status. */
+		}
 	}
 
 	/* And if it was chosen directly, it should be printed, even if we have 
 	 * the "old" revision.  */
 	sts->flags |= RF_PRINT;
 
-	STOPIF( st__status(sts, path), NULL);
+	STOPIF( st__status(sts), NULL);
 
 
-	/* For files we have no changes anymore.
-	 * Removing the FS_REMOVED flag means that the children will be loaded, 
-	 * and we get called again after they're done :-)
-	 * See also actionlist_t::local_callback. */
-	sts->entry_status=0;
+	/* Entries that are now ignored don't matter for the parent directory; 
+	 * but if we really changed something in the filesystem, we have to 
+	 * update the parent status. */
+	if (sts->entry_type != FT_IGNORE)
+	{
+		/* For files we have no changes anymore.
+		 * Removing the FS_REMOVED flag for directories means that the children 
+		 * will be loaded, and we get called again after they're done :-)
+		 * See also actionlist_t::local_callback. */
+		sts->entry_status=0;
 
-	/* For directories we set that we still have meta-data to do - children 
-	 * might change our mtime. */
-	if (S_ISDIR(sts->st.mode))
-		sts->entry_status=FS_META_MTIME;
+		/* For directories we set that we still have meta-data to do - children 
+		 * might change our mtime. */
+		if (S_ISDIR(sts->st.mode))
+			sts->entry_status=FS_META_MTIME;
 
-	/* Furthermore the parent should be re-stat()ed after the children have 
-	 * finished. */
-	if (sts->parent)
-		sts->parent->entry_status |= FS_META_MTIME;
+		/* Furthermore the parent should be re-stat()ed after the children have 
+		 * finished. */
+		if (sts->parent)
+			sts->parent->entry_status |= FS_META_MTIME;
+	}
 
 ex:
 	return status;
@@ -527,6 +768,7 @@ int rev__work(struct estat *root, int argc, char *argv[])
 {
 	int status;
 	char **normalized;
+	time_t delay_start;
 
 
 	status=0;
@@ -557,20 +799,26 @@ int rev__work(struct estat *root, int argc, char *argv[])
 	status=waa__read_or_build_tree(root, argc, normalized, argv, NULL, 1);
 	if (status == ENOENT)
 		STOPIF(status,
-				"We know nothing about previous or current versions, as this tree\n"
+				"!We know nothing about previous or current versions, as this tree\n"
 				"was never checked in.\n"
 				"If you need such an entry reverted, you could either write the needed\n"
 				"patch (and send it to dev@fsvs.tigris.org), or try with a 'sync-repos'\n"
 				"command before (if you know a good revision number)\n");
+	else
+		STOPIF(status, NULL);
 
 	only_check_status=0;
+	delay_start=time(NULL);
 	STOPIF( waa__output_tree(root), NULL);
+	STOPIF( hlp__delay(delay_start, DELAY_REVERT), NULL);
 
 ex:
 	return status;
 }
 
 
+/** -.
+ * Used on update. */
 int rev__do_changed(svn_ra_session_t *session, 
 		struct estat *dir, 
 		apr_pool_t *pool)
@@ -581,6 +829,10 @@ int rev__do_changed(svn_ra_session_t *session,
 	char *fn;
 	struct sstat_t st;
 	apr_pool_t *subpool;
+	const char *unique_name_mine, 
+				*unique_name_remote, 
+				*unique_name_common;
+	char revnum[12];
 
 
 	status=0;
@@ -601,9 +853,38 @@ int rev__do_changed(svn_ra_session_t *session,
 			/* If we remove an entry, the entry_count gets decremented; 
 			 * we have to repeat the loop *for the same index*. */
 
-			/** \todo Conflict handling */
-			STOPIF_CODE_ERR( sts->entry_status & FS_CHANGED, EBUSY,
-					"The entry %s has changed locally", fn);
+
+			unique_name_mine=NULL;
+
+			/* Conflict handling; depends whether it has changed locally. */
+			if (sts->entry_status & (FS_CHANGED | FS_CHILD_CHANGED))
+				switch (opt__get_int(OPT__CONFLICT))
+				{
+					case CONFLICT_STOP:
+						STOPIF( EBUSY, "!The entry %s has changed locally", fn);
+						break;
+
+					case CONFLICT_LOCAL:
+						/* Next one, please. */
+						printf("Conflict for %s skipped.\n", fn);
+						continue;
+
+					case CONFLICT_REMOTE:
+						/* Just ignore local changes. */
+						break;
+
+					case CONFLICT_MERGE:
+					case CONFLICT_BOTH:
+						/* Rename local file to something like .mine. */
+						STOPIF( hlp__rename_to_unique(fn, ".mine", 
+									&unique_name_mine, pool), NULL);
+						/* Now the local name is not used ... so get the file. */
+						break;
+
+					default:
+						BUG("unknown conflict resolution");
+				}
+
 
 			/* If the entry has been removed in the repository, we remove it
 			 * locally, too (if it wasn't changed).
@@ -613,8 +894,11 @@ int rev__do_changed(svn_ra_session_t *session,
 			 * again - possibly as another type. */
 			if (sts->remote_status & FS_REMOVED)
 			{
-				/* Already removed? */
-				if ((sts->entry_status & FS_REPLACED) != FS_REMOVED)
+				/* Is the entry already removed? */
+				/* If there's a typechange involved, the old entry has been 
+				 * renamed, and so doesn't exist in the filesystem anymore. */
+				if ((sts->entry_status & FS_REPLACED) != FS_REMOVED &&
+						!unique_name_mine)
 				{
 					/* Find type. Small race condition - it might be removed now. */
 					/** \todo - remember what kind it was *before updating*, and
@@ -641,7 +925,7 @@ int rev__do_changed(svn_ra_session_t *session,
 				else
 				{
 					/* We must do that here ... later the entry is no longer valid. */
-					STOPIF( st__rm_status(sts, NULL), NULL);
+					STOPIF( st__rm_status(sts), NULL);
 					STOPIF( ops__delete_entry(dir, NULL, i, UNKNOWN_INDEX), NULL);
 					i--;
 					goto loop_end;
@@ -652,6 +936,8 @@ int rev__do_changed(svn_ra_session_t *session,
 			/* If we change something in this directory, we have to re-sort the 
 			 * entries by inode again. */
 			dir->to_be_sorted=1;
+
+			current_url=sts->url;
 
 			if (S_ISDIR(sts->st.mode))
 			{
@@ -678,9 +964,74 @@ int rev__do_changed(svn_ra_session_t *session,
 			{
 				if (sts->remote_status & (FS_CHANGED | FS_REPLACED))
 				{
-					STOPIF( rev__get_file(sts, sts->repos_rev,
+					STOPIF( rev__get_file(sts, sts->repos_rev, NULL,
 								NULL, NULL, subpool),
 							NULL);
+
+					/* We had a conflict; rename the file fetched from the 
+					 * repository to a unique name. */
+					if (unique_name_mine)
+					{
+						/* If that revision number overflows, we've got bigger problems.  
+						 * */
+						snprintf(revnum, sizeof(revnum)-1, 
+								".r%llu", (t_ull)sts->repos_rev);
+						revnum[sizeof(revnum)-1]=0;
+
+						STOPIF( hlp__rename_to_unique(fn, revnum,
+									&unique_name_remote, pool), NULL);
+
+						/* If we're updating and already have a conflict, we don't 
+						 * merge again. */
+						if (sts->flags & RF_CONFLICT)
+						{
+							printf("\"%s\" already marked as conflict.\n", fn);
+							STOPIF( res__mark_conflict(sts, 
+										unique_name_mine, unique_name_remote, NULL), NULL);
+						}
+						else if (opt__get_int(OPT__CONFLICT) == CONFLICT_BOTH)
+						{
+							STOPIF( res__mark_conflict(sts, 
+										unique_name_mine, unique_name_remote, NULL), NULL);
+
+							/* Create an empty file,
+							 * a) to remind the user, and
+							 * b) to avoid a "Deleted" status. */
+							j=creat(fn, 0777);
+							if (j != -1) j=close(j);
+
+							STOPIF_CODE_ERR(j == -1, errno, 
+									"Error creating \"%s\"", fn);
+
+							/* up__set_meta_data() does an lstat(), but we want the 
+							 * original values. */
+							st=sts->st;
+							STOPIF( up__set_meta_data(sts, fn), NULL);
+							sts->st=st;
+						}
+						else if (opt__get_int(OPT__CONFLICT) == CONFLICT_MERGE)
+						{
+							{
+								STOPIF( rev__get_file(sts, sts->old_rev, NULL,
+											NULL, NULL, subpool),
+										NULL);
+
+								snprintf(revnum, sizeof(revnum)-1, 
+										".r%llu", (t_ull)sts->old_rev);
+								revnum[sizeof(revnum)-1]=0;
+
+								STOPIF( hlp__rename_to_unique(fn, revnum,
+											&unique_name_common, pool), NULL);
+
+								STOPIF( rev__merge(sts, 
+											unique_name_mine, 
+											unique_name_common, 
+											unique_name_remote), NULL);
+							}
+						}
+						else
+							BUG("why a conflict?");
+					}
 				}
 				else 
 				{
@@ -719,18 +1070,18 @@ int rev__do_changed(svn_ra_session_t *session,
 
 		/* After the recursive call the path string may not be valid anymore. 
 		 * */
-		STOPIF( st__rm_status(sts, NULL), NULL);
+		STOPIF( st__rm_status(sts), NULL);
 
 loop_end:
 		apr_pool_destroy(subpool);
 		subpool=NULL;
 	}
 
-	STOPIF( ops__free_marked(dir), NULL);
+	STOPIF( ops__free_marked(dir, 0), NULL);
 
 	/* The root entry would not be printed; do that here. */
 	if (!dir->parent)
-		STOPIF( st__rm_status(dir, NULL), NULL);
+		STOPIF( st__rm_status(dir), NULL);
 
 	/* If the directory had local modifications, we need to check it 
 	 * next time -- as we take its current timestamp,

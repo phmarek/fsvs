@@ -107,6 +107,8 @@ typedef svn_error_t *(*change_any_prop_t) (void *baton,
 		apr_pool_t *pool);
 
 
+unsigned committed_entries;
+
 
 /** -.
  * */
@@ -161,9 +163,17 @@ svn_error_t * ci__callback (
 /** -.
  *
  * This callback is called by input_tree and build_tree. */
-int ci__action(struct estat *sts,
-		char *path)
+int ci__action(struct estat *sts)
 {
+	int status;
+	char *path;
+
+
+	STOPIF( ops__build_path(&path, sts), NULL);
+
+	STOPIF_CODE_ERR( sts->flags & RF_CONFLICT, EBUSY,
+			"!The entry \"%s\" is still marked as conflict.", path);
+
 	if (sts->entry_status ||
 			(sts->flags & (RF_ADD | RF_UNVERSION | RF_PUSHPROPS)) )
 	{
@@ -177,7 +187,10 @@ int ci__action(struct estat *sts,
 		}
 	}
 
-	return st__progress(sts, path);
+	STOPIF( st__progress(sts), NULL);
+
+ex:
+	return status;
 }
 
 
@@ -355,7 +368,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	hash_t db;
 	datum encoder_prop;
 	struct encoder_t *encoder;
-	int transfer_text;
+	int transfer_text, has_manber;
 
 
 	str=NULL;
@@ -390,13 +403,14 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	 * a difference if you do not have a gigabit pipe to your
 	 * server. ;)
 	 * The RF_ADD was replaced by FS_NEW above. */
-	DEBUGP("%s: status %s, flags %s", sts->name,
+	DEBUGP("%s: status %s; flags %s", sts->name,
 			st__status_string(sts), 
       st__flags_string_fromint(sts->flags));
 
+
 	transfer_text= sts->entry_status & (FS_CHANGED | FS_NEW | FS_REMOVED);
-	/* In case the file is identical to the original copy source, we need not 
-	 * send the data to the server.
+	/* In case the file is identical to the original copy source, we need 
+	 * not send the data to the server.
 	 * BUT we have to store the correct MD5 locally; as the source file may 
 	 * have changed, we re-calculate it - that has the additional advantage 
 	 * that the manber-hashes get written, for faster comparision next time.  
@@ -413,14 +427,13 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	 *
 	 * TODO: run the whole fsvs commit process against an unionfs, and use 
 	 * that for local transactions. */
-	if (!transfer_text && !(sts->flags & RF_COPY_BASE))
+	if (!transfer_text && !(sts->flags & RF___IS_COPY))
 	{
-		DEBUGP("File has not actually changed, skipping fulltext upload.");
+		DEBUGP("hasn't changed, and no copy.");
 	}
 	else
 	{
-		/* The data has changed - send the "body" (or "full-text"). */
-		DEBUGP("sending text");
+		has_manber=0;
 		switch (sts->entry_type)
 		{
 			case FT_SYMLINK:
@@ -446,7 +459,8 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 
 				/* We need the local manber hashes and MD5s to detect changes;
 				 * the remote values would be needed for delta transfers. */
-				if (sts->st.size >= CS__MIN_FILE_SIZE)
+				has_manber= (sts->st.size >= CS__MIN_FILE_SIZE);
+				if (has_manber)
 					STOPIF( cs__new_manber_filter(sts, s_stream, &s_stream, pool), NULL );
 
 				/* That's needed only for actually putting the data in the 
@@ -459,6 +473,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 					{
 						STOPIF( hlp__encode_filter(s_stream, encoder_prop.dptr, 0,
 									&s_stream, &encoder, pool), NULL );
+						encoder->output_md5= &(sts->md5);
 					}
 				}
 				break;
@@ -492,11 +507,12 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 		else
 		{
 			DEBUGP("doing local MD5.");
-			/* For a non-changed entry, simply pass the data through. */
-			/* If the file is big enough for manber hashing, we need no second 
-			 * MD5 calculation ... further down we take the already computed 
-			 * value.  */
-			STOPIF( hlp__stream_md5(s_stream, encoder ? NULL : sts->md5), NULL);
+			/* For a non-changed entry, simply pass the data through the MD5 (and, 
+			 * depending on filesize, the manber filter).
+			 * If the manber filter already does the MD5, we don't need it a second 
+			 * time. */
+			STOPIF( hlp__stream_md5(s_stream, 
+						has_manber ? NULL : sts->md5), NULL);
 		}
 
 		STOPIF_SVNERR( svn_stream_close, (s_stream) );
@@ -513,7 +529,6 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 		/* If the entry was encoded, send the original MD5 as well. */
 		if (encoder)
 		{
-			memcpy(sts->md5, encoder->md5, sizeof(sts->md5));
 			cp=cs__md52hex(sts->md5);
 			DEBUGP("Sending original MD5 as %s", cp);
 
@@ -521,10 +536,11 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 			STOPIF_SVNERR( editor->change_file_prop,
 					(baton, propname_origmd5, stg, pool) );
 		}
-	} /* send full-text if changed*/
+
+	}
+
 
 	STOPIF( cs__set_file_committed(sts), NULL);
-
 
 ex:
 	if (a_stream)
@@ -534,7 +550,6 @@ ex:
 		apr_file_close(a_stream);
 	}
 	if (db) hsh__close(db, status);
-	IF_FREE(encoder);
 
 	RETURN_SVNERR(status);
 }
@@ -556,7 +571,6 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	char* utf8_filename;
 	svn_error_t *status_svn;
 	struct sstat_t dummy_stat64;
-	struct estat *src_sts;
 	char *src_path;
 	svn_revnum_t src_rev;
 
@@ -568,21 +582,25 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	{
 		sts=dir->by_inode[i];
 
-		if (sts->do_this_entry)
+
+		/* The flags are stored persistently; we have to check whether this 
+		 * entry shall be committed. */
+		if ( (sts->flags & RF___COMMIT_MASK) && sts->do_this_entry)
 		{
 			/* Did we change properties since last commit? Then we have something 
 			 * to do. */
 			if (sts->flags & RF_PUSHPROPS)
 				sts->entry_status |= FS_PROPERTIES;
-			/* TODO: better RF_ADD? Difference is N to n. */
-			if (sts->flags & RF_COPY_BASE)
-				sts->entry_status |= FS_NEW;
 		}
-
-		/* completely ignore item if nothing to be done */
-		if (!(sts->entry_status || 
-					(sts->flags & RF___COMMIT_MASK)))
+		else if (sts->entry_status)
+		{
+			/* The entry_status is set depending on the do_this_entry already;
+			 * if it's not 0, it's got to be committed. */
+		}
+		else
+			/* Completely ignore item if nothing to be done. */
 			continue;
+
 
 		/* clear an old pool */
 		if (subpool) apr_pool_destroy(subpool);
@@ -594,7 +612,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		/* as the path needs to be canonical we strip the ./ in front */
 		STOPIF( hlp__local2utf8(filename+2, &utf8_filename, -1), NULL );
 
-		STOPIF( st__status(sts, filename), NULL);
+		STOPIF( st__status(sts), NULL);
 
 		DEBUGP("%s: action is %X, type is %X, flags %X", 
 				filename, sts->entry_status, sts->entry_type, sts->flags);
@@ -611,6 +629,8 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			/* that's easy :-) */
 			STOPIF_SVNERR( editor->delete_entry,
 					(utf8_filename, SVN_INVALID_REVNUM, dir_baton, subpool) );
+
+			committed_entries++;
 
 			if (!exists_now)
 			{
@@ -723,12 +743,9 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			 * not actually get much. */
 			if (sts->flags & RF_COPY_BASE)
 			{
-				status=cm__get_source(sts, filename, NULL, 
-						&src_sts, NULL, &src_rev, 1);
+				status=cm__get_source(sts, filename, &src_path, &src_rev, 1);
 				BUG_ON(status == ENOENT, "copy but not copied?");
 				STOPIF(status, NULL);
-
-				STOPIF( urls__full_url( src_sts, NULL, &src_path), NULL);
 			}
 			else
 			{
@@ -740,9 +757,6 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			/* TODO: src_sts->entry_status newly added? Then remember for second  
 			 * commit!
 			 * */
-
-			/* TODO: remember this filename for purging from the database after 
-			 * commit. */
 
 			DEBUGP("adding %s with %s:%ld",
 					filename, src_path, src_rev);
@@ -763,11 +777,14 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			if (sts->flags & RF_COPY_BASE)
 				ci___unset_copyflags(sts);
 			else
+			{
 				sts->flags &= ~RF_ADD;
-			sts->entry_status |= FS_NEW | FS_META_CHANGED;
+				sts->entry_status |= FS_NEW | FS_META_CHANGED;
+			}
 		}
 
 
+		committed_entries++;
 		DEBUGP("doing changes, flags=%X", sts->flags);
 		/* Now we have a baton. Do changes. */
 		if (sts->entry_type == FT_DIR)
@@ -916,6 +933,7 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	char *utf8_commit_msg;
 	char **normalized;
 	const char *url_name;
+	time_t delay_start;
 
 
 	status=0;
@@ -1027,14 +1045,26 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	STOPIF_SVNERR( editor->open_root,
 			(edit_baton, current_url->current_rev, global_pool, &root_baton) );
 
+	committed_entries=0;
 	/* This is the second step that takes time. */
 	STOPIF_SVNERR( ci__directory,
 			(editor, root, root_baton, global_pool));
 
+	/* If an error occurred, abort the commit. */
 	if (!status)
 	{
+		if (opt__get_int(OPT__EMPTY_COMMIT)==OPT__NO && 
+				committed_entries==0)
+		{
+			printf("Avoiding empty commit as requested.\n");
+			goto abort_commit;
+		}
+
+
 		STOPIF_SVNERR( editor->close_edit, (edit_baton, global_pool) );
 		edit_baton=NULL;
+
+		delay_start=time(NULL);
 
 		/* Has to write new file, if commit succeeded. */
 		if (!status)
@@ -1049,10 +1079,11 @@ int ci__work(struct estat *root, int argc, char *argv[])
 			STOPIF( waa__output_tree(root), NULL);
 			STOPIF( url__output_list(), NULL);
 		}
+
+		/* We do the delay here ... here we've got a chance that the second 
+		 * wrap has already happened because of the IO above. */
+		STOPIF( hlp__delay(delay_start, DELAY_COMMIT), NULL);
 	}
-	
-	STOPIF( cm__get_source(NULL, NULL, NULL, NULL, NULL, NULL, status), 
-			NULL);
 
 ex:
 	STOP_HANDLE_SVNERR(status_svn);
@@ -1060,6 +1091,7 @@ ex:
 ex2:
 	if (status && edit_baton)
 	{
+abort_commit:
 		/* If there has already something bad happened, it probably
 		 * makes no sense checking the error code. */
 		editor->abort_edit(edit_baton, global_pool);

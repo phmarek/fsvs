@@ -1,4 +1,4 @@
-Detailed Description
+Using ignore patterns
 
 Why should I ignore files?
 
@@ -29,7 +29,6 @@ Shell-like patterns
    the first character or also be escaped using a backslash.
 
    Example for / as the base-directory
-
      ./[oa]pt
      ./sys
      ./proc/*
@@ -47,23 +46,43 @@ Shell-like patterns
           you want to exclude a directories' files, but not the directory
           itself, use something like ./dir/* or ./dir/**
 
+Absolute shell patterns
+
+   There's another way to specify shell patterns - using absolute paths.
+   The syntax is similar to normal shell patterns; but instead of the ./
+   prefix the full path, starting with /, is used.
+
+         /etc/**.dpkg-old
+         /etc/**.dpkg-bak
+         /**.bak
+         /**~
+
+   The advantage of using full paths is that a later dump and load in
+   another working copy (eg. when moving from versioning /etc to /) does
+   simply work; the patterns don't have to be modified.
+
+   Internally this simply tries to remove the working copy base directory
+   at the start of the patterns; then they are processed as usually.
+
+   If a pattern does not match the wc base, and neither has the
+   wild-wildcard prefix /**, a warning is issued; this can be handled as
+   usual.
+
 PCRE-patterns
 
    PCRE stands for Perl Compatible Regular Expressions; you can read about
-   them with man pcre (if the manpages are installed), and/or
-   asdfasdgasdgahsgkjashg perldoc perlre (if perldoc is installed)
+   them with man pcre (if the manpages are installed), and/or perldoc
+   perlre (if perldoc is installed)
 
    These patterns have the form PCRE:{pattern} (with PCRE in uppercase, to
    distinguish from modifiers).
 
    An example:
-
      PCRE:./home/.*~
 
    This one achieves exactly the same as ./home/**~ .
 
    Another example:
-
      PCRE:./home/[a-s]
 
    This would match /home/anthony , /home/guest , /home/somebody and so
@@ -93,7 +112,6 @@ Ignoring all files on a device
    bigger-or-equal-than relationship, to ignore a set of device classes.
 
    Examples:
-
      tDEVICE:3
      ./*
 
@@ -116,7 +134,6 @@ Ignoring a single file, by inode
 
    At last, another form to ignore entries is to specify them via the
    device their on and their inode:
-
      INODE:major:minor:inode
 
    This can be used if a file can be hardlinked to many places, but only
@@ -141,4 +158,3 @@ Modifiers
 
    Such declaration would store only /proc/stat , and nothing else of
    /proc .
-

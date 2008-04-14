@@ -14,9 +14,24 @@ fn2=$fn-2
 log=$LOGDIR/043.cp_mv
 
 echo $data > $fn1-a
-$BINq ci -m a
+$BINq ci -m a -o delay=yes
 mkdir d1
-sleep 1
+
+echo $RANDOM > $fn1-b
+$BINdflt copyfrom-detect > $log
+if [[ `cat $log` != "No copyfrom relations found." ]]
+then
+  $ERROR "Reported a completely unrelated entry"
+fi
+$BINdflt -v copyfrom-detect $fn1-b > $log
+if [[ `grep $fn1-b $log` == "- No copyfrom relation found for $fn1-b" ]]
+then
+  $SUCCESS "Verbose copyfrom-detect reports none found."
+else
+  $ERROR "Message 'not found' missing"
+fi
+
+
 
 cat $fn1-a > $fn1-b
 $BINdflt copyfrom-detect > $log
@@ -29,11 +44,21 @@ else
   $ERROR "md5 check not passed"
 fi
 
+
+$BINdflt copyfrom-detect -o copyfrom_exp=no > $log
+if [[ `cat $log` == "No copyfrom relations found." ]]
+then
+  $SUCCESS "Can avoid expensive checks."
+else
+	cat $log
+  $ERROR "md5 always done?"
+fi
+
+
 rm $fn1-b
 
 echo x$data > $fn2-a
-$BINq ci -m a
-sleep 1
+$BINq ci -m a -o delay=yes
 
 cat $fn1-a > $fn1-b
 cat $fn2-a > d1/$fn2-b
@@ -52,9 +77,8 @@ fi
 # Get a distinct file for next test, and save the wc
 date > $fn1-22
 mkdir di1
-$BINq ci -m a
+$BINq ci -m a -o delay=yes
 # TODO: check that copyfrom was used
-sleep 1
 
 
 # Re-use the inode number.
@@ -79,9 +103,8 @@ fi
 
 # Get some unique value
 echo $RANDOM-$RANDOM-$RANDOM-$RANDOM > $fn1-a
-$BINq ci -m a
+$BINq ci -m a -o delay=yes
 # TODO: check that copyfrom was used
-sleep 1
 
 
 # check that files not given as arguments can be a source, too.
@@ -127,8 +150,7 @@ cd $WC
 $BINq cp $fn1-a di2/asf
 date >> di2/asf
 echo $RANDOM $$ >> di2/asf
-$BINq ci -m "copy" # -d > $LOGDIR/043.ci
-sleep 1
+$BINq ci -m "copy" -o delay=yes # -d > $LOGDIR/043.ci 
 
 cat di2/asf > 6uhtr
 arg_check 6 6uhtr "$WC/di2/asf" 6uhtr "Committing copied with change"
@@ -138,8 +160,7 @@ arg_check 6 6uhtr "$WC/di2/asf" 6uhtr "Committing copied with change"
 # Make "source" file unique
 echo $RANDOM $$ >> 6uhtr
 $BINdflt cp di2/asf 6uhtr
-$BINq ci -m "copy" # -d > $LOGDIR/043.ci
-sleep 1
+$BINq ci -m "copy" -o delay=yes # -d > $LOGDIR/043.ci 
 cat 6uhtr > bthtrgb
 arg_check 7 bthtrgb "$WC/6uhtr" bthtrgb "Committing copied without change"
 $BINq cp 6uhtr bthtrgb

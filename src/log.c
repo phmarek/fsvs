@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -97,7 +97,7 @@ svn_error_t *log__receiver(void *baton,
 		const char *message,
 		apr_pool_t *pool)
 {
-	const char indent[]="  ";
+	static const char indent[]="  ";
 	int status;
 	int lines, len, cur, sol, i;
 	const char *ccp;
@@ -176,7 +176,7 @@ svn_error_t *log__receiver(void *baton,
 			cur=ccp-message+1;
 		else if (cur == MAX_LOG_OUTPUT_LINE)
 		{
-		/* No newline, we need to split. */
+			/* No newline, we need to split. */
 			/* Find a position where we can split the stream into valid 
 			 * characters.
 			 * UTF-8 has defined that at most 4 bytes can be in a single 
@@ -185,10 +185,12 @@ svn_error_t *log__receiver(void *baton,
 			/* We limit the loop to find invalid sequences earlier. */
 			for(i=8; i>=0 && cur > 0; i--)
 			{
-			  if ((message[cur-1] & 0x80) == 0 ||
-						(message[cur-1] & 0xc0) == 0xc0)
-					break;
 				cur--;
+				/* No UTF-8 character (ie. 7bit ASCII) */
+				if ((message[cur] & 0x80) == 0 ||
+						/* or first character */
+						(message[cur] & 0xc0) == 0xc0)
+					break;
 			}
 			STOPIF_CODE_ERR(i < 0, EILSEQ, 
 					"Invalid UTF8-sequence in log message for revision %llu found",
@@ -209,9 +211,7 @@ svn_error_t *log__receiver(void *baton,
 		sol= ccp!=NULL;
 	}
 
-	putc('\n', output);
-
-	STOPIF(status, NULL);
+	STOPIF_CODE_ERR( putc('\n', output) == EOF, EPIPE, NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -318,8 +318,7 @@ int log__work(struct estat *root, int argc, char *argv[])
 		opt_target_revision2=head;
 
 
-	STOPIF_SVNERR( svn_ra_get_log,
-			(session,
+	status_svn=svn_ra_get_log(session,
 			 paths,
 			 opt_target_revision,
 			 opt_target_revision2,
@@ -328,7 +327,20 @@ int log__work(struct estat *root, int argc, char *argv[])
 			 0, // TODO: stop-on-copy,
 			 log__receiver,
 			 output,
-			 global_pool) );
+			 global_pool);
+
+	/* Quit silently on EPIPE. */
+	if (status_svn && 
+			status_svn->apr_err == EPIPE)
+	{
+		status=0;
+		status_svn=NULL;
+		goto ex;
+	}
+
+	/* A bit of a hack. */
+	STOPIF_SVNERR(status_svn, +0);
+
 
 	STOPIF( log___divider(output, ANSI__NORMAL), NULL);
 

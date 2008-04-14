@@ -67,6 +67,9 @@
   %pid_to_result=();
 
   MSG("INFO", StartText($start));
+
+# We don't want no cache.
+	$| =1;
 }
 
 
@@ -77,6 +80,8 @@
 # My default is debug - so do that last, to have a 
 # correctly configured environment :-)
 # Furthermore the "unusual" configurations are done first.
+#  for $release ("--enable-debug")
+#  for $release ("--enable-release")
   for $release ("", "--enable-release", "--enable-debug")
   {
 # make sure that the binary gets recompiled
@@ -140,6 +145,7 @@
 
   close CSV;
 }
+  system qq(make gcov);
 exit;
 
 

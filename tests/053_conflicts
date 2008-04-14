@@ -1,0 +1,276 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/053.conflicts
+
+
+#### Define the test files.
+# A list of numbers
+seq 1 20 > common_ancestor
+# Lines *2 gets changed
+perl -pe 's/2$/2changed-repos/' < common_ancestor > repository
+# Now change line 7.
+perl -pe 's/^7$/7local/' < common_ancestor > locally_changed
+# What the merged file should look like
+merge -A -p locally_changed common_ancestor repository > merged_ok
+# Another local data, with conflict
+perl -pe 's/^2$/2 is changed=conflict/' < common_ancestor > will_conflict
+# Output of the merge conflict can be done only when we know the revision 
+# numbers; these get encoded in the filenames.
+touch merged_conflict
+
+
+target=myfile
+
+# Put into repository.
+cat common_ancestor > $target
+$BINq ci -m 1 $target > $logfile 
+rev_old=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
+
+cat repository > $target
+$BINq ci -m 2 $target > $logfile 
+rev_new=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
+
+
+# Now create the merge conflict compare file.
+if merge -A -p -L ./$target.mine -L ./$target.r$rev_old -L ./$target.r$rev_new will_conflict common_ancestor repository > merged_conflict
+then
+	$ERROR "merge doesn't gives a conflict?"
+fi
+if [[ $? == 1 ]]
+then
+	$ERROR "Expected error code of merge not given"
+fi
+if [[ `egrep '<<<<|>>>>|====|\|\|\|\|' < merged_conflict | wc -l` -eq 4 ]]
+then
+	$INFO "merged_conflict seems ok."
+else
+	$ERROR "merged_conflict wrong?"
+fi
+
+
+
+# We start with the "old" version.
+$BINq up -r$rev_old
+
+# Now we change something ....
+cat locally_changed > $target
+
+# and try to get the newer version.
+if $BINq up -o conflict=stop > $logfile 2>&1
+then
+  $ERROR "Didn't stop on conflict"
+else
+  $SUCCESS "Stop on conflict=stop"
+fi
+if $BINdflt st -v $target | grep "^....x. "
+then
+  $ERROR "Marked as conflict on conflict=stop?"
+fi
+
+
+if $BINq up -o conflict=local > $logfile 2>&1
+then
+	if cmp $target locally_changed
+	then
+		md5sum $target locally_changed
+		$SUCCESS "conflict=local works"
+	else
+		diff -u $target locally_changed
+		$ERROR "conflict=local doesn't work - wrong data"
+	fi
+else
+	cat $logfile
+  $ERROR "conflict=local doesn't work"
+fi
+
+if $BINdflt st -v $target | grep "^....x. "
+then
+  $ERROR "Marked as conflict on conflict=local?"
+fi
+
+if [[ x`$BINq st $target` != x ]]
+then
+	$BINq st $target
+  $ERROR "unexpected status output on conflict=local - should be empty."
+fi
+
+
+# Goto old revision
+$BINq up -r$rev_old -o conflict=local
+if ! cmp $target locally_changed
+then
+	$ERROR "Returning to old revision doesn't work - 1"
+fi
+
+if $BINq up -o conflict=remote > $logfile 2>&1
+then
+	if cmp $target repository
+	then
+		md5sum $target repository
+		$SUCCESS "conflict=remote works"
+	else
+		diff -u $target repository
+		$ERROR "conflict=remote doesn't work - wrong data"
+	fi
+else
+	cat $logfile
+  $ERROR "conflict=repository doesn't work"
+fi
+
+if $BINdflt st -v $target | grep "^...x. "
+then
+  $ERROR "Marked as conflict on conflict=repos?"
+fi
+
+
+# Goto old revision. There's no conflict now, as we took the committed 
+# version.
+$BINq up -r$rev_old -o conflict=stop
+if ! cmp $target common_ancestor
+then
+	$ERROR "Returning to old revision doesn't work - 2"
+fi
+
+
+# Now test getting both files.
+cat locally_changed > $target
+$BINq up -o conflict=both
+if ! cmp $target.mine locally_changed
+then
+	$ERROR "conflict=both: wrong data for $target.mine."
+fi
+if ! cmp $target.r$rev_new repository
+then
+	$ERROR "conflict=both: wrong data for $target.r$rev_new."
+fi
+
+if $BINdflt st -v $target | grep "^....x. "
+then
+	$SUCCESS "conflict=both works."
+else
+  $ERROR "No conflict on conflict=both?"
+fi
+
+
+# Revert should leave only a single file.
+$BINq revert $target
+if [[ `ls -dla $target* | wc -l` -eq 1 ]]
+then
+	$SUCCESS "aux files removed after revert."
+else
+  ls -dla $target*
+	$ERROR "unexpected auxillary files after revert."
+fi
+
+
+rm $target*
+# Now that should just work.
+$BINq up -r$rev_old -o conflict=remote
+
+# Test doing a merge
+cat locally_changed > $target
+$BINq up -o conflict=merge
+if ! cmp $target merged_ok
+then
+	$ERROR "conflict=merge: wrong data for $target."
+fi
+if [[ `ls -dla $target* | wc -l` -eq 1 ]]
+then
+	$SUCCESS "conflict=merge works."
+else
+  ls -dla $target*
+	$ERROR "conflict=merge: unexpected auxillary files."
+fi
+
+
+# This should give the old file.
+$BINq up -r$rev_old -o conflict=merge
+if cmp $target locally_changed
+then
+	$SUCCESS "reverse merge ok"
+else
+	diff -u $target locally_changed
+	$ERROR "reverse merge wrong?"
+fi
+
+
+# Now do a conflict
+cat will_conflict > $target
+$BINq up -o conflict=merge > $logfile
+if ! cmp $target merged_conflict
+then
+	diff -u $target merged_conflict
+	$ERROR "conflict=merge with conflict: wrong data for $target."
+fi
+
+if [[ `ls -dla $target* | wc -l` -ne 4 ]]
+then
+  ls -dla $target*
+	$ERROR "conflict=merge: unexpected auxillary files."
+fi
+
+if [[ -e $target && -e $target.r$rev_new && $target.r$rev_old && $target.mine ]]
+then
+	$SUCCESS "conflict=merge producing conflict has auxillary files."
+else
+  ls -dla $target*
+	$ERROR "conflict=merge: expected auxillary files missing."
+fi
+
+
+if $BINdflt st -v $target | grep "^....x. "
+then
+	$SUCCESS "conflict marker set."
+else
+  $ERROR "No conflict on mis-merge?"
+fi
+
+if $BINdflt ci $target -m 1
+then
+	$ERROR "shouldn't commit a conflicted file!"
+else
+	$SUCCESS "doesn't commit a conflicted file"
+fi
+
+
+# resolve should leave only a single file, and process only known.
+$BINq resolve *
+if [[ `ls -dla $target* | wc -l` -eq 1 ]]
+then
+	$SUCCESS "aux files removed after revert (2)."
+else
+  ls -dla $target*
+	$ERROR "unexpected auxillary files after revert (2)."
+fi
+
+# After resolve only $target should be seen - not any other files.
+# With just "status" we'd get a line for ".", too - which we don't want.
+$BINdflt st * > $logfile
+if [[ `grep '^N' < $logfile | wc -l` -ne 6 ]]
+then
+	cat $logfile
+  $ERROR "resolve takes unknown files, too"
+fi
+if [[ `grep -v '^N' < $logfile` == ".mC."*"$target" ]]
+then
+  $SUCCESS "resolve takes only the known files."
+else
+	cat $logfile
+  $ERROR "Wrong status after resolve"
+fi
+
+
+
+if $BINdflt ci $target -m 1
+then
+	$SUCCESS "Can commit after revert."
+else
+	$ERROR "Can't commit?"
+fi
+
+

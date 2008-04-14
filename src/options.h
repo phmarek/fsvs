@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,50 +20,80 @@
 /** \name A list of supported settings/options.
  * @{ */
 enum opt__settings_e {
-	/** Option how paths should be shown. 
-	 * See also \ref opt_paths_t and \ref o_opt_path. */
+
+	/* Output options */
+	/** Option how paths should be shown.  See also \ref opt_paths_t and \ref 
+	 * o_opt_path. */
 	OPT__PATH=0,
-	/** Which programm should be called.
-	 * See \ref o_diff. */
-	OPT__DIFF_PRG,
-	/** Path for debug output.
-	 * See \ref glob_opt_deb. */
-	OPT__DEBUG_OUTPUT,
-	/** Default options for the diff program.
-	 * See \ref o_diff. */
-	OPT__DIFF_OPT,
-	/** Extra options for the diff program.
-	 * See \ref o_diff. */
-	OPT__DIFF_EXTRA,
 	/** The option bits for log output.
 	 * See \ref o_logoutput. */
 	OPT__LOG_OUTPUT,
-	/** The filter mask as given with \ref o_filter -f. */
-	OPT__FILTER,
-	/** Set warning levels.
-	 * See \ref o_warnings */
-	OPT__WARNINGS,
-	/** WAA root directory; per definition no PATH_SEPARATOR at the end.
-	 * See \ref o_softroot. */
-	OPT__SOFTROOT,
 	/** Whether to pipe to colordiff.
 	 * Currently yes/no/auto; possibly path/"auto"/"no"?
 	 * See \ref o_colordiff. */
 	OPT__COLORDIFF,
-	/** Which URL to commit to.
-	 * See \ref o_commit_to. */
-	OPT__COMMIT_TO,
 	/** Should directory listings be sorted?
 	 * See \ref o_dir_sort. */
 	OPT__DIR_SORT,
 	/** Should the status output be colored?
 	 * See \ref o_colordiff*/
 	OPT__STATUS_COLOR,
+	/** The filter mask as given with \ref o_filter -f. */
+	OPT__FILTER,
+
+	/** Path for debug output.
+	 * See \ref glob_opt_deb. */
+	OPT__DEBUG_OUTPUT,
+
+	/* merge/diff options */
+	/** How conflicts on update should be handled.
+	 * See \ref o_conflict. */
+	OPT__CONFLICT,
+	/** Default options for the merge program.
+	 * See \ref o_merge. */
+	OPT__MERGE_OPT,
+	/** Name of the merge binary to be used.
+	 * See \ref o_merge. */
+	OPT__MERGE_PRG,
+
+	/** Which programm should be called.
+	 * See \ref o_diff. */
+	OPT__DIFF_PRG,
+	/** Default options for the diff program.
+	 * See \ref o_diff. */
+	OPT__DIFF_OPT,
+	/** Extra options for the diff program.
+	 * See \ref o_diff. */
+	OPT__DIFF_EXTRA,
+
+	/** Set warning levels.
+	 * See \ref o_warnings */
+	OPT__WARNINGS,
+	/** WAA root directory; per definition no PATH_SEPARATOR at the end.
+	 * See \ref o_softroot. */
+	OPT__SOFTROOT,
+
+	/** Which URL to commit to.
+	 * See \ref o_commit_to. */
+	OPT__COMMIT_TO,
+
+	/** Whether commits without changes should be done.
+	 * See \ref o_empty_commit. */
+	OPT__EMPTY_COMMIT,
+	/** Should commit wait for the next full second?
+	 * If shells would export \c $- we could do an \c auto value as well.
+	 * See \ref o_delay. */
+	OPT__DELAY,
+	/** Do expensive copyfrom checks?
+	 * See \ref o_copyfrom_exp*/
+	OPT__COPYFROM_EXP,
 
 	/** End of enum marker. */
 	OPT__COUNT
 };
 /** @} */
+
+
 
 /** \name List of priority levels for settings loading.
  * @{ */
@@ -174,7 +204,8 @@ void opt__set_string(enum opt__settings_e which, enum opt__prio_e prio,
 int opt__parse_option(enum opt__settings_e which, enum opt__prio_e prio, 
 		char *string);
 /** Find the option, and parse the string. */
-int opt__parse(char *key, char *value, enum opt__prio_e prio);
+int opt__parse(char *key, char *value, enum opt__prio_e prio, 
+		int quiet_errors);
 
 /** Load options from the environment. */
 int opt__load_env(char **env);
@@ -204,6 +235,29 @@ enum opt_paths_t {
 	PATH_CACHEDENVIRON,
 	/** \ref pd_env */
 	PATH_FULLENVIRON,
+};
+/** @} */
+
+
+/** \name List of constants for \ref o_delay option.
+ * @{ */
+enum opt__delay_e {
+	DELAY_CHECKOUT	= 1 << 0,
+  DELAY_COMMIT		= 1 << 1,
+	DELAY_UPDATE		= 1 << 2,
+	DELAY_REVERT		= 1 << 3,
+};
+/** @} */
+
+
+/** \name List of constants for \ref o_conflict option.
+ * @{ */
+enum opt__conflict_e {
+	CONFLICT_STOP=0,
+	CONFLICT_LOCAL,
+	CONFLICT_REMOTE,
+	CONFLICT_BOTH,
+	CONFLICT_MERGE,
 };
 /** @} */
 

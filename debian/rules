@@ -76,7 +76,7 @@ binary-arch: build install
 	dh_installchangelogs CHANGES
 	dh_installdocs
 	dh_installexamples
-	dh_installman doc/man/fsvs.1
+	dh_installman doc/fsvs.1 doc/fsvs-options.5
 	dh_link
 	dh_strip
 	dh_compress

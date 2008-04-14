@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2007 Philipp Marek.
+ * Copyright (C) 2006-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,6 +23,7 @@ action_t rev__action;
 /** Fetches a given entry from the repository. */
 int rev__get_file(struct estat *sts, 
 		svn_revnum_t revision,
+		char *url_to_use,
 		svn_revnum_t *fetched,
 		char **only_tmp,
 		apr_pool_t *pool);

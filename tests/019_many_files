@@ -17,8 +17,6 @@ exp_count=`expr $COUNT1 \* \( $COUNT2 \* \( $COUNT3 + 1 \) + 1 \) + 1`
 
 echo -n "Generating $exp_count entries: "
 
-sleep 1
-
 for lev1 in $seq1
 do
 	echo -n "."

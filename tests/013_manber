@@ -71,14 +71,13 @@ function TestExtensively
 
 	L
 	echo "     ci1"
-	$BIN ci -m "big file"
+	$BIN ci -m "big file" -o delay=yes
 
 	# Data and mtime not changed
 	T "......" 'Ok, not seen as changed (1)' 'Seen as changed? (1)' '-v'
 	T "......" 'Ok, not seen as changed (2)' 'Seen as changed? (2)' '-v -C'
 	T "......" 'Ok, not seen as changed (3)' 'Seen as changed? (3)' '-v -C -C'
 
-	sleep 1
 
 	# Data not changed, mtime changed
 	echo "  touch, but don't change"

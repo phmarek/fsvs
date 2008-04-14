@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -91,16 +91,17 @@
 #include "helper.h"
 
 
-int sync__progress(struct estat *sts, char *path)
+int sync__progress(struct estat *sts)
 {
 	int status;
 	struct sstat_t st;
+	char *path;
 
 
 	status=0;
-	if (!path) STOPIF( ops__build_path(&path, sts), NULL);
+	STOPIF( ops__build_path(&path, sts), NULL);
 
-	STOPIF( st__rm_status(sts, path), NULL);
+	STOPIF( st__rm_status(sts), NULL);
 
 	/* If the entry is a special node (symlink or device), we have
 	 * a little problem here.
@@ -253,6 +254,8 @@ int sync__work(struct estat *root, int argc, char *argv[])
 		 * these files. */
 		STOPIF( waa__output_tree(root), NULL);
 		STOPIF( url__output_list(), NULL);
+		/* The copyfrom database is no longer valid. */
+		STOPIF( waa__delete_byext(wc_path, WAA__COPYFROM_EXT, 1), NULL);
 	}
 
 

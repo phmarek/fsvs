@@ -1,3 +1,13 @@
+fsvs (1.1.14-1) unstable; urgency=low
+
+  * New upstream release
+  * Update list of docs and manpages.
+  * Remove manual page cleanups.  Upstream's content has improved and
+    expanded to overshadow the value of my presentation cleanups.
+  * Remove fix_tree_copies.dpatch (upstream).
+
+ -- Sheldon Hearn <sheldonh@starjuice.net>  Mon, 14 Apr 2008 10:39:58 +0200
+
 fsvs (1.1.12-1) unstable; urgency=low
 
   * New upstream release

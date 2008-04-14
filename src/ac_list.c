@@ -24,6 +24,7 @@
 #include "info.h"
 #include "revert.h"
 #include "remote.h"
+#include "resolve.h"
 #include "build.h"
 
 
@@ -46,6 +47,7 @@ static const char
 			*acl_cp[]         = { "copy", "move", "cp", "mv", NULL },
 			*acl_unvers[]     = { "unversion", NULL },
 			*acl_log[]        = { "log", NULL },
+			*acl_resolv[]     = { "resolved", NULL },
 			*acl_checko[]   	= { "checkout", "co", NULL },
 			*acl_sync_r[]     = { "sync-repos", NULL },
 			*acl_revert[]     = { "revert", "undo", NULL },
@@ -68,41 +70,46 @@ static const char
  * order to get a nice tabular layout.
  * Simply writing the initializations in structure order is not good;
  * a simple re-arrange could make problems. */
-#define ACT(nam, _work, _act, _act_u, ...) \
+#define ACT(nam, _work, _act, ...) \
 { .name=acl_##nam, .help_text=hlp_##nam, \
-	.work=_work, .local_callback=_act, .local_uninit=_act_u, \
+	.work=_work, .local_callback=_act, \
 	__VA_ARGS__ }
+
+#define UNINIT .local_uninit=st__progress_uninit
+#define DECODER .needs_decoder=1
+#define FILTER .only_opt_filter=1
 
 
 /** -. */
 struct actionlist_t action_list[]=
 {
 	/* The first action is the default. */
-	ACT(status,   st__work,   st__status,                NULL, .only_opt_filter=1),
-	ACT(commit,   ci__work,   ci__action, st__progress_uninit, .only_opt_filter=1),
-	ACT(update,   up__work, st__progress, st__progress_uninit, .needs_decoder=1),
-	ACT(export,  exp__work,         NULL,                NULL, .is_import_export=1, .needs_decoder=1),
-	ACT(unvers,   au__work,   au__action,                NULL, .i_val=RF_UNVERSION),
-	ACT(   add,   au__work,   au__action,                NULL, .i_val=RF_ADD),
-	ACT(  diff,   df__work,   df__action,                NULL, .needs_decoder=1),
-	ACT(sync_r, sync__work,         NULL,                NULL, .repos_feedback=sync__progress),
-	ACT(  urls, urls__work,         NULL,                NULL),
-	ACT(revert,  rev__work,  rev__action, st__progress_uninit, .needs_decoder=1, .keep_children=1),
-	ACT(ignore,  ign__work,         NULL,                NULL),
-	ACT(copyfr, cm__detect, st__progress, st__progress_uninit),
-	ACT(    cp,   cm__work,         NULL,                NULL),
-	ACT(   log,  log__work,         NULL,                NULL),
-	ACT(checko,   co__work,         NULL,                NULL, .needs_decoder=1),
-	ACT( build,  bld__work,   st__status,                NULL),
+	ACT(status,   st__work,   st__status, FILTER),
+	ACT(commit,   ci__work,   ci__action, UNINIT, FILTER),
+	ACT(update,   up__work, st__progress, UNINIT, DECODER),
+	ACT(export,  exp__work,         NULL, .is_import_export=1, DECODER),
+	ACT(unvers,   au__work,   au__action, .i_val=RF_UNVERSION),
+	ACT(   add,   au__work,   au__action, .i_val=RF_ADD),
+	ACT(  diff,   df__work,   df__action, DECODER),
+	ACT(sync_r, sync__work,         NULL, .repos_feedback=sync__progress),
+	ACT(  urls,  url__work,         NULL),
+	ACT(revert,  rev__work,  rev__action, UNINIT, DECODER, .keep_children=1),
+	ACT(ignore,  ign__work,         NULL),
+	ACT(copyfr, cm__detect, st__progress, UNINIT),
+	ACT(    cp,   cm__work,         NULL),
+	ACT(resolv,  res__work,  res__action, .is_compare=1),
+	ACT(   log,  log__work,         NULL),
+	ACT(checko,   co__work,         NULL, DECODER, .repos_feedback=st__rm_status),
+	ACT( build,  bld__work,   st__status),
 	/* For help we set import_export, to avoid needing a WAA 
 	 * (default /var/spool/fsvs) to exist. */
-	ACT(  help,  ac__Usage,         NULL,                NULL, .is_import_export=1),
-	ACT(  info, info__work, info__action,                NULL),
-	ACT(prop_g,prp__g_work,         NULL,                NULL),
-	ACT(prop_s,prp__s_work,         NULL,                NULL, .i_val=FS_NEW),
-	ACT(prop_d,prp__s_work,         NULL,                NULL, .i_val=FS_REMOVED),
-	ACT(prop_l,prp__l_work,         NULL,                NULL),
-	ACT(remote,   up__work,         NULL,                NULL, .is_compare=1, .repos_feedback=st__rm_status),
+	ACT(  help,  ac__Usage,         NULL, .is_import_export=1),
+	ACT(  info, info__work, info__action),
+	ACT(prop_g,prp__g_work,         NULL),
+	ACT(prop_s,prp__s_work,         NULL, .i_val=FS_NEW),
+	ACT(prop_d,prp__s_work,         NULL, .i_val=FS_REMOVED),
+	ACT(prop_l,prp__l_work,         NULL),
+	ACT(remote,   up__work,         NULL, .is_compare=1, .repos_feedback=st__rm_status),
 };
 
 /** -. */

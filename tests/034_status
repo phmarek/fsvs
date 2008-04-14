@@ -5,7 +5,7 @@ $PREPARE_DEFAULT > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
-logfile=$LOGDIR/033.status
+logfile=$LOGDIR/034.status
 
 file=empty-file
 
@@ -65,7 +65,7 @@ FiltMTOGNDA 1 1 0 0 0 0 1
 
 # deleted
 rm $file
-FiltMTOGNDA 0 0 0 0 0 1 1
+FiltMTOGNDA 0 1 0 0 0 1 1
 
 # replaced
 mkdir $file
@@ -78,9 +78,6 @@ mkdir -p a/b/c/d a/b/c/e a/b/d a/h/u a/h/j
 $BINq ci -m 2
 rmdir a/b/c/d a/b/c/e a/b/c a/h/u
 
-date > a/h/some
-date > a/h/dir
-
 $BINdflt st -C -o filter=deleted > $logfile
 if [[ `wc -l < $logfile` -ne 4 || 
 	`grep -w dir < $logfile | wc -l` -ne 4 ||
@@ -90,13 +87,17 @@ then
 	$ERROR "Status output wrong (deleted directories #1)"
 fi
 
+# The parent directories are changed, and that gets counted, too.
 $BINdflt st -C -o filter=text > $logfile
-if [[ `wc -l < $logfile` -ne 4 || 
-	`grep a/ < $logfile | wc -l` -ne 4 ]]
+if [[ `wc -l < $logfile` -ne 6 || 
+	`grep a/ < $logfile | wc -l` -ne 6 ]]
 then
 	cat $logfile
 	$ERROR "Status output wrong (deleted directories #2)"
 fi
+
+date > a/h/some
+date > a/h/dir
 
 $BINdflt st -C > $logfile
 if [[ `wc -l < $logfile` -ne 8 || 
@@ -112,8 +113,7 @@ $SUCCESS "Ok, filter works."
 
 
 # set as known state.
-$BINq ci -m 2
-sleep 1
+$BINq ci -m 2 -o delay=yes
 $INFO "Testing sorting"
 
 # Try sorting.
@@ -141,3 +141,61 @@ done
 $SUCCESS "Sorting works."
 
 
+$BINq ci -m1 -o delay=yes
+
+# Test color output.
+function HasEscape
+{
+	# I cannot make grep and egrep understand \x1b.
+  if $BINdflt st -o stat_color=yes | perl -e 'exit (0 == grep(/\x1b\[0;0m/, <STDIN>))'
+	then
+	  $SUCCESS "$1 colorized"
+	else
+	  $ERROR "$1 not colorized"
+	fi
+}
+
+echo aaa > hazgr
+HasEscape "New"
+$BINq ci -m1 -o delay=yes
+echo aaar > hazgr
+HasEscape "Changed"
+$BINq ci -m1 -o delay=yes
+rm hazgr
+HasEscape "Deleted"
+
+
+# Check for -N on deleted hierarchies
+# Set some known timestamp
+touch -d "2008-02-01 12:13" .
+$BINq ci -m1 -o delay=yes
+
+function ExpLines
+{
+  parms="$1"
+	exp_cnt="$2"
+	if [[ `$BINdflt st $parms | wc -l` -eq $exp_cnt ]]
+	then
+		$SUCCESS "found $exp_cnt for '$parms'"
+	else
+		$BINdflt st $parms
+		$ERROR "expected $exp_cnt, got "`$BINdflt st $parms | wc -l`
+	fi
+}
+
+
+ExpLines "-C" 0
+rm -r tree
+touch -d "2008-02-01 12:13" .
+
+# With -N -N, no children are looked at.
+ExpLines "-N -N -C" 0
+# If we don't pass -C, the timestamp is looked at, and if it's still the 
+# same no check is done.
+ExpLines "-N -N" 0
+# We have to touch the directory; even with -C no children are seen.
+touch .
+ExpLines "-N -N -C" 1
+ExpLines "-N -N" 1
+ExpLines "-N" 2
+ExpLines "" 41

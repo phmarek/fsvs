@@ -1,0 +1,114 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/048.log
+
+# Test warning messages
+
+
+if ! $BINdflt -Wunknown-warning-string-346246262=ignore st > $logfile 2>&1
+then
+	$SUCCESS "unknown warnings are rejected"
+else
+	$ERROR "unknown warnings are NOT rejected!"
+fi
+
+if ! $BINdflt -Wmeta-user=UNKNOWN-action st > $logfile 2>&1
+then
+	$SUCCESS "unknown warning actions are rejected"
+else
+	$ERROR "unknown warning actions are NOT rejected!"
+fi
+
+
+if FSVS_WARNING="meta-user=ignore unknown-warning=ignore" $BINdflt st > $logfile 2>&1
+then
+	$ERROR "FSVS_WARNING not used?"
+else
+	$SUCCESS "FSVS_WARNING seems to be used"
+fi
+
+
+if FSVS_WARNINGS="meta-user=ignore unknown-warning=ignore" $BINdflt st > $logfile 2>&1
+then
+	$ERROR "FSVS_WARNINGS not used?"
+else
+	$SUCCESS "FSVS_WARNINGS seems to be used"
+fi
+
+
+if [[ 1$opt_DEBUG == 11 ]]
+then
+	# We need a sub-shell, as we expect an error returned and have to remove
+	# the error trap.
+	# Simply remembering the error trap doesn't work here; bash doesn't 
+	# print the needed " in "trap -p ERR".
+	# There's no easy way to return values from the sub-shell; but
+	# as the complete output of fsvs is written to a file we simply
+	# take STDOUT as the error code.
+	el=$(
+		trap '' ERR ;
+		set +e ;
+		$BINdflt -W_test-warning=stop > $logfile 2>&1 ;
+		echo $?
+	)
+
+	if [[ $el -ne 0 && `grep WARNING: $logfile` ]]
+	then
+		$SUCCESS "test-warning can stop fsvs"
+	else
+		$ERROR "Doesn't break for test-warning!"
+	fi
+
+
+	$BINdflt -W_test-warning=once st > $logfile 2>&1
+	el=$?
+	if [[ $el -eq 0 && `grep test-warning $logfile` ]]
+	then
+		$SUCCESS "test-warning can be set to non-fatal"
+	else
+		$ERROR "non-fatal test-warning failed"
+	fi
+	
+	FSVS_WARNING=_test-warning=once $BINdflt st > $logfile 2>&1
+	el=$?
+	if [[ $el -eq 0 && `grep test-warning $logfile` ]]
+	then
+		$SUCCESS "FSVS_WARNING used"
+	else
+		$ERROR "FSVS_WARNING not parsed?"
+	fi
+
+	FSVS_WARNINGS=_test-warning=once $BINdflt st > $logfile 2>&1
+	el=$?
+	if [[ $el -eq 0 && `grep test-warning $logfile` ]]
+	then
+		$SUCCESS "FSVS_WARNINGS used"
+	else
+		$ERROR "FSVS_WARNINGS not parsed?"
+	fi
+
+	# Check whether the config file is respected
+	echo 'warning=_test-warning=stop' > $FSVS_CONF/config
+	if $BINdflt -d st > $logfile 2>&1
+	then
+		$ERROR "Warning levels NOT read from config file."
+	else
+		$SUCCESS "Warning levels read from config"
+	fi
+
+	if $BINdflt -W_test-warning=ignore st > $logfile 2>&1
+	then
+		$SUCCESS "Commandline overrides config file."
+	else
+		$ERROR "Commandline does NOT override config file."
+	fi
+	echo '' > $FSVS_CONF/config
+else
+	$INFO "Cannot test test-warning for non-debug builds."
+fi
+

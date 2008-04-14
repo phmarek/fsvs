@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2007 Philipp Marek.
+ * Copyright (C) 2006-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -88,16 +88,30 @@ typedef int (*comparison_fn_t) (__const void *, __const void *);
 /** Does \c linux/kdev_t.h exist?
  * Needed for \a MAJOR() and \a MINOR() macros. */
 #undef HAVE_LINUX_KDEV_T_H
+/** Should we fake definitions? */
+#undef ENABLE_DEV_FAKE
+/** Error macro if no device definitions available. */
+#undef DEVICE_NODES_DISABLED
+
 #ifdef HAVE_LINUX_KDEV_T_H
-#include <linux/kdev_t.h>
+	#include <linux/kdev_t.h>
 #else
-/** \name fakedev Fake definitions, as reported with configure.
- * Taken from \c linux/kdev_t.h. */
-/** @{ */
-#define MAJOR(dev)	((dev)>>8)
-#define MINOR(dev)	((dev) & 0xff)
-#define MKDEV(ma,mi)	((ma)<<8 | (mi))
-/** @} */
+	#ifdef ENABLE_DEV_FAKE
+		/** \name fakedev Fake definitions, as reported with configure.
+		 * Taken from \c linux/kdev_t.h. */
+		/** @{ */
+		#define MAJOR(dev)	((dev)>>8)
+		#define MINOR(dev)	((dev) & 0xff)
+		#define MKDEV(ma,mi)	((ma)<<8 | (mi))
+		/** @} */
+	#else
+		/** No definitions, disable some code. */
+		#define DEVICE_NODES_DISABLED() BUG("No MAJOR(), MINOR() or MKDEV() found at configure time.")
+
+		#undef MAJOR
+		#undef MINOR
+		#undef MKDEV
+	#endif
 #endif
 
 /** @} */

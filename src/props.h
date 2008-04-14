@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -94,7 +94,13 @@ static inline int prp__fetch(hash_t db, datum key, datum *value)
 
 	return status;
 }
+
+/** Open, fetch, close a property hash corresponding to \a sts and \a name.  
+ * */
+int prp__open_get_close(struct estat *sts, char *name, 
+		char **data, int *len);
 /** @} */
+
 
 /** Prop-get worker function. */
 work_t prp__g_work;

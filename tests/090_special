@@ -1,0 +1,135 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+
+logfile=$LOGDIR/090.spec
+
+
+mv tree gt
+mkdir 4rg
+for a in `seq 1 200`
+do
+  echo $a > 4rg/$a
+done
+
+
+# Commit a file that's actively changing
+$BINdflt ci -m1 > 4rg/file
+
+$BINdflt ci -m1 > 4rg/file2
+$BINdflt ci -m1 > 4rg/file3
+$BINq ci -m1
+
+$WC2_UP_ST_COMPARE
+
+
+###############################################################
+# 
+#  Test commit delay.
+#  From common sense this should be done as soon as possible,
+#  as most other tests need that to work; but in 001 it would
+#  slow down even single case testing, and as 002 it might be
+#  run after all other tests (with RANDOM_ORDER=1).
+#  So we hope that it just works - and try to get a test
+#  summary. 
+
+$INFO "Testing commit delay"
+function CT
+{
+	delay_start=`date +%s`
+	for a in 1 2 3 4
+	do
+		echo $a > file
+		$BINq ci -m1 $1 > /dev/null
+# Alternatively we could test whether the microseconds are nearly 0 when we 
+# get here.
+	done
+# We get an error here if the result is 0 ... so make it at least 1.
+	delta=$(expr `date +%s` - $delay_start + 1)
+}
+
+CT -odelay=yes
+with_delay=$delta
+echo "With delay that took $delta seconds"
+
+CT -odelay=no
+normal=$delta
+echo "Without delay that took $delta seconds"
+
+diff=$(expr $with_delay - $normal)
+$INFO "Difference $diff"
+
+# At least two seconds difference should be here.
+if [[ $(expr $with_delay - $normal) -ge 2 ]]
+then
+  $SUCCESS "delay seems to work."
+else
+  $ERROR "delay too fast"
+fi
+
+
+# Test having *many* subdirectories in parallel in waa__output_dir(), 
+# triggering reallocating the directory array.
+# On tmpfs the inode numbers are given in ascending order; so creating many 
+# directories, and then putting files there might do the trick.
+# We do that as 50 * 50 directories, with each having a file.
+$INFO "Creating many directories"
+list=`seq 1 50`
+declare -a entries
+for a in $list
+do
+	mkdir $a
+	for b in $list
+	do
+	  entries+=($a/$b/file)
+		mkdir $a/$b
+	done
+done
+
+
+# create files
+touch "${entries[@]}"
+opt=""
+if [[ "$opt_DEBUG" == "1" ]]
+then
+  opt="-d -D waa__output_tree"
+fi
+
+$BINq ci -m1 $opt > $logfile
+$WC2_UP_ST_COMPARE
+
+if [[ "$opt_DEBUG" == "1" ]]
+then
+	if grep "reallocated directory pointers to " $logfile
+	then
+		$SUCCESS "Many parallel directories in output_tree"
+	else
+	# Should that only be a warning? Might not work on other filesystems.
+		$ERROR "No realloc message found for many parallel directories"
+	fi
+else
+  $WARN "no debug info compiled in"
+fi
+
+# If writing the tree didn't work, we will find out when we do a status or 
+# another commit.
+G=40/32/file
+touch $G
+if [[ `$BINdflt st` == ".m.?"*" 0 "*"$G" ]]
+then
+	$SUCCESS "Entry list seems to be correct"
+else
+	$ERROR "Status wrong - entry list destroyed?"
+fi
+if $BINq ci -m1
+then
+	$SUCCESS "Commit ok"
+else
+	$ERROR "Commit barks"
+fi
+$WC2_UP_ST_COMPARE

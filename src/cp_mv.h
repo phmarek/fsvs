@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,10 +23,8 @@ work_t cm__detect;
 /** Worker function. */
 action_t cm__action;
 
-/** Returns the source element of the given entry. */
+/** Returns the source of the given entry. */
 int cm__get_source(struct estat *sts, char *name,
-		struct estat *root, 
-		struct estat **source, 
 		char **src_name, svn_revnum_t *src_rev,
 		int register_for_cleanup);
 

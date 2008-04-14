@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -69,13 +69,11 @@ int info__action(struct estat *sts)
 {
 	int status;
 
-/* Wird für gelöschte doppelt ausgegeben */
-/* Kein errorlevel für gelöschte */
 	/* Always print this entry. */
 	sts->was_output=0;
 	sts->flags |= RF_PRINT;
 
-	STOPIF( st__status(sts, NULL), NULL);
+	STOPIF( st__status(sts), NULL);
 	STOPIF( st__print_entry_info(sts, 1), NULL);
 
 ex:
@@ -103,6 +101,7 @@ int info__work(struct estat *root, int argc, char *argv[])
 	/* Default is single-element only. */
 	opt_recursive-=2;
 
+	/* do not update the entries; print info based on *known* data. */
 	only_check_status=1;
 
 	status=waa__read_or_build_tree(root, argc, normalized, argv, NULL, 1);
@@ -115,9 +114,6 @@ int info__work(struct estat *root, int argc, char *argv[])
 	STOPIF( status, "Cannot get tree information");
 
 	only_check_status=0;
-
-	STOPIF( cm__get_source(NULL, NULL, NULL, NULL, NULL, NULL, status), 
-			NULL);
 
 ex:
 	return status;

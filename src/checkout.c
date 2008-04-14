@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -9,11 +9,13 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
 #include <ctype.h>
 #include <sys/select.h>
 
 #include "url.h"
 #include "waa.h"
+#include "helper.h"
 #include "commit.h"
 #include "export.h"
 
@@ -68,6 +70,7 @@ int co__work(struct estat *root, int argc, char *argv[])
 	int status;
 	int l;
 	char *path;
+	time_t delay_start;
 
 
 	path=NULL;
@@ -106,6 +109,8 @@ int co__work(struct estat *root, int argc, char *argv[])
 		STOPIF_CODE_ERR( chdir(path)==-1, errno,
 				"!Cannot use the directory \"%s\";\nmaybe you meant to give an URL?", path);
 
+	root->arg=path ? path : ".";
+	opt_verbose++;
 
 	/* We don't use the loop above, because the user might give the same URL 
 	 * twice - and we'd overwrite the fetched files. */
@@ -120,8 +125,10 @@ int co__work(struct estat *root, int argc, char *argv[])
 	}
 
 	/* Store where we are ... */
+	delay_start=time(NULL);
 	STOPIF( url__output_list(), NULL);
 	STOPIF( waa__output_tree(root), NULL);
+	STOPIF( hlp__delay(delay_start, DELAY_CHECKOUT), NULL);
 
 ex:
 	return status;
