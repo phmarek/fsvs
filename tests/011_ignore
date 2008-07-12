@@ -79,21 +79,21 @@ echo $all_new new files, $take_new to take.
 PATTERN_COUNT=15
 # We need the patterns in the order take, ignore.
 # Test the --prepend here, too.
-$BIN ignore "./**$PREFIX-s**" "PCRE:.*$PREFIX-p\."
-$BIN ignore prepend "t./**$PREFIX-s.$TAKE**" "tPCRE:.*$PREFIX-p\.$TAKE"
-$BIN ignore at=1 "ti./*/dir/*/W?LD/**/$PREFIX-s.$TAKE**"
-$BIN ignore at=1 "ti./**/$PREFIX-[ef].$TAKE**"
-$BIN ignore "t/**$PREFIX-S.$TAKE**" "/**$PREFIX-S**"
-$BIN ignore "t$WC/**$PREFIX-A.$TAKE**" "$WC/**$PREFIX-A**"
-$BIN ignore "i./**/$PREFIX-[ef]**"
-$BIN ignore prepend "DEVICE:<0" "DEVICE:>=0xff:0xff"
+$BINq ignore "./**$PREFIX-s**" "PCRE:.*$PREFIX-p\."
+$BINq ignore prepend "t./**$PREFIX-s.$TAKE**" "tPCRE:.*$PREFIX-p\.$TAKE"
+$BINq ignore at=1 "ti./*/dir/*/W?LD/**/$PREFIX-s.$TAKE**"
+$BINq ignore at=1 "ti./**/$PREFIX-[ef].$TAKE**"
+$BINq ignore "t/**$PREFIX-S.$TAKE**" "/**$PREFIX-S**"
+$BINq ignore "t$WC/**$PREFIX-A.$TAKE**" "$WC/**$PREFIX-A**"
+$BINq ignore "i./**/$PREFIX-[ef]**"
+$BINq ignore prepend "DEVICE:<0" "DEVICE:>=0xff:0xff"
 
 ignored_file=$PREFIX-perinode-$POSTFIX
 touch $ignored_file
-$BIN ignore prepend `perl -e '@f=stat(shift); $f[1] || die $!; printf "INODE:%d:%d:%d", $f[0] >> 8, $f[0] & 0xff, $f[1];' $ignored_file`
+$BINq ignore prepend `perl -e '@f=stat(shift); $f[1] || die $!; printf "INODE:%d:%d:%d", $f[0] >> 8, $f[0] & 0xff, $f[1];' $ignored_file`
 
 # this should never match
-$BIN ignore prepend "DEVICE:0xff:0xff"
+$BINq ignore prepend "DEVICE:0xff:0xff"
 
 if [[ `$BINdflt ignore dump  | wc -l` -eq $PATTERN_COUNT ]]
 then
@@ -236,15 +236,19 @@ else
 fi
 
 
+$BINq ci -mO
+
 # Now we put the WAA in there and test again, to see whether it gets 
 # correctly ignored.
 new=$WC/waa
 cp -a $FSVS_WAA $new
 FSVS_WAA=$new
-if [[ `$BIN st -C` == "" ]]
+# Only "." and "waa" may be shown - nothing below.
+if [[ `$BINdflt st -C | wc -l` -le 2 ]]
 then
   $SUCCESS "WAA gets ignored"
 else
+	$BINdflt st -C
   $ERROR "WAA would get versioned"
 fi
 

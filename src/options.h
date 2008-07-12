@@ -25,6 +25,9 @@ enum opt__settings_e {
 	/** Option how paths should be shown.  See also \ref opt_paths_t and \ref 
 	 * o_opt_path. */
 	OPT__PATH=0,
+	/** The maximum number of revisions on \c log output.
+	 * See \ref o_logmax. */
+	OPT__LOG_MAXREV,
 	/** The option bits for log output.
 	 * See \ref o_logoutput. */
 	OPT__LOG_OUTPUT,
@@ -38,6 +41,9 @@ enum opt__settings_e {
 	/** Should the status output be colored?
 	 * See \ref o_colordiff*/
 	OPT__STATUS_COLOR,
+	/** Stop on change.
+	 * See \ref o_stop_change*/
+	OPT__STOP_ON_CHANGE,
 	/** The filter mask as given with \ref o_filter -f. */
 	OPT__FILTER,
 
@@ -56,7 +62,7 @@ enum opt__settings_e {
 	 * See \ref o_merge. */
 	OPT__MERGE_PRG,
 
-	/** Which programm should be called.
+	/** Which program should be called.
 	 * See \ref o_diff. */
 	OPT__DIFF_PRG,
 	/** Default options for the diff program.
@@ -77,6 +83,9 @@ enum opt__settings_e {
 	 * See \ref o_commit_to. */
 	OPT__COMMIT_TO,
 
+	/** The author for commit.
+	 * See \ref o_author. */
+	OPT__AUTHOR,
 	/** Whether commits without changes should be done.
 	 * See \ref o_empty_commit. */
 	OPT__EMPTY_COMMIT,
@@ -85,8 +94,15 @@ enum opt__settings_e {
 	 * See \ref o_delay. */
 	OPT__DELAY,
 	/** Do expensive copyfrom checks?
-	 * See \ref o_copyfrom_exp*/
+	 * See \ref o_copyfrom_exp */
 	OPT__COPYFROM_EXP,
+
+	/** The base path of the WAA.
+	 * See \ref o_waa. */
+	OPT__WAA_PATH,
+	/** The base path of the configuration area.
+	 * See \ref o_conf. */
+	OPT__CONF_PATH,
 
 	/** End of enum marker. */
 	OPT__COUNT
@@ -215,6 +231,10 @@ int opt__load_env(char **env);
 /** Load options from a file.
  * Will use hlp__vpathcopy(), with parameters swapped (\a prio first). */
 int opt__load_settings(char *path, char *name, enum opt__prio_e prio);
+
+/** Returns \c 0 if the \a string is an \b off value (like \c off, \c 
+ * false, or \c no). */
+int opt__doesnt_say_off(const char *string);
 
 
 /** \name Specific data for single options.

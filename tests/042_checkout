@@ -20,7 +20,7 @@ echo "   softroot "$dir_sr
 rm $dir_norm $dir_sr 2> /dev/null || true
 
 mkdir $CODIR
-$BIN checkout $REPURL $CODIR
+$BINq checkout $REPURL $CODIR
 $COMPAREWITH $CODIR
 
 rm -rf $CODIR

@@ -10,9 +10,11 @@ FSVS understands some other options, that modify its behaviour.
 \section o__list Short list of options
 
 FSVS currently knows:<UL>
+<LI>\c author - \ref o_author
 <LI>\c colordiff - \ref o_colordiff
 <LI>\c commit_to - \ref o_commit_to
 <LI>\c conflict - \ref o_conflict
+<LI>\c conf - \ref o_conf.
 <LI>\c copyfrom_exp - \ref o_copyfrom_exp
 <LI>\c debug_output - \ref o_debug_output
 <LI>\c delay - \ref o_delay
@@ -20,12 +22,15 @@ FSVS currently knows:<UL>
 <LI>\c dir_sort - \ref o_dir_sort
 <LI>\c empty_commit - \ref o_empty_commit
 <LI>\c filter - \ref o_filter, but see \ref glob_opt_filter "-f".
+<LI>\c limit - \ref o_logmax
 <LI>\c log_output - \ref o_logoutput
 <LI>\c merge_prg, \c merge_opt - \ref o_merge
 <LI>\c path - \ref o_opt_path
 <LI>\c softroot - \ref o_softroot
 <LI>\c stat_color - \ref o_status_color
+<LI>\c stop_on_change - \ref o_stop_change
 <LI>\c warning - \ref o_warnings, but see \ref glob_opt_warnings "-W".  
+<LI>\c waa - \ref o_waa.
 </UL>
 
 
@@ -200,13 +205,14 @@ in the \c colordiff option.
 
 It can take on of these values:
 - \c no, \c off or \c false: Don't use \c colordiff.
-- \c yes, \c true or \c on: If this option is set on the commandline, or 
-	the output is a tty, pipe the output of the \c diff program (see \ref 
-	o_diff) to \c colordiff.
-- \c auto: Like yes, but don't throw an error if colordiff can't be 
-	started; just pipe the data as-is to \c STDOUT.
+- "", ie. empty (default value): Try to use \c colordiff as executable, but 
+	don't throw an error if it can't be started; just pipe the data as-is to 
+	\c STDOUT.
+- anything else: Pipe the output of the \c diff program (see \ref o_diff) 
+	to the given executable.
 
-The default value is \c auto.
+Please note that if \c STDOUT is not a tty (eg. is redirected into a file), 
+this option must be given on the command line to take effect.
 
 
 \section o_filter Filtering entries
@@ -232,7 +238,7 @@ identical.
 \section o_softroot Using an alternate root directory
 
 This is a path that is prepended to \c $FSVS_WAA and \c $FSVS_CONF 
-(or their default values, see \ref envs), if they do not already 
+(or their default values, see \ref waa_files), if they do not already 
 start with it, and it is cut off for the directory-name MD5 calculation.
 
 When is that needed? Imagine that you've booted from some Live-CD like 
@@ -267,6 +273,20 @@ the decoder for update, see \ref s_p_n) would not be available.
 \note The easy way to understand \c softroot is: If you want to do a 
 \c chroot() into the given directory (or boot with it as \c /), you'll want 
 this set.
+
+
+\section o_logmax "fsvs log" revision limit
+
+There are some defaults for the number of revisions that are shown on a 
+<tt>"fsvs log"</tt> command:<ul>
+<li>2 revisions given (<tt>-rX:Y</tt>): \c abs(X-Y)+1, ie. all revisions in 
+that range.
+<li>1 revision given: exactly that one.
+<li>no revisions given: from \c HEAD to 1, with a maximum of 100.
+</ul>
+
+So this command is mostly useful to get more than the default number of 
+revisions on when running without revision arguments, or to get fewer.
 
 
 \section o_logoutput "fsvs log" output format
@@ -315,6 +335,27 @@ want to turn this option off again (eg. on the commandline with \c
 -odir_sort=no) to see where \c fsvs stops.
 
 
+\section o_author Author
+
+You can specify an author to be used on commit.
+This option has a special behaviour; if the first character of
+the value is an \c '$', the value is replaced by the environment
+variable named.
+
+Empty strings are ignored; that allows an \c /etc/fsvs/config like this:
+\code
+  author=unknown
+  author=$LOGNAME
+  author=$SUDO_USER
+\endcode
+where the last non-empty value is taken;
+and if your \c .authorized_keys has lines like
+\code
+  environment="FSVS_AUTHOR=some_user" ssh-rsa ...
+\endcode
+that would override the config values.
+
+
 \section o_commit_to Destination URL for commit
 
 If you defined multiple URLs for your working copy, \c FSVS needs to know 
@@ -326,6 +367,7 @@ example:
 		fsvs urls N:master,P:10,http://... N:local,P:20,file:///...
 		fsvs ci /etc/passwd -m "New user defined" -ocommit_to=local
 \endcode
+
 
 \section o_debug_output Destination for debug output
 
@@ -381,6 +423,19 @@ for \c yes all of these actions are delayed until the clock seconds change.
 Example how to set that option via an environment variable:
 \code
 		export FSVS_DELAY=commit,revert
+\endcode
+
+
+\section o_stop_change Stopping status reports as soon as changes are found
+
+If you want to use \c FSVS in scripts, you might simply want to know whether
+anything was changed.
+
+For this use the \c stop_on_change option, possibly combined with 
+\ref o_filter :
+\code
+    fsvs -o stop_change=yes st /etc
+    fsvs -o stop_change=yes -o filter=text status /etc/init.d
 \endcode
 
 
@@ -441,6 +496,23 @@ The option \c "-p" is always used:
 	$merge_prg $merge_opt -p $file1 $common $file2
 \endcode
 
+
+\section o_conf Path definitions for the config and WAA area
+
+\anchor o_waa 
+
+The path given here is used to store the persistent configuration data 
+needed by FSVS; please see \ref waa_files and \ref o__prio for more 
+details, and the \ref o_softroot parameter as well as the \ref 
+howto_backup_recovery for further discussion.
+
+\code
+	FSVS_CONF=/home/user/.fsvs-conf fsvs -o waa=/home/user/.fsvs-waa st
+\endcode
+
+\note Please note that these paths can be given \b only as environment 
+variables (\c $FSVS_CONF resp. \c $FSVS_WAA) or as command line parameter; 
+settings in config files are ignored.
 
  */
 // vi: filetype=doxygen spell spelllang=en_gb formatoptions+=ta : 

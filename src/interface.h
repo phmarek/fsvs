@@ -20,27 +20,6 @@
  * environment variables and similar. */
 /** @{ */
 
-/** \anchor envs
- * \name Environment variables
- * @{ */
-/** The environment variable to override the spool
- * directory (default /var/spool/fsvs). */
-#define WAA__PATH_ENV "FSVS_WAA"
-
-/** The environment variable to override the configuration directory 
- * (default /etc/fsvs). */
-#define CONF__PATH_ENV "FSVS_CONF"
-
-/** The environment variable to set warning defaults.
- * Contains a list of specifications just like used after \c -W, separated 
- * by one of \c ",;\\r\\n\\t".
- * Example:
- * \code
- *    export FSVS_WARNINGS=chmod-eperm=ignore
- * \endcode
- * */
-#define WARNINGS_ENV "FSVS_WARNINGS"
-
 /** If this variable has a numeric value other than 0, the debuglevel is 
  * set even before commandline parsing. */
 #define FSVS_DEBUG_ENV "FSVS_DEBUGLEVEL"
@@ -58,6 +37,12 @@
  * */
 #define DIFF_ENV "FSVS_DIFF"
 /** @} */
+
+
+/** The default WAA path. */
+#define DEFAULT_WAA_PATH "/var/spool/fsvs"
+/** The default CONF path. */
+#define DEFAULT_CONF_PATH "/etc/fsvs"
 
 
 /** \name List of environment variables used for a chroot jail.

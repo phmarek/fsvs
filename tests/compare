@@ -4,29 +4,43 @@ $s=shift;
 $d=shift;
 ($s && $d) || die "Which directories to compare???\n";
 
-$expect_fail=!!(shift());
+# !! crashes syntax highlightning in vim
+$expect_fail= ! !(shift());
 
+# find /tmp/fsvs-test-1000/wc-1/ -printf "% y%04m %7s %5G %5U %T+ %P\0\t%l\0\n"
 # strace -o /tmp/asdga -f -tt 
-$cmd=qq'LANG=C rsync -n -v -v --delete -a --stats "$s" "$d"';
-$_=`$cmd`;
+$cmd=qq'LANG=C rsync -ain --delete "$s" "$d" -c';
+@changes=();
+for (`$cmd`)
+{
+# Ignore empty lines.
+	next if m(^\s*$);
 
-$SIG{"__DIE__"} = sub { print STDERR '$ ',$cmd,"\n",$_,@_; exit 1; };
+# ignore root directory
+  next if m(\.d......... \./\s*$);
 
-($count)=( m#Number of files transferred: (\d+)#i );
-($deleted)=( m#[\r\n]deleting (?!in \.)#i );
+# ignore mtime of links
+  next if m(\.L\.\.t\.\.\.\.\.\. .* -> );
 
+# everything else is a change.
+	push @changes, $_;
+#.L..t...... typechange/device-symlink -> device-1
+#>fc........ typechange/dir-file
+#.L..t...... typechange/file-symlink -> file-1
+#cL+++++++++ typechange/symlink-symlink -> symlink-1
+}
 
-defined($count) || die "----- Cannot interpret this answer\n";
+$SIG{"__DIE__"} = sub { print STDERR '$ ',$cmd,"\n",@changes,@_; exit 1; };
 
-if ($expect_fail && ($count || $deleted))
+if ($expect_fail && @changes)
 {
 	print "----- expected differences\n";
 # pass output for further processing
-	print $_;
+	print @changes;
 	exit 0;
 }
 
-die "----- Differences were found\n" if ( $count || $deleted );
+die "----- Differences were found\n" if @changes;
 
 print "----- comparison of directory gave no differences\n";
 exit 0;

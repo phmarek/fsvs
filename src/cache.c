@@ -65,7 +65,7 @@ inline int cch__entry_set(struct cache_entry_t **cache,
 			(ce->len - len) > 1024)
 	{
 		/* Round up a bit (including the struct). */
-		alloc_len = (alloc_len + 256-1) & ~64;
+		alloc_len = (alloc_len + 96-1) & ~64;
 
 		if (copy_old_data)
 			ce=realloc(ce, alloc_len);
@@ -209,17 +209,19 @@ void cch__set_active(struct cache_t *cache, int i)
 
 /** A simple hash.
  * Copies the significant bits ' ' .. 'Z' (or, really, \\x20 ..  \\x60) of 
- * at most 5 bytes into a packed bitfield, so that 30bits are used. */
+ * at most 6 bytes into a packed bitfield, so that 30bits are used. */
 inline cache_value_t cch___string_to_cv(const char *stg)
 {
   union {
 	  cache_value_t cv;
 		struct {
-			int c0:5;
-			int c1:5;
-			int c2:5;
-			int c3:5;
-			int c4:5;
+			unsigned int c0:5;
+			unsigned int c1:5;
+			unsigned int c2:5;
+			unsigned int c3:5;
+			unsigned int c4:5;
+			unsigned int c5:5;
+			unsigned int ignore_me:2;
 		};
 	} __attribute__((packed)) result;
 
@@ -234,7 +236,9 @@ inline cache_value_t cch___string_to_cv(const char *stg)
 				{ result.c3 = *(stg++) - 0x20;
 					if (*stg) 
 					{ result.c4 = *(stg++) - 0x20;
-					} } } } } 
+						if (*stg) 
+						{ result.c5 = *(stg++) - 0x20;
+						} } } } } }
 
 	return result.cv;
 }

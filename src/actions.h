@@ -15,13 +15,28 @@
 /** \file
  * Action handling header file. */
 
-/** \name Action callbacks. */
+/** \anchor callbacks \name callbacks Action callbacks. */
 /** @{ */
-/** One to show progress.
+/** Callback that gets called for each entry.
+ *
+ * Entries get read from the entry list in global [device, inode] order; in 
+ * the normal action callback (\ref actionlist_t::local_callback and \ref 
+ * actionlist_t::repos_feedback) the parent entries are handled \b after child 
+ * entries (but the parent \c struct \ref estat "estats" exist, of course), 
+ * so that the list of children is correct.
+ *
+ * As in the entry list file (\ref dir) there is a callback \ref 
+ * actionlist_t::early_entry that's done \b before the child entries;
+ * Clearing \ref estat::do_this_entry and \ref estat::do_tree in this 
+ * callback will skip calling \ref actionlist_t::local_callback for this and 
+ * the child entries (see \ref ops__set_to_handle_bits()).
+ *
+ * See also \ref waa__update_tree.
+ *
  * The full (wc-based) path can be built as required by \ref 
  * ops__build_path().*/
 typedef int (action_t)(struct estat *sts);
-/** One for working */
+/** Callback for initializing the action. */
 typedef int (work_t)(struct estat *root, int argc, char *argv[]);
 /** One after all progress has been made. */
 typedef int (action_uninit_t)(void);
@@ -44,9 +59,19 @@ struct actionlist_t
 {
 	/** Array of names this action will be called on the command line. */
 	const char** name;
-	/** The function doing the setup, tear down, and in-between - the real
-	 * worker. */
+
+	/** The function doing the setup, tear down, and in-between - the 
+	 * worker main function.
+	 *
+	 * See \ref callbacks. */
 	work_t *work;
+
+	/** The output function for repository accesses.
+	 * Currently only used in cb__record_changes().
+	 *
+	 * See \ref callbacks. */
+	action_t *repos_feedback;
+
 	/** The local callback.
 	 * Called for each entry, just after it's been checked for changes.
 	 * Should give the user feedback about individual entries and what 
@@ -57,37 +82,42 @@ struct actionlist_t
 	 * \note A removed directory is taken as empty (as no more elements are 
 	 * here) - this is used in \ref revert so that revert gets called twice 
 	 * (once for restoring the directory itself, and again after its 
-	 * populated). */
+	 * populated). 
+	 *
+	 * See \ref callbacks. */
 	action_t *local_callback;
-	/** The output function for repository accesses.
-	 * Currently only used in cb__record_changes(). */
-	action_t *repos_feedback;
 	/** The progress reporter needs a callback to clear the line after printing
 	 * the progress. */
 	action_uninit_t *local_uninit;
+
+	/** A pointer to the verbose help text. */
+	char const *help_text;
+
+	/** Flag for usage in the action handler itself. */
+	int i_val;
+
 	/** Is this an import or export, ie do we need a WAA?
 	 * We don't cache properties, manber-hashes, etc., if is_import_export 
 	 * is set. */
-	int is_import_export;
+	int is_import_export:1;
 	/** This is set if it's a compare operation (remote-status).
 	 * The properties are parsed, but instead of writing them into the 
 	 * \c struct \c estat they are compared, and \c entry_status set
 	 * accordingly. */
-	int is_compare;
-	/** A pointer to the verbose help text. */
-	char const *help_text;
+	int is_compare:1;
 	/** Whether we need fsvs:update-pipe cached. 
 	 * Do we install files from the repository locally? Then we need to know 
 	 * how to decode them.
 	 * We don't do that in every case, to avoid wasting memory. */
-	int needs_decoder;
+	int needs_decoder:1;
 	/** Whether the entries should be filtered on opt_filter. */
-	int only_opt_filter;
+	int only_opt_filter:1;
+	/** Whether user properties should be stored in estat::user_prop while 
+	 * running cb__record_changes(). */
+	int keep_user_prop:1;
 	/** Makes ops__update_single_entry() keep the children of removed 
 	 * directories. */
-	int keep_children;
-	/** Flag for usage in the action handler itself. */
-	int i_val;
+	int keep_children:1;
 };
 
 

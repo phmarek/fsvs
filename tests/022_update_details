@@ -15,15 +15,15 @@ logfile=$LOGDIR/022.logfile
 
 # We don't use backticks here - in case there's an error in fsvs, the shell
 # would not stop.
-$BIN up > $logfile
+$BINq up > $logfile
 # this next line has two tabulators - in grep and cut
 rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d"."` 
 echo "now at rev. $rev"
 
 touch empty-file
-$BIN ci -m "new file"
+$BINq ci -m "new file"
 # Goto old revision
-$BIN up -r$rev -o delay=yes
+$BINq up -r$rev -o delay=yes
 
 
 # Modify WC
@@ -35,7 +35,7 @@ echo B > $file2
 $BINdflt st | grep new > $logfile
 
 # Goto last revision
-$BIN up
+$BINq up
 
 # The status must not have changed!
 if $BINdflt st | grep new | cmp $logfile -

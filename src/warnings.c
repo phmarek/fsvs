@@ -92,27 +92,6 @@ ex:
 }
 
 
-/** -.
- *
- * \todo Deprecate, as FSVS_WARNING is allowed?
- * */
-int wa__init(void)
-{
-	int status;
-	char *warn;
-
-	status=0;
-	warn=getenv(WARNINGS_ENV);
-
-	if (warn)
-		STOPIF( wa__split_process(warn, PRIO_ENV), 
-				"From environment variable %s", WARNINGS_ENV);
-
-ex:
-	return status;
-}
-
-
 /**
  * -.
  * The given string is of the format \c warning=action.
@@ -247,8 +226,7 @@ int wa__summary(void)
 	status=0;
 	/* Flush all streams, so that this warnings occur *after* 
 	 * every other status output. */
-	STOPIF_CODE_ERR( fflush(NULL) == EOF, errno, 
-			"Could not flush output streams");
+	STOPIF_CODE_EPIPE( fflush(NULL), NULL);
 
 	flag=0;
 	for(i=0; i<_WRN__LAST_INDEX; i++)

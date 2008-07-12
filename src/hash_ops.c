@@ -84,102 +84,102 @@
  *   {
  *     rank=same;
  *     key;
-*     1;
-*   }
-*   key -> C1;
-*   1 -> C0;
-*
-*   edge [style=dotted];
-*   edge [arrowhead=none, arrowtail=normal];
-*   1 -> C1:p;
-*
-*   edge [style=invis, weight=20];
-*   key -> 1;
-* }
-* \enddot
-* After several insertions, the situation might be like this:
-* \dot
-* digraph {
-	*   node [shape=record];
-	*   {
-		*     rank=same;
-		*     Ca  [label = " { <p> 0 | value_A } " ];
-		*     Cb  [label = " { <p> 0 | value_B2 } " ];
-		*     Cb2 [label = " { <p> 1 | value_B1 } " ];
-		*     Cc3 [label = " { <p> 3 | value_C3 } " ];
-		*     Cc2 [label = " { <p> 2 | value_C2 } " ];
-		*     Cc  [label = " { <p> 0 | value_C1 } " ];
-		*   }
-		*   {
-			*     rank=same;
-			*     key_A;
-			*     key_B;
-			*     key_C;
-			*     1;
-			*     2;
-			*     3;
-			*   }
-			*
-				*   "key_A" -> Ca;
-			*
-				*   "key_B" -> Cb2;
-			*   "1" -> Cb;
-			*
-				*   "key_C" -> Cc3;
-			*   "2" -> Cc;
-			*   "3" -> Cc2;
-			*
-				*   edge [style=dotted];
-			*   edge [arrowhead=none, arrowtail=normal];
-			*   1 -> Cb2:p;
-			*   3 -> Cc3:p;
-			*   2 -> Cc2:p;
-			*
-				*   edge [style=invis, weight=20];
-			*   key_A -> key_B;
-			*   1 -> key_C;
-			* }
-			* \enddot
-			*
-			*
-			* \subsection hsh_store_array Storing a verbatim array
-			*
-			* If there's a limited number of entries (with known length) to store, an 
-			* array with a defined size might be easiest.  \n
-			* A similar variant would be to simply concatenate the data in the hash 
-			* buckets, with some suitable separator.
-			* - memory intensive, slow for big buckets (many bytes to copy).
-			* - For array iteration some special convention for the \c key would 
-			* have to be used, like \c .dsize=0 and \c .dptr=array_def; the last 
-			* returned index would have to be stored in the array structure.
-			* - Big advantage: fast for reading, doesn't have to seek around.
-			* \dot
-			* digraph {
-				*   node [shape=record];
-				*   C1 [label = "num=4 | v1 | v2 | v3 | v4 | 0 | 0 | 0 | 0 | 0 | 0 | 0" ];
-				*   "key" -> C1;
-				*   }
-				* \enddot
-				*
-				*
-				* \subsection Conclusio
-				*
-				* Barring other (better) ideas, the array solution is currently 
-				* implemented; the array is of fixed-size, can store only pointers, and 
-				* the function for getting a list allows returning a set of elements. 
-				*
-				* <hr>
-				* */
+ *     1;
+ *   }
+ *   key -> C1;
+ *   1 -> C0;
+ *
+ *   edge [style=dotted];
+ *   edge [arrowhead=none, arrowtail=normal];
+ *   1 -> C1:p;
+ *
+ *   edge [style=invis, weight=20];
+ *   key -> 1;
+ * }
+ * \enddot
+ * After several insertions, the situation might be like this:
+ * \dot
+ * digraph {
+ *   node [shape=record];
+ *   {
+ *     rank=same;
+ *     Ca  [label = " { <p> 0 | value_A } " ];
+ *     Cb  [label = " { <p> 0 | value_B2 } " ];
+ *     Cb2 [label = " { <p> 1 | value_B1 } " ];
+ *     Cc3 [label = " { <p> 3 | value_C3 } " ];
+ *     Cc2 [label = " { <p> 2 | value_C2 } " ];
+ *     Cc  [label = " { <p> 0 | value_C1 } " ];
+ *   }
+ *   {
+ *     rank=same;
+ *     key_A;
+ *     key_B;
+ *     key_C;
+ *     1;
+ *     2;
+ *     3;
+ *   }
+ *
+ *   "key_A" -> Ca;
+ *
+ *   "key_B" -> Cb2;
+ *   "1" -> Cb;
+ *
+ *   "key_C" -> Cc3;
+ *   "2" -> Cc;
+ *   "3" -> Cc2;
+ *
+ *   edge [style=dotted];
+ *   edge [arrowhead=none, arrowtail=normal];
+ *   1 -> Cb2:p;
+ *   3 -> Cc3:p;
+ *   2 -> Cc2:p;
+ *
+ *   edge [style=invis, weight=20];
+ *   key_A -> key_B;
+ *   1 -> key_C;
+ * }
+ * \enddot
+ *
+ *
+ * \subsection hsh_store_array Storing a verbatim array
+ *
+ * If there's a limited number of entries (with known length) to store, an 
+ * array with a defined size might be easiest.  \n
+ * A similar variant would be to simply concatenate the data in the hash 
+ * buckets, with some suitable separator.
+ * - memory intensive, slow for big buckets (many bytes to copy).
+ * - For array iteration some special convention for the \c key would 
+ * have to be used, like \c .dsize=0 and \c .dptr=array_def; the last 
+ * returned index would have to be stored in the array structure.
+ * - Big advantage: fast for reading, doesn't have to seek around.
+ * \dot
+ * digraph {
+ *   node [shape=record];
+ *   C1 [label = "num=4 | v1 | v2 | v3 | v4 | 0 | 0 | 0 | 0 | 0 | 0 | 0" ];
+ *   "key" -> C1;
+ *   }
+ * \enddot
+ *
+ *
+ * \subsection Conclusio
+ *
+ * Barring other (better) ideas, the array solution is currently 
+ * implemented; the array is of fixed-size, can store only pointers, and 
+ * the function for getting a list allows returning a set of elements. 
+ *
+ * <hr>
+ * */
 
 
-				/** \name Simple hash functions.
-				 *
-				 * @{ */
+/** \name Simple hash functions.
+ *
+ * @{ */
 
-				/** Bare open function for internal use. 
-				 *
-				 * \a *fname_out, if not \c NULL, gets an allocated copy of the filename. 
-				 * */
+/** Bare open function for internal use. 
+ *
+ * \a *fname_out, if not \c NULL, gets an allocated copy of the filename. 
+ * */
 int hsh___new_bare(char *wcfile, char *name, int gdbm_mode, 
 		GDBM_FILE *output, 
 		char **fname_out)
@@ -280,6 +280,45 @@ ex:
 
 
 /** -.
+ *
+ * The previously marked keys in the hash table are removed; it is not 
+ * checked for empty-ness nor reorganized.  */
+int hsh__collect_garbage(hash_t db, int *did_remove)
+{
+	int status;
+	int have_removed;
+	datum key, next;
+
+	status=0;
+	have_removed=0;
+	if (db && db->to_delete)
+	{
+		key=gdbm_firstkey(db->to_delete);
+		while (key.dptr)
+		{
+			next=gdbm_nextkey(db->to_delete, key);
+			STOPIF_CODE_ERR( gdbm_delete(db->db, key)!=0, gdbm_errno,
+					"Removing entry");
+
+			free(key.dptr);
+			key=next;
+			have_removed++;
+		}
+
+		DEBUGP("%d cleanups", have_removed);
+
+		gdbm_close(db->to_delete);
+		db->to_delete=NULL;
+	}
+
+	if (did_remove) *did_remove=have_removed;
+
+ex:
+	return status;
+}
+
+
+/** -.
  * 
  * If \a has_failed is set, some error has happened, and the registered 
  * keys are not used for deletion (like a \c ROLLBACK). */
@@ -287,50 +326,33 @@ int hsh__close(hash_t db, int has_failed)
 {
 	int status;
 	int have_removed;
-	datum key, next;
+	datum key;
 
 
 	status=0;
 	if (!db) goto ex;
 
+	have_removed=0;
 	if (db->to_delete)
 	{
-		have_removed=0;
 		if (!has_failed)
-		{
-			key=gdbm_firstkey(db->to_delete);
-			while (key.dptr)
-			{
-				next=gdbm_nextkey(db->to_delete, key);
-				STOPIF_CODE_ERR( gdbm_delete(db->db, key)!=0, gdbm_errno,
-						"Removing entry");
+			STOPIF( hsh__collect_garbage(db, &have_removed), NULL);
+	}
 
-				free(key.dptr);
-				key=next;
-				have_removed++;
-			}
-		}
-
-		DEBUGP("%d cleanups", have_removed);
-
-		gdbm_close(db->to_delete);
-		db->to_delete=NULL;
-
-		/* No more data in that hash? */
-		if (hsh__first(db, &key) == ENOENT &&
-				db->filename)
-		{
-			DEBUGP("nothing found, removing %s", db->filename);
-			STOPIF_CODE_ERR( unlink(db->filename)==-1, errno,
-					"Cleaning up the empty hash '%s'", db->filename);
-		}
-		else
-		{
-			DEBUGP("reorganize?");
-			/* At least fewer space used? */
-			if (have_removed)
-				gdbm_reorganize(db->db);
-		}
+	/* No more data in that hash? */
+	if (hsh__first(db, &key) == ENOENT &&
+			db->filename)
+	{
+		DEBUGP("nothing found, removing %s", db->filename);
+		STOPIF( waa__delete_byext(db->filename, NULL, 0), 
+				"Cleaning up the empty hash '%s'", db->filename);
+	}
+	else
+	{
+		DEBUGP("reorganize?");
+		/* At least fewer space used? */
+		if (have_removed)
+			gdbm_reorganize(db->db);
 	}
 
 	DEBUGP("closing hash");
@@ -388,13 +410,16 @@ int hsh__next(hash_t db, datum *key, const datum *oldkey)
 {
 	datum k;
 
+	/* Get next key. */
 	k=gdbm_nextkey(db->db, *oldkey);
 
+	/* Ev. free old key-data. */
 	if (oldkey == key) 
 		/* Should be IF_FREE(oldkey->dptr) -- but oldkey==key, and oldkey is 
 		 * read-only. */
 		IF_FREE(key->dptr);
 
+	/* Return new key. */
 	*key=k;
 
 	return (k.dptr) ? 0 : ENOENT;

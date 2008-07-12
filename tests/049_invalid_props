@@ -46,6 +46,8 @@ if perl -e 'exit 1 if -M shift() > (3/86400.0)' $filename
 then
   $SUCCESS "Timestamp is current"
 else
+	date
+	ls -la $filename
   $ERROR "Timestamp is wrong"
 fi
 

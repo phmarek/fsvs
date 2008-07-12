@@ -1,3 +1,66 @@
+Changes since 1.1.15
+- FSVS_WARNINGS removed. Use FSVS_WARNING.
+- Small fixes and cleanups.
+- Handling of FSVS_WAA and FSVS_CONF now via the normal option handling, to 
+	reduce code size. Now it's possible to use "-oconf=..." on the command 
+	line, too.
+	(But it's not possible to override the paths from the config file.)
+- Fixed EPIPE handling in many functions, most notably on "fsvs st" output.
+- The colordiff option has changed; it can now be used to specify the 
+	binary to use instead of the default "colordiff".
+- "fsvs diff" would leave a temporary file behind if the colordiff binary 
+	quits unexpectedly, or a EPIPE was caught.
+- Bugfix for error after commit, when $EDITOR returned an 0 byte file as 
+	commit message.
+- "fsvs diff" changed to recursive behaviour, as "svn" does.
+- Fixed "fsvs diff -rX" to print only changed entries, not the whole list.
+- "fsvs diff -rX:Y" reimplemented, too; performance could get optimized.
+- Changed the memory allocation pattern to (hopefully) allocate in larger 
+	blocks.
+- Removed entries are not kept in some mixed mode internally, but 
+	temporarily copied and remembered as old - cleans up some code, and 
+	lowers memory usage by about 20 byte per entry on 32bit; 32 on 64bit.
+- Fixed some issues in the example/setup.sh script.
+- Moved a lot of structure members, to avoid padding (esp. on 64bit).
+- Some bigger cleanups (FS_CHILD_CHANGED)
+- Fix for waa__mkdir() not seeing that the existing inode isn't a 
+	directory.
+- Bugfix for special entries; they'd be created as $destination.XXXXXX, 
+	without checking whether such a file already exists. 
+- Bugfix for revert - if an entry gets reverted, we implicitly change the 
+	parents mtime. That shouldn't be printed as a change, though.
+- Removed properties wouldn't get committed or updated properly.
+- Committed the distclean patch from Sheldon Hearn.
+- "make install" implemented.
+- Tempfile generation consolidated.
+- Rewrote entry fetching from the repository. Previously a file with bad 
+	mode (like 0111) couldn't get diffed.
+- "update -rX" and "diff -rX" (but not "diff -rX:Y") now use the per-url 
+	override syntax (see "-u").
+- Multi-URL code has been found to be not perfect - removing a (common) 
+	directory removes files from all URLs.
+- New option to set maximum number of revisions on "fsvs log".
+- Fixed a memory leak for symlinks.
+- Fixed diff for symlinks and devices.
+- "fsvs sync" now tries to fetch all filesizes and entry types from the 
+  repository, too. For that we have to do a recursive listing, and fetch
+	special entries; encoded files with only a few kB are looked at, too.
+	Needs more time and bandwidth.
+- "update -rX" and "diff -rX" (but not "diff -rX:Y") now use the per-url 
+	override syntax (see "-u").
+- Multi-URL code has been found to be not perfect - removing a (common) 
+	directory removes files from all URLs.
+- New option to set maximum number of revisions on "fsvs log".
+- Fixed a memory leak for symlinks.
+- Fixed diff for symlinks and devices.
+- New option "stop_change" for use in scripts.
+- New option "author" for commit.
+- Changed from "merge" to "diff3" as merge program; seems to be more common.
+
+Changes since 1.1.14
+- Fixed a bug in the shadow-clean.pl script; it wouldn't remove the 
+	passwords.
+
 Changes since 1.1.13
 - New option for conflict handling; allows "stop" (historical default), 
 	"local", "remote", "both" or "merge".

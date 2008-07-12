@@ -27,7 +27,7 @@ do
 	fi
 
 	echo "     ci"
-	$BINdflt ci -m "$filename-$RANDOM" -o delay=yes > $tmp
+	$BINdflt ci -m "$filename-$RANDOM" -o delay=yes . > $tmp
 	if [[ `grep -F "N...         0  ./$filename" < $tmp > /dev/null` ]]
 	then
 		$ERROR_NB "expected '$filename' as new"
@@ -37,13 +37,13 @@ do
 		$SUCCESS "'$filename' is new"
 	fi
 
-	if [[ `tail -1 $tmp | grep -v 'committed revision'` ]]
+	if [[ `tail -1 $tmp` == "committed revision"* ]]
 	then
+		$SUCCESS "found revision line"
+	else
 		$ERROR_NB "expected 'committed revision'"
 		cat $tmp
 		exit 1
-	else
-		$SUCCESS "found revision line"
 	fi
 
 	$WC2_UP_ST_COMPARE
@@ -73,7 +73,7 @@ fi
 
 
 echo "     ci"
-$BINdflt ci -m delete > $tmp
+$BINdflt ci -m delete . > $tmp
 if [[ `grep -F "D...         0  ./$filename" < $tmp > /dev/null` ]]
 then
 	$ERROR_NB "expected $filename as deleted"
@@ -83,13 +83,13 @@ else
 	$SUCCESS "$filename is deleted"
 fi
 
-if [[ `tail -1 $tmp | grep -v 'committed revision'` ]]
+if [[ `tail -1 $tmp` == "committed revision"* ]]
 then
+	$SUCCESS "found revision line"
+else
 	$ERROR_NB "expected 'committed revision'"
 	cat $tmp
 	exit 1
-else
-	$SUCCESS "found revision line"
 fi
 
 

@@ -15,8 +15,6 @@
 DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 
-include /usr/share/dpatch/dpatch.make
-
 CFLAGS = -Wall -g
 
 ifneq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
@@ -32,17 +30,14 @@ config.status: configure
 
 build: build-stamp
 
-build-stamp: patch-stamp config.status
+build-stamp: config.status
 	dh_testdir
 
 	$(MAKE) -C src
 
 	touch $@
 
-# distclean is only added to top-level Makefile by dpatch
-clean: patch-stamp clean-patched unpatch
-
-clean-patched:
+clean:
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp

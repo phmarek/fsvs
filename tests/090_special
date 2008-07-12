@@ -42,10 +42,11 @@ $INFO "Testing commit delay"
 function CT
 {
 	delay_start=`date +%s`
-	for a in 1 2 3 4
+# Make sure the files have different lengths
+	for a in 1 22 333 4444
 	do
 		echo $a > file
-		$BINq ci -m1 $1 > /dev/null
+		$BINq ci -m$a $1 > /dev/null
 # Alternatively we could test whether the microseconds are nearly 0 when we 
 # get here.
 	done

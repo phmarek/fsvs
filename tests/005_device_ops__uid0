@@ -15,9 +15,9 @@ then
 	touch reclink
 
 	echo "     ci"
-	$BIN ci -m "changed dev to dir/dev and link to file"
+	$BINq ci -m "changed dev to dir/dev and link to file"
 	echo "     st1"
-	$BIN st
+	$BINq st
 
 	$WC2_UP_ST_COMPARE
 else

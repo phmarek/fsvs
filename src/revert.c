@@ -20,7 +20,6 @@
 #include "resolve.h"
 #include "checksum.h"
 #include "props.h"
-#include "cache.h"
 #include "helper.h"
 #include "url.h"
 #include "update.h"
@@ -134,125 +133,76 @@ static int number_reverted=0;
 static svn_revnum_t last_rev;
 
 
-/** -.
- * This function fetches a file from the current repository, and
- * applies it locally. 
- *
- * Meta-data is set; an existing local entry gets atomically removed by \c 
- * rename().
- * The \c sts->entry_type \b must be correct.
- * \c current_url \b must match, and be open.
- *
- * If \a only_tmp is not \c NULL, the temporary file is not renamed
- * to the real name; instead its path is returned, in a buffer which must
- * not be freed. There is a small number of such buffers used round-robin;
- * at least two slots are always valid. \n
- * No manber-hashes are done in this case.
- *
- * If \a url_to_use is not \c NULL, it is taken as source, and so must not 
- * be a directory.
- */
 #define REV___GETFILE_MAX_CACHE (4)
-int rev__get_file(struct estat *sts, 
-		svn_revnum_t revision,
-		char *url_to_use,
-		svn_revnum_t *fetched,
-		char **only_tmp,
+
+
+/** -.
+ *
+ * This function fetches an non-directory entry \a utf8_url from the 
+ * current repository in \a session, and writes it to \a output - which 
+ * gets closed via \c svn_stream_close(). 
+ *
+ * \a decoder should be set correctly.
+ * \todo if it's \c NULL, but an update-pipe is set on the entry, the data 
+ * has to be read from disk again, to be correctly processed.
+ *
+ * No meta-data is set, and the \c svn:special attribute is ignored.
+ *
+ * The revision number must be valid, it may not be \c SVN_INVALID_REVNUM.
+ *
+ * If \a sts_for_manber is \c NULL, no manber hashes are calculated.
+ *
+ * If \a output_sts is \c NULL, the meta-data properties are kept in \a 
+ * props; else its fields are filled (as far as possible) with data. That 
+ * includes the estat::repos_rev field.
+ *
+ * The user-specified properties can be returned in \a props.
+ *
+ * */
+int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
+		const char *decoder,
+		svn_stream_t *output,
+		struct estat *sts_for_manber,
+		struct estat *output_sts,
+		apr_hash_t **props,
 		apr_pool_t *pool)
 {
 	int status;
 	svn_error_t *status_svn;
-
-	static struct cache_t *cache=NULL;
-
-	char *filename_tmp;
-	char *utf8_path;
-
-	char *filename;
-	apr_hash_t *props;
-	svn_stream_t *stream;
-	apr_file_t *a_stream;
 	svn_string_t *prop_val;
-	apr_pool_t *subpool;
-	svn_stringbuf_t *target_stringbuf;
-	const char *encoder_str;
 	struct encoder_t *encoder;
-	char *relative_to_url;
+	char *relative_url, *utf8_url;
+	apr_hash_t *properties;
 
 
-	STOPIF( cch__new_cache(&cache, 8), NULL);
-	target_stringbuf=NULL;
 	encoder=NULL;
-
-	BUG_ON(!pool);
-
-	STOPIF( ops__build_path(&filename, sts), NULL);
-	/* We cannot give the filename as parameter to copy.
-	 * We need a few bytes more for the unique part, and this additional 
-	 * length might not be addressible any more. */
-	STOPIF( cch__add(cache, 0, NULL, sts->path_len+16, &filename_tmp), NULL);
+	status=0;
+	DEBUGP("getting file %s@%llu from %s",
+			loc_url, (t_ull)revision, current_url->url);
 
 
-	if (!url_to_use)
+	if (strncmp(loc_url, "./", 2) == 0)
 	{
 		/* Skip ./ in front. */
-		relative_to_url=filename+2;
+		relative_url=loc_url+2;
 	}
 	else
 	{
-		/* Verify that the correct URL is taken. */
-		if (strncmp(current_url->url, url_to_use, current_url->urllen) == 0)
-		{
-			DEBUGP("%s matches current_url.", url_to_use);
-		}
-		else
-		{
-			STOPIF(EINVAL, "%s not below %s", url_to_use, current_url->url);
-		}
+		/* It could be an absolute value. */
 
-		relative_to_url=url_to_use + current_url->urllen+1;
+		/* Verify that the correct URL is taken.
+		 * The "/" that's not stored at the end of the URL must be there, too.  
+		 * */
+		if (strncmp(current_url->url, loc_url, current_url->urllen) == 0 &&
+				loc_url[current_url->urllen] == '/')
+			loc_url += current_url->urllen+1;
+
+		/* If the string doesn't match, it better be a relative value already 
+		 * ... else we'll get an error.  */
+		//	else STOPIF(EINVAL, "%s not below %s", loc_url, current_url->url);
 	}
 
-	DEBUGP("getting file %s@%llu from %s",
-			relative_to_url, (t_ull)revision, current_url->url);
-
-
-	/* We could use a completely different mechanism for temp-file-names;
-	 * but keeping it close to the target lets us see if we're out of
-	 * disk space in this filesystem. (At least if it's not a binding mount
-	 * or something similar - but then rename() should fail).
-	 * If we wrote the data somewhere else, we'd risk moving it again -
-	 * across filesystem boundaries. */
-	strcpy(filename_tmp, filename);
-	strcat(filename_tmp, ".XXXXXX");
-
-
-	STOPIF( apr_pool_create(&subpool, pool),
-			"Creating the filehandle pool");
-
-	if (sts->entry_type == FT_FILE)
-	{
-		/* Files get written in files. */
-		STOPIF( apr_file_mktemp(&a_stream, filename_tmp, 
-					APR_WRITE | APR_CREATE | APR_EXCL | APR_READ | APR_TRUNCATE,
-					subpool),
-				"Cannot open/create file %s", filename_tmp);
-		stream=svn_stream_from_aprfile(a_stream, subpool);
-	}	
-	else
-	{
-		/* Special entries are typically smaller than 1kByte, and get stored in 
-		 * an in-memory buffer. */
-		target_stringbuf=svn_stringbuf_create("", subpool);
-
-		stream=svn_stream_from_stringbuf(target_stringbuf, subpool);
-	}
-
-
-	/* When we get a file, every old manber-hashes are stale.
-	 * So remove them; if the file is big enough, we'll recreate it with 
-	 * correct data. */
-	STOPIF( waa__delete_byext(filename, WAA__FILE_MD5s_EXT, 1), NULL);
+	STOPIF( hlp__local2utf8(loc_url, &utf8_url, -1), NULL);
 
 
 	/* Symlinks have a MD5, too ... so just do that here. */
@@ -262,13 +212,9 @@ int rev__get_file(struct estat *sts,
 	 * We need to get the MD5 anyway; there's svn_stream_checksummed(),
 	 * but that's just one chainlink more, and so we simply use our own
 	 * function. */
-	if (!action->is_import_export && !only_tmp)
-		STOPIF( cs__new_manber_filter(sts, stream, &stream, 
-					subpool),
-				NULL);	
-
-	/* We need to skip the ./ in front. */
-	STOPIF( hlp__local2utf8(relative_to_url, &utf8_path, -1), NULL);
+	if (sts_for_manber)
+		STOPIF( cs__new_manber_filter(sts_for_manber, 
+					output, &output, pool), NULL);	
 
 
 	/* If there's a fsvs:update-pipe, we would know when we have the file 
@@ -299,93 +245,272 @@ int rev__get_file(struct estat *sts,
 	 * use network, or use disk.
 	 * For a local-remote diff we could pipe the data into the diff program; 
 	 * but that wouldn't work for remote-remote diffing, as diff(1) doesn't 
-	 * accept arbitrary filehandles as input.
-	 **/
-	if (sts->decoder_is_correct)
+	 * accept arbitrary filehandles as input (and /proc/self/fd/ isn't 
+	 * portable). */
+
+	/* Fetch decoder from repository. */
+	if (decoder == DECODER_UNKNOWN)
 	{
-		encoder_str=sts->decoder;
-		/* \todo: are there cases where we haven't seen the properties?
-		 * Call up__fetch_encoder_str()? Should know whether the value is valid, or 
-		 * just not set yet. */
-	}
-	else
-	{
-		/* Get the correct value for the update-pipe. */
 		STOPIF_SVNERR( svn_ra_get_file,
 				(current_url->session,
-				 utf8_path,
-				 revision,
+				 loc_url, revision,
 				 NULL,
-				 NULL,
-				 &props,
-				 subpool) );
+				 &revision, &properties,
+				 pool) );
 
-		prop_val=apr_hash_get(props, propval_updatepipe, APR_HASH_KEY_STRING);
-		encoder_str=prop_val ? prop_val->data : NULL;
+		prop_val=apr_hash_get(properties, propval_updatepipe, APR_HASH_KEY_STRING);
+		decoder=prop_val ? prop_val->data : NULL;
 	}
-	DEBUGP("updatepipe found as %s", encoder_str);
+
 
 	/* First decode, then do manber-hashing. As the filters are prepended, we 
 	 * have to do that after the manber-filter. */
-	if (encoder_str)
+	if (decoder)
 	{
-		STOPIF( hlp__encode_filter(stream, encoder_str, 1, 
-					&stream, &encoder, subpool), NULL);
-		encoder->output_md5= &(sts->md5);
+		STOPIF( hlp__encode_filter(output, decoder, 1, 
+					&output, &encoder, pool), NULL);
+		if (output_sts)
+			encoder->output_md5= &(output_sts->md5);
 	}
 
 
-	if (!fetched) fetched=&revision;
-	/* \a fetched only gets set for \c SVN_INVALID_REVNUM , so set a default. */
-	*fetched=revision;
 	STOPIF_SVNERR( svn_ra_get_file,
 			(current_url->session,
-			 utf8_path,
-			 revision,
-			 stream,
-			 fetched,
-			 &props,
-			 subpool) );
-	DEBUGP("got revision %llu", (t_ull)*fetched);
+			 loc_url, revision,
+			 output,
+			 &revision, &properties,
+			 pool) );
+	DEBUGP("got revision %llu", (t_ull)revision);
+
+	/* svn_ra_get_file doesn't close the stream. */
+	STOPIF_SVNERR( svn_stream_close, (output));
+	output=NULL;
+
+	if (output_sts)
+	{
+	  output_sts->repos_rev = revision;
+		STOPIF( prp__set_from_aprhash( output_sts, properties, 
+					ONLY_KEEP_USERDEF, pool), NULL);
+	}
+
+	if (props)
+		*props=properties;
+
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * Mostly the same as \c rev__get_text_to_stream(), but returning a 
+ * (temporary) \a filename based on \a filename_base, if this is not \c 
+ * NULL.
+ *
+ * If \a filename_base is \c NULL, the file will be put in a real temporary 
+ * location.
+ *
+ * \a output_stat is used to store the parsed properties of the entry.
+ * */
+int rev__get_text_to_tmpfile(char *loc_url, svn_revnum_t revision,
+		char *encoder,
+		char *filename_base, char **filename,
+		struct estat *sts_for_manber, 
+		struct estat *output_sts, apr_hash_t **props,
+		apr_pool_t *pool)
+{
+	int status;
+	apr_file_t *apr_f;
+	svn_stream_t *output;
+
+
+	status=0;
+
+	STOPIF( waa__get_tmp_name( filename_base, filename, &apr_f, pool), NULL);
+	output=svn_stream_from_aprfile(apr_f, pool);
+
+	STOPIF( rev__get_text_to_stream( loc_url, revision, encoder,
+				output, sts_for_manber, output_sts, props, pool), NULL);
 
 	/* svn_ra_get_file() doesn't close. */
-  STOPIF_SVNERR( svn_stream_close, (stream));
+	STOPIF( apr_file_close(apr_f), NULL);
 
-	if (sts->entry_type != FT_FILE)
+ex:
+	return status;
+}
+
+
+/** -.
+ *
+ * Does no validation of input - might fill entire memory.  */
+int rev__get_text_into_buffer(char *loc_url, svn_revnum_t revision,
+		const char *decoder,
+		svn_stringbuf_t **output,
+		struct estat *sts_for_manber,
+		struct estat *output_sts,
+		apr_hash_t **props,
+		apr_pool_t *pool)
+{
+	int status;
+	svn_stringbuf_t *string;
+	svn_stream_t *stream;
+
+	status=0;
+	string=svn_stringbuf_create("", pool);
+	stream=svn_stream_from_stringbuf(string, pool);
+
+	STOPIF( rev__get_text_to_stream(loc_url, revision,
+				decoder, stream, sts_for_manber, output_sts, props, pool), NULL);
+
+	*output=string;
+ex:
+	return status;
+}
+
+
+/** -.
+ *
+ * Meta-data is set; an existing local entry gets atomically removed by \c 
+ * rename().
+ *
+ * If the entry has no URL defined yet, but has a copy flag set (\c 
+ * RF_COPY_BASE or \c RF_COPY_SUB), this URL is taken.
+ *
+ * If \a revision is 0, the \c BASE revision is and \a decoder is used; 
+ * this is the copy base for copied entries.
+  */
+int rev__install_file(struct estat *sts, svn_revnum_t revision,
+		char *decoder,
+		apr_pool_t *pool)
+{
+	int status;
+	char *filename;
+	char *filename_tmp;
+	apr_hash_t *props;
+	svn_stream_t *stream;
+	apr_file_t *a_stream;
+	apr_pool_t *subpool;
+	char *special_data;
+	char *url;
+	svn_revnum_t rev_to_take;
+
+
+	BUG_ON(!pool);
+	STOPIF( ops__build_path(&filename, sts), NULL);
+
+
+	/* We know that we have to do something here; but because the order is 
+	 * depth-first, the parent directory isn't done yet (and shouldn't be, 
+	 * because it needs permissions and mtime set!).
+	 * So it's possible that the target directory doesn't yet exist.
+	 *
+	 * Note: because we're here for *non-dir* entries, we always have a 
+	 * parent. */
+	STOPIF( waa__mkdir(filename, 0), NULL);
+
+
+	STOPIF( apr_pool_create(&subpool, pool),
+			"Creating the filehandle pool");
+
+
+	/* When we get a file, old manber-hashes are stale.
+	 * So remove them; if the file is big enough, we'll recreate it with 
+	 * correct data. */
+	STOPIF( waa__delete_byext(filename, WAA__FILE_MD5s_EXT, 1), NULL);
+
+
+	/* Files get written in files; we use the temporarily generated name for  
+	 * special entries, too. */
+	/* We could use a completely different mechanism for temp-file-names;
+	 * but keeping it close to the target lets us see if we're out of
+	 * disk space in this filesystem. (At least if it's not a binding mount
+	 * or something similar - but then rename() should fail).
+	 * If we wrote the data somewhere else, we'd risk moving it again, across 
+	 * filesystem boundaries. */
+	STOPIF( waa__get_tmp_name( filename, &filename_tmp, &a_stream, subpool), 
+			NULL);
+
+
+	/* It's a bit easier to just take the (small) performance hit, and always 
+	 * (temporarily) write the data in a file.
+	 * If it's a special entry, that will just get read immediately back and 
+	 * changed to the correct type.
+	 *
+	 * It doesn't really make much difference, as the file is always created 
+	 * to get a distinct name. */
+	stream=svn_stream_from_aprfile(a_stream, subpool);
+
+
+	if (sts->url)
 	{
-		target_stringbuf->data[ target_stringbuf->len ]=0;
-		DEBUGP("got special value %s", target_stringbuf->data);
-		STOPIF( up__handle_special(sts, filename_tmp, 
-					target_stringbuf->data, subpool), NULL);
+		STOPIF( hlp__local2utf8( filename+2, &url, -1), NULL);
+		rev_to_take=sts->repos_rev;
+		current_url=sts->url;
+	}
+	else if (sts->flags & RF___IS_COPY)
+	{
+		STOPIF( cm__get_source( sts, filename, &url, &rev_to_take, 0), NULL);
+		STOPIF( url__find( url, &current_url), NULL);
+		STOPIF( hlp__local2utf8( url, &url, -1), NULL);
+	}
+	else
+		BUG("cannot get file %s", filename);
+
+	if (revision == 0) 
+	{
+		/* BASE wanted; get decoder. */
+		STOPIF( up__fetch_decoder(sts), NULL);
+		decoder=sts->decoder;
+	}
+	else
+	{
+		/* Arbitrary revision - get decoder. */
+		rev_to_take=revision;
+		decoder=DECODER_UNKNOWN;
 	}
 
 
-	STOPIF( prp__set_from_aprhash(sts, props, subpool), NULL);
+	STOPIF( url__open_session(NULL), NULL);
+
+	/* We don't give an estat for meta-data parsing, because we have to loop 
+	 * through the property list anyway - for storing locally. */
+	STOPIF( rev__get_text_to_stream( url, rev_to_take, decoder, 
+				stream, sts, NULL, &props, pool), NULL);
+
+
+	if (apr_hash_get(props, propname_special, APR_HASH_KEY_STRING))
+	{
+		STOPIF( ops__read_special_entry( a_stream, &special_data, 
+					0, NULL, filename_tmp, subpool), NULL);
+
+		/* The correct type gets set on parsing. */
+		STOPIF( up__handle_special(sts, filename_tmp, 
+					special_data, subpool), NULL);
+	}
+
+
+	STOPIF( prp__set_from_aprhash(sts, props, STORE_IN_FS, subpool), NULL);
 
 
 	/* We write all meta-data. If we got no values from the repository, we just
 	 * write what we have in the local filesystem back - the temporary file has
 	 * just some default values, after all. */
-	sts->entry_status |= FS_META_CHANGED;
+	sts->remote_status |= FS_META_CHANGED;
 	DEBUGP("setting meta-data");
 	STOPIF( up__set_meta_data(sts, filename_tmp), NULL);
 
-	if (only_tmp)
-	{
-		DEBUGP("returning temporary file %s", filename_tmp);
-		*only_tmp=filename_tmp;
-	}
-	else
-	{
-		DEBUGP("rename to %s", filename);
-		/* rename to correct filename */
-		STOPIF_CODE_ERR( rename(filename_tmp, filename)==-1, errno,
-				"Cannot rename '%s' to '%s'", filename_tmp, filename);
+	STOPIF( apr_file_close(a_stream), NULL);
 
-		/* The rename changes the ctime. */
-		STOPIF( hlp__lstat( filename, &(sts->st)),
-				"Cannot lstat('%s')", filename);
-	}
+
+	DEBUGP("rename to %s", filename);
+	/* rename to correct filename */
+	STOPIF_CODE_ERR( rename(filename_tmp, filename)==-1, errno,
+			"Cannot rename '%s' to '%s'", filename_tmp, filename);
+
+	/* The rename changes the ctime. */
+	STOPIF( hlp__lstat( filename, &(sts->st)),
+			"Cannot lstat('%s')", filename);
+
 
 	sts->url=current_url;
 	/* We have to re-sort the parent directory, as the inode has changed
@@ -394,6 +519,7 @@ int rev__get_file(struct estat *sts,
 
 	apr_pool_destroy(subpool);
 	subpool=NULL;
+
 
 ex:
 	/* On error remove the temporary file. */
@@ -452,7 +578,6 @@ int rev__merge(struct estat *sts,
 		STOPIF_CODE_ERR( execlp( opt__get_string(OPT__MERGE_PRG), 
 					opt__get_string(OPT__MERGE_PRG),
 					opt__get_string(OPT__MERGE_OPT),
-					"-p",
 					file1, common, file2,
 					NULL) == -1, errno,
 				"Starting the merge program \"%s\" failed",
@@ -537,7 +662,7 @@ int rev__get_props(struct estat *sts,
 			 NULL,
 			 &props,
 			 pool) );
-	STOPIF( prp__set_from_aprhash(sts, props, pool), NULL);
+	STOPIF( prp__set_from_aprhash(sts, props, STORE_IN_FS, pool), NULL);
 
 ex:
 	return status;
@@ -560,10 +685,10 @@ ex:
 int rev__action(struct estat *sts)
 {
 	int status;
-	svn_revnum_t fetched, wanted;
+	svn_revnum_t wanted;
 	struct estat copy;
-	char *url_to_fetch;
 	char *path;
+	struct sstat_t st;
 
 
 	status=0;
@@ -629,24 +754,6 @@ int rev__action(struct estat *sts)
 		 * Print the current revision. */
 
 
-		url_to_fetch=NULL;
-		if (sts->flags & RF___IS_COPY)
-		{
-			/* No URL yet, but we can reconstruct it. */
-			/* We have to use the copyfrom */
-			STOPIF( cm__get_source(sts, NULL, &url_to_fetch, &wanted, 0), NULL);
-
-			/* \TODO: That doesn't work for unknown URLs. */
-			STOPIF( url__find(url_to_fetch, &current_url), NULL);
-		}
-		else
-		{
-			STOPIF( !sts->url,
-					"The entry '%s' has no URL associated.", path);
-			current_url = sts->url;
-		}
-
-
 		if (sts->parent && (!number_reverted || last_rev != wanted))
 		{
 			printf("Reverting to revision %s:\n", hlp__rev_to_string(wanted));
@@ -661,10 +768,6 @@ int rev__action(struct estat *sts)
 		/* Parent directories might just have been created. */
 		if (sts->entry_type & FT_NONDIR)
 		{
-			/* We cannot give connection errors before stat()ing many thousand 
-			 * files, because we do not know which URL to open -- until here. */
-			STOPIF( url__open_session(NULL), NULL);
-
 			DEBUGP("file was changed, reverting");
 
 			/* \todo It would be nice if we could solve meta-data *for the current 
@@ -674,8 +777,7 @@ int rev__action(struct estat *sts)
 			 * data, reset rights.
 			 * */
 			/* TODO - opt_target_revision ? */
-			STOPIF( rev__get_file(sts, wanted, url_to_fetch,
-						&fetched, NULL, current_url->pool),
+			STOPIF( rev__install_file(sts, wanted, sts->decoder, global_pool),
 					"Unable to revert entry '%s'", path);
 		}
 		else
@@ -724,6 +826,26 @@ int rev__action(struct estat *sts)
 		{
 			/* There's no change anymore, we're at BASE.
 			 * But just printing "...." makes no sense ... show the old status. */
+		}
+
+
+		/* If we change data, we may have changed the parents mtime.
+		 * Changing it back might hide other local modifications, so we just 
+		 * record the new value (as it is a modification NOW), and set the 
+		 * CHECK flag.
+		 *
+		 * Note that we don't know whether that directory is otherwise 
+		 * unchanged - neither it nor the other children might be updated. */
+		/* TODO: Maybe we should query the parent first, and restore the mtime 
+		 * if it wasn't changed before; but then we should remember that we 
+		 * queried the parent, to avoid doing that for every child. */
+		if (sts->parent)
+		{
+			STOPIF( ops__build_path( &path, sts->parent), NULL);
+			STOPIF( hlp__lstat(path, &st), NULL);
+
+			sts->parent->st.mtim=st.mtim;
+			sts->parent->flags |= RF_CHECK;
 		}
 	}
 
@@ -817,241 +939,232 @@ ex:
 }
 
 
-/** -.
- * Used on update. */
-int rev__do_changed(svn_ra_session_t *session, 
-		struct estat *dir, 
-		apr_pool_t *pool)
+/** Convenience function to reduce indenting. */
+int rev___undo_change(struct estat *sts, apr_pool_t *pool)
 {
 	int status;
-	int i, j;
-	struct estat *sts;
 	char *fn;
-	struct sstat_t st;
-	apr_pool_t *subpool;
 	const char *unique_name_mine, 
 				*unique_name_remote, 
 				*unique_name_common;
 	char revnum[12];
+	int j;
+	struct estat *removed;
+	struct sstat_t st;
+
+
+	STOPIF( ops__build_path( &fn, sts), NULL);
+	DEBUGP("%s has changed: mode=0%o, r=%X(%s), l=%X(%s)", 
+			fn, sts->st.mode, 
+			sts->remote_status, st__status_string_fromint(sts->remote_status),
+			sts->entry_status, st__status_string(sts));
+
+	/* If we remove an entry, the entry_count gets decremented; 
+	 * we have to repeat the loop *for the same index*. */
+
+
+	unique_name_mine=NULL;
+
+	/* Conflict handling; depends whether it has changed locally. */
+	if (sts->entry_status & (FS_CHANGED | FS_CHILD_CHANGED))
+		switch (opt__get_int(OPT__CONFLICT))
+		{
+			case CONFLICT_STOP:
+				STOPIF( EBUSY, "!The entry %s has changed locally", fn);
+				break;
+
+			case CONFLICT_LOCAL:
+				/* Next one, please. */
+				STOPIF_CODE_EPIPE( printf("Conflict for %s skipped.\n", fn), NULL);
+				goto ex;
+
+			case CONFLICT_REMOTE:
+				/* Just ignore local changes. */
+				break;
+
+			case CONFLICT_MERGE:
+			case CONFLICT_BOTH:
+				/* Rename local file to something like .mine. */
+				STOPIF( hlp__rename_to_unique(fn, ".mine", 
+							&unique_name_mine, pool), NULL);
+				/* Now the local name is not used ... so get the file. */
+				break;
+
+			default:
+				BUG("unknown conflict resolution");
+		}
+
+
+	/* If the entry has been removed in the repository, we remove it
+	 * locally, too (if it wasn't changed).
+	 * But the type in the repository may be another than the local one -
+	 * so we have to check what we currently have. */
+	/* An entry can be given as removed, and in the same step be created
+	 * again - possibly as another type. */
+
+	/* If the entry wasn't replaced, but only removed, there's no 
+	 * sts->old. */
+	removed=sts->old ? sts->old : sts;
+	if (removed->remote_status & FS_REMOVED)
+	{
+		DEBUGP("old entry removed");
+
+		/* Is the entry already removed? */
+		/* If there's a typechange involved, the old entry has been 
+		 * renamed, and so doesn't exist in the filesystem anymore. */
+		if ((sts->entry_status & FS_REPLACED) != FS_REMOVED &&
+				!unique_name_mine)
+		{
+			/* Find type. Small race condition - it might be removed now. */
+			if (S_ISDIR(removed->st.mode))
+			{
+				STOPIF( up__rmdir(removed, sts->url), NULL);
+			}
+			else
+				STOPIF( up__unlink(removed, fn), NULL);
+		}
+	}
+
+
+	/* If we change something in this directory, we have to re-sort the 
+	 * entries by inode again. */
+	sts->parent->to_be_sorted=1;
+
+	if ((sts->remote_status & FS_REPLACED) == FS_REMOVED)
+	{
+		sts->entry_type=FT_IGNORE;
+		goto ex;
+	}
+	current_url=sts->url;
+
+	if (S_ISDIR(sts->st.mode))
+	{
+		STOPIF( waa__mkdir_mask(fn, 1, sts->st.mode), NULL);
+
+		/* Meta-data is done later. */
+
+		/* An empty directory need not be sorted; if we get entries,
+		 * we'll mark it with \c to_be_sorted .*/
+	}
+	else if (sts->remote_status & (FS_CHANGED | FS_REPLACED))
+		/* Not a directory */
+	{
+		STOPIF( rev__install_file(sts, 0, sts->decoder, pool), NULL);
+
+		/* We had a conflict; rename the file fetched from the 
+		 * repository to a unique name. */
+		if (unique_name_mine)
+		{
+			/* If that revision number overflows, we've got bigger problems.  
+			 * */
+			snprintf(revnum, sizeof(revnum)-1, 
+					".r%llu", (t_ull)sts->repos_rev);
+			revnum[sizeof(revnum)-1]=0;
+
+			STOPIF( hlp__rename_to_unique(fn, revnum,
+						&unique_name_remote, pool), NULL);
+
+			/* If we're updating and already have a conflict, we don't 
+			 * merge again. */
+			if (sts->flags & RF_CONFLICT)
+			{
+				STOPIF_CODE_EPIPE(
+						printf("\"%s\" already marked as conflict.\n", fn), 
+						NULL);
+				STOPIF( res__mark_conflict(sts, 
+							unique_name_mine, unique_name_remote, NULL), NULL);
+			}
+			else if (opt__get_int(OPT__CONFLICT) == CONFLICT_BOTH)
+			{
+				STOPIF( res__mark_conflict(sts, 
+							unique_name_mine, unique_name_remote, NULL), NULL);
+
+				/* Create an empty file,
+				 * a) to remind the user, and
+				 * b) to avoid a "Deleted" status. */
+				j=creat(fn, 0777);
+				if (j != -1) j=close(j);
+
+				STOPIF_CODE_ERR(j == -1, errno, 
+						"Error creating \"%s\"", fn);
+
+				/* up__set_meta_data() does an lstat(), but we want the 
+				 * original values. */
+				st=sts->st;
+				STOPIF( up__set_meta_data(sts, fn), NULL);
+				sts->st=st;
+			}
+			else if (opt__get_int(OPT__CONFLICT) == CONFLICT_MERGE)
+			{
+				STOPIF( rev__install_file(sts, sts->old_rev, 
+							NULL, pool), NULL);
+
+				snprintf(revnum, sizeof(revnum)-1, 
+						".r%llu", (t_ull)sts->old_rev);
+				revnum[sizeof(revnum)-1]=0;
+
+				STOPIF( hlp__rename_to_unique(fn, revnum,
+							&unique_name_common, pool), NULL);
+
+				STOPIF( rev__merge(sts, 
+							unique_name_mine, 
+							unique_name_common, 
+							unique_name_remote), NULL);
+			}
+			else
+				BUG("why a conflict?");
+		}
+	}
+	else 
+	{
+		/* If user-defined properties have changed, we have to fetch them 
+		 * from the repository, as we don't store them in RAM (due to the  
+		 * amount of memory possibly needed). */
+		if (sts->remote_status & FS_PROPERTIES)
+			STOPIF( rev__get_props(sts, NULL, sts->repos_rev, pool), NULL);
+
+		if (sts->remote_status & FS_META_CHANGED)
+		{
+			/* If we removed the file, it has no meta-data any more;
+			 * if we fetched it via rev__get_file(), it has it set already.
+			 * Only the case of *only* meta-data-change is to be done. */
+			STOPIF( up__set_meta_data(sts, fn), NULL);
+		}
+	}
+
+
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * Used on update. */
+int rev__do_changed(struct estat *dir, 
+		apr_pool_t *pool)
+{
+	int status;
+	int i;
+	struct estat *sts;
+	apr_pool_t *subpool;
 
 
 	status=0;
 	subpool=NULL;
-	for(i=0; i<dir->entry_count; i++)
+
+	/* If some children have changed, do a full run.
+	 * Else just repair meta-data. */
+	if (!(dir->remote_status & FS_CHILD_CHANGED))
+		DEBUGP("%s: no children changed", dir->name);
+	else for(i=0; i<dir->entry_count; i++)
 	{
 		sts=dir->by_inode[i];
 
 		STOPIF( apr_pool_create(&subpool, pool), "Cannot get a subpool");
 
 		if (sts->remote_status & FS__CHANGE_MASK)
-		{
-			STOPIF( ops__build_path( &fn, sts), NULL);
-			DEBUGP("%s has changed: %X, mode=0%o (local %X - %s)", 
-					fn, sts->remote_status, sts->st.mode, sts->entry_status,
-					st__status_string(sts));
-
-			/* If we remove an entry, the entry_count gets decremented; 
-			 * we have to repeat the loop *for the same index*. */
-
-
-			unique_name_mine=NULL;
-
-			/* Conflict handling; depends whether it has changed locally. */
-			if (sts->entry_status & (FS_CHANGED | FS_CHILD_CHANGED))
-				switch (opt__get_int(OPT__CONFLICT))
-				{
-					case CONFLICT_STOP:
-						STOPIF( EBUSY, "!The entry %s has changed locally", fn);
-						break;
-
-					case CONFLICT_LOCAL:
-						/* Next one, please. */
-						printf("Conflict for %s skipped.\n", fn);
-						continue;
-
-					case CONFLICT_REMOTE:
-						/* Just ignore local changes. */
-						break;
-
-					case CONFLICT_MERGE:
-					case CONFLICT_BOTH:
-						/* Rename local file to something like .mine. */
-						STOPIF( hlp__rename_to_unique(fn, ".mine", 
-									&unique_name_mine, pool), NULL);
-						/* Now the local name is not used ... so get the file. */
-						break;
-
-					default:
-						BUG("unknown conflict resolution");
-				}
-
-
-			/* If the entry has been removed in the repository, we remove it
-			 * locally, too (if it wasn't changed).
-			 * But the type in the repository may be another than the local one -
-			 * so we have to check what we currently have. */
-			/* An entry can be given as removed, and in the same step be created
-			 * again - possibly as another type. */
-			if (sts->remote_status & FS_REMOVED)
-			{
-				/* Is the entry already removed? */
-				/* If there's a typechange involved, the old entry has been 
-				 * renamed, and so doesn't exist in the filesystem anymore. */
-				if ((sts->entry_status & FS_REPLACED) != FS_REMOVED &&
-						!unique_name_mine)
-				{
-					/* Find type. Small race condition - it might be removed now. */
-					/** \todo - remember what kind it was *before updating*, and
-					 * only remove if still of same kind. 
-					 * make switch depend on old type? */
-					STOPIF( hlp__lstat(fn, &st), NULL);
-					if (S_ISDIR(st.mode))
-					{
-						STOPIF( up__rmdir(sts), NULL);
-						/* Free space used by children */
-						for(j=0; j<sts->entry_count; j++)
-							STOPIF( ops__free_entry(sts->by_inode+j), NULL);
-						/* Now there're none */
-						sts->entry_count=0;
-						sts->by_inode=sts->by_name=NULL;
-					}
-					else
-						STOPIF( up__unlink(sts, fn), NULL);
-				}
-
-				/* Only removed, or added again? */
-				if (sts->remote_status & FS_NEW)
-					DEBUGP("entry %s added again", fn);
-				else
-				{
-					/* We must do that here ... later the entry is no longer valid. */
-					STOPIF( st__rm_status(sts), NULL);
-					STOPIF( ops__delete_entry(dir, NULL, i, UNKNOWN_INDEX), NULL);
-					i--;
-					goto loop_end;
-				}
-			}
-
-
-			/* If we change something in this directory, we have to re-sort the 
-			 * entries by inode again. */
-			dir->to_be_sorted=1;
-
-			current_url=sts->url;
-
-			if (S_ISDIR(sts->st.mode))
-			{
-				/* Just try to create the directory, and ignore EEXIST. */
-				status = (mkdir(fn, sts->st.mode & 07777) == -1) ? errno : 0;
-				DEBUGP("mkdir(%s) says %d", fn, status);
-				if (status == EEXIST)
-				{
-					/* Make sure it's a directory */
-					STOPIF( hlp__lstat(fn, &st), NULL);
-					STOPIF_CODE_ERR( !S_ISDIR(st.mode), EEXIST,
-							"%s does exist as a non-directory entry!", fn);
-					/* \todo conflict? */
-				}
-				else
-					STOPIF( status, "Cannot create directory %s", fn);
-
-				/* Meta-data is done later. */
-
-				/* An empty directory need not be sorted; if we get entries,
-				 * we'll mark it with \c to_be_sorted .*/
-			}
-			else /* Not a directory */
-			{
-				if (sts->remote_status & (FS_CHANGED | FS_REPLACED))
-				{
-					STOPIF( rev__get_file(sts, sts->repos_rev, NULL,
-								NULL, NULL, subpool),
-							NULL);
-
-					/* We had a conflict; rename the file fetched from the 
-					 * repository to a unique name. */
-					if (unique_name_mine)
-					{
-						/* If that revision number overflows, we've got bigger problems.  
-						 * */
-						snprintf(revnum, sizeof(revnum)-1, 
-								".r%llu", (t_ull)sts->repos_rev);
-						revnum[sizeof(revnum)-1]=0;
-
-						STOPIF( hlp__rename_to_unique(fn, revnum,
-									&unique_name_remote, pool), NULL);
-
-						/* If we're updating and already have a conflict, we don't 
-						 * merge again. */
-						if (sts->flags & RF_CONFLICT)
-						{
-							printf("\"%s\" already marked as conflict.\n", fn);
-							STOPIF( res__mark_conflict(sts, 
-										unique_name_mine, unique_name_remote, NULL), NULL);
-						}
-						else if (opt__get_int(OPT__CONFLICT) == CONFLICT_BOTH)
-						{
-							STOPIF( res__mark_conflict(sts, 
-										unique_name_mine, unique_name_remote, NULL), NULL);
-
-							/* Create an empty file,
-							 * a) to remind the user, and
-							 * b) to avoid a "Deleted" status. */
-							j=creat(fn, 0777);
-							if (j != -1) j=close(j);
-
-							STOPIF_CODE_ERR(j == -1, errno, 
-									"Error creating \"%s\"", fn);
-
-							/* up__set_meta_data() does an lstat(), but we want the 
-							 * original values. */
-							st=sts->st;
-							STOPIF( up__set_meta_data(sts, fn), NULL);
-							sts->st=st;
-						}
-						else if (opt__get_int(OPT__CONFLICT) == CONFLICT_MERGE)
-						{
-							{
-								STOPIF( rev__get_file(sts, sts->old_rev, NULL,
-											NULL, NULL, subpool),
-										NULL);
-
-								snprintf(revnum, sizeof(revnum)-1, 
-										".r%llu", (t_ull)sts->old_rev);
-								revnum[sizeof(revnum)-1]=0;
-
-								STOPIF( hlp__rename_to_unique(fn, revnum,
-											&unique_name_common, pool), NULL);
-
-								STOPIF( rev__merge(sts, 
-											unique_name_mine, 
-											unique_name_common, 
-											unique_name_remote), NULL);
-							}
-						}
-						else
-							BUG("why a conflict?");
-					}
-				}
-				else 
-				{
-					/* If user-defined properties have changed, we have to fetch them 
-					 * from the repository, as we don't store them in RAM (due to the  
-					 * amount of memory possibly needed). */
-					if (sts->remote_status & FS_PROPERTIES)
-						STOPIF( rev__get_props(sts, NULL, sts->repos_rev, subpool), NULL);
-
-					if (sts->remote_status & FS_META_CHANGED)
-					{
-						/* If we removed the file, it has no meta-data any more;
-						 * if we fetched it via rev__get_file(), it has it set already.
-						 * Only the case of *only* meta-data-change is to be done. */
-						STOPIF( up__set_meta_data(sts, fn), NULL);
-					}
-				}
-			}
-		}
-
+			STOPIF( rev___undo_change(sts, subpool), NULL);
 
 		/* We always recurse now, even if the directory has no children.
 		 * Else we'd have to check for children in a few places above, which would
@@ -1059,24 +1172,24 @@ int rev__do_changed(svn_ra_session_t *session,
 		if (S_ISDIR(sts->st.mode)
 				/* && 
 					 (sts->remote_status & FS_CHILD_CHANGED)  */
+				&& (sts->remote_status & FS_REPLACED) != FS_REMOVED
 			 )
 		{
 			apr_pool_destroy(subpool);
 			subpool=NULL;
 			STOPIF( apr_pool_create(&subpool, pool), "subpool creation");
 
-			STOPIF( rev__do_changed(session, sts, subpool), NULL);
+			STOPIF( rev__do_changed(sts, subpool), NULL);
 		}	
 
-		/* After the recursive call the path string may not be valid anymore. 
-		 * */
 		STOPIF( st__rm_status(sts), NULL);
 
-loop_end:
 		apr_pool_destroy(subpool);
 		subpool=NULL;
 	}
 
+	/* We cannot free the memory earlier - the data is needed for the status 
+	 * output and recursion. */
 	STOPIF( ops__free_marked(dir, 0), NULL);
 
 	/* The root entry would not be printed; do that here. */

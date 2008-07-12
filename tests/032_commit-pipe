@@ -7,11 +7,12 @@ cd $WC
 
 function cmpdiff
 {
-	perl -e '$f=shift; $t=shift; undef $/; $_=<>; exit 1 unless m#---\s+$f.*'"$1"'.*\n\+\+\+\s+$f.*'"$2"'.*\n\@\@ -1 \+1 \@\@\n-$t\n\+$t$t\n#;' $filename $text < $logfile
+  [[ `cat $logfile` == *"--- $filename"*"$1"*"+++ $filename"*"$2"*"@@ -1 +1 @@"*"-$text"*"+$text$text" ]]
 }
 
 
 logfile=$LOGDIR/032.commit-pipe
+logfile2=$logfile.2
 filename=abcdefg.ijk
 text=abcde.123
 encoder="openssl enc -e -a"
@@ -42,11 +43,18 @@ fi
 
 # Try update
 $WC2_UP_ST_COMPARE
+# Make sure both arrived there
+if [[ X`$BINdflt pl -v $WC2/$filename | sort` == X"fsvs:commit-pipe=$encoder"*"fsvs:update-pipe=$decoder" ]]
+then
+  $SUCCESS "En- and decoder arrived in $WC2."
+else
+  $ERROR "En- or decoder didn't arrive in $WC2."
+fi
 
 # Try diff
 echo $text$text > $filename
 $BINdflt diff $filename > $logfile
-if cmpdiff "Rev. $rev_base64" "Local\s+version"
+if cmpdiff "Rev. $rev_base64" "Local version"
 then
 	$SUCCESS "Diff works."
 else
@@ -58,7 +66,7 @@ $BINq ps fsvs:commit-pipe "gzip" $filename
 $BINq ps fsvs:update-pipe "gzip -d" $filename
 # compare
 $BINdflt diff $filename > $logfile
-if cmpdiff "Rev. $rev_base64" "Local\s+version"
+if cmpdiff "Rev. $rev_base64" "Local version"
 then
 	$SUCCESS "Diff after changing the decoder works."
 else
@@ -69,7 +77,11 @@ fi
 $BINdflt ci -m2 > $logfile
 rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "`
 rev_gzip=$rev
-$BINdflt diff -r $rev_base64:$rev_gzip $filename > $logfile
+# diff -rx:y currently prints the full path - TODO
+
+# If we'd just pipe to perl we wouldn't stop on error.
+$BINdflt diff -r $rev_base64:$rev_gzip $filename > $logfile2
+perl -pe 's('"$WC"'/*)()g' < $logfile2 > $logfile
 if cmpdiff "Rev. $rev_base64" "Rev. $rev_gzip"
 then
 	$SUCCESS "Repos-repos-diff works."

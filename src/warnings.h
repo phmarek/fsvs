@@ -113,9 +113,6 @@ typedef enum {
 } warning_e;
 
 
-/** Initialize the warning subsystem from the environment - \ref 
- * WARNINGS_ENV. */
-int wa__init(void);
 /** Possibly print a warning. */
 int wa__warn(warning_e index, int status, char *format, ...)
 	__attribute__ ((format (printf, 3, 4) ));

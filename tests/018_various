@@ -16,16 +16,32 @@ msg="$STG_UTF8.$STG_LOC"
 
 logfile=$LOGDIR/018.log
 
-# Exercise the commit msg editor code
+# Exercise the commit msg editor code. Try an empty file, too.
+echo $RANDOM > $file
+EDITOR="touch" $BINdflt ci 
 echo $msg > $file
-EDITOR="cp $file" $BINdflt ci 
+EDITOR="cp $file" $BINdflt ci -o author=NoSuchMan
 
-if svn log $REPURL -rHEAD | grep $msg > $logfile 2>&1
+svn log $REPURL -rHEAD > $logfile
+if grep $msg < $logfile > /dev/null
 then
-	$SUCCESS "message was taken"
+	$SUCCESS "Message was taken"
 else
-	$ERROR "message not fetched from editor!"
+	$ERROR "Message not fetched from editor!"
 fi
+
+if [[ "$PROTOCOL" != "file://" ]]
+then
+  $WARN "Author only taken for file://; doesn't work for svn+ssh."
+else
+	if grep NoSuchMan < $logfile > /dev/null
+	then
+		$SUCCESS "Author was taken"
+	else
+		$ERROR "Author not used on commit"
+	fi
+fi
+
 
 $BINdflt log -rHEAD > $logfile 2>&1
 if grep $msg < $logfile > /dev/null
@@ -92,27 +108,43 @@ fi
 > $file
 $BINdflt ci -F $file
 
+# Test limit parameter
+$BINdflt log -rHEAD:1 -o limit=1 $file > $logfile
+if [[ `wc -l < $logfile` -eq 5 ]]
+then
+  $SUCCESS "log limit obeyed"
+else
+	cat $logfile
+	wc -l < $logfile
+  $ERROR "log limit doesn't work"
+fi
+
 
 # Test EPIPE handling.
-# I could reproduce it with "strace -o /dev/null $BINdflt log | head -1",
-# but only in 1 of 10 cases without the strace.
-# Any error code $BINdflt would give is overwritten by "head"; so we use a 
-# perl loop here.
+# I could reproduce it with "strace -o /dev/null $BINdflt log | true", (or 
+# "| head -1"), but only in 1 of 10 cases without the strace.
 strace_bin=`which strace || true`
 strace_cmd=${strace_bin:+$strace_bin -o /dev/null}
-cmd="$strace_cmd $BINdflt log"
-if perl -e '$cmd=shift(); for(1 .. 10) { open(F, $cmd . " |") || die $!; close(F) || die $!; }' "$cmd" > $logfile 2>&1
-then
-	# No errors on STDOUT allowed.
-  if [[ `wc -l < $logfile` -eq 0 ]]
+for command in log st
+do
+	ret=$(
+		set -o pipefail
+		$strace_cmd $BINdflt $command 2>$logfile | true
+		echo $?
+		set +o pipefail )
+	if [[ $ret -eq 0 ]]
 	then
-		$SUCCESS "EPIPE handled correctly"
+		# No errors on STDOUT allowed.
+		if [[ `wc -l < $logfile` -eq 0 ]]
+		then
+			$SUCCESS "EPIPE on $command handled correctly"
+		else
+			$ERROR "wrong number of output lines on EPIPE $command test"
+		fi
 	else
-		$ERROR "wrong number of output lines on EPIPE test"
+		$ERROR "Error code on EPIPE $command"
 	fi
-else
-	$ERROR "Error code on EPIPE"
-fi
+done
 
 
 # Test whether / at the end of an URL are removed

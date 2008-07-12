@@ -25,10 +25,10 @@ typedef long cache_value_t;
 struct cache_entry_t {
 	/** ID of entry */
 	cache_value_t id;
-	/** Length of data */
-	int len;
 	/** User-data for hashes */
 	cache_value_t hash_data;
+	/** Length of data */
+	int len;
 #if 0
 	/** Measurement of accesses */
 	short accessed;
@@ -75,6 +75,7 @@ struct cache_t {
 	 * }
 	 * \enddot	 * */
 	int lru;
+
 	/** Cache entries, \c NULL terminated. */
   struct cache_entry_t *entries[CACHE_DEFAULT+1];
 };

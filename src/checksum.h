@@ -21,9 +21,6 @@
  * It stores the CRCs and MD5s of the manber-blocks of this file. */
 struct cs__manber_hashes 
 {
-	/** Number of manber-hash-entries stored */
-	unsigned count;
-
 	/** The manber-hashes */
 	AC_CV_C_UINT32_T *hash;
 	/** The MD5-digests */
@@ -33,6 +30,9 @@ struct cs__manber_hashes
 	off_t *end;
 	/** The index into the above arrays - sorted by manber-hash. */
 	AC_CV_C_UINT32_T *index;
+
+	/** Number of manber-hash-entries stored */
+	unsigned count;
 };
 
 

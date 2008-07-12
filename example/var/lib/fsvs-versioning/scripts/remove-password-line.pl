@@ -3,6 +3,6 @@
 while (<>)
 {
 # No substitution value, could be used wrongly
-  s#^(\s+password\s+=).*#\1#;
+  s#^(\s*password\s*=).*#\1#;
 	print;
 }

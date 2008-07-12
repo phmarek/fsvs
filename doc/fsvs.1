@@ -1,4 +1,4 @@
-.TH "Commands and command line parameters" 1 "1 Apr 2008" "Version trunk:2078" "fsvs" \" -*- nroff -*-
+.TH "Commands and command line parameters" 1 "13 Jun 2008" "Version trunk:1496" "fsvs" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -69,6 +69,7 @@ The following commands are understood by \fCfsvs:\fP
 Multi-url-operations are relatively new; there might be rough edges.
 .RE
 .PP
+The \fBreturn code\fP is \fC0\fP for successfull and \fC2\fP for an error. \fC1\fP is returned if the option \fBStopping status reports as soon as changes are found\fP is used, and changes are found; see also \fBFiltering entries\fP.
 .SH "Universal options"
 .PP
 .SS "-V -- show version"
@@ -178,10 +179,10 @@ The following situations can be handled with this: \fImeta-mtime\fP, \fImeta-use
 .PP
 .PP
 Also an environment variable \fCFSVS_WARNINGS\fP is used and parsed; it is simply a whitespace-separated list of option specifications.
-.SS "-u URLname[@revision] -- select URLs"
-Some commands' operations can be reduced to a subset of defined URLs; the \fBupdate\fP command is the best example.
+.SS "-u URLname[@revision[:revision]] -- select URLs"
+Some commands can be reduced to a subset of defined URLs; the \fBupdate\fP command is a example.
 .PP
-If you have more than a single URL in use for your working copy, and \fCupdate\fP updates \fBall\fP entries from \fBall\fP URLs. By using this parameter you can tell FSVS to update only a single URL.
+If you have more than a single URL in use for your working copy, \fCupdate\fP normally updates \fBall\fP entries from \fBall\fP URLs. By using this parameter you can tell FSVS to update only the specified URLs.
 .PP
 The parameter can be used repeatedly; the value can have multiple URLs, separated by whitespace or one of \fC',;'\fP.
 .PP
@@ -190,7 +191,14 @@ The parameter can be used repeatedly; the value can have multiple URLs, separate
    fsvs up -u base_install,boot@32 -u gcc
 .fi
 .PP
- This would get \fCHEAD\fP of \fCbase_install\fP and \fCgcc\fP, and set the target revision of the \fCboot\fP URL at 32.
+.PP
+This would get \fCHEAD\fP of \fCbase_install\fP and \fCgcc\fP, and set the target revision of the \fCboot\fP URL at 32.
+.PP
+\fBNote:\fP
+.RS 4
+The second revision specification will be used for eg. the \fBdiff\fP command; but this is not yet implemented.
+.RE
+.PP
 .SS "-o [name[=value]] -- other options"
 This is used for setting some seldom used option, for which default can be set in a configuration file (to be implemented, currently only command-line).
 .PP
@@ -327,8 +335,6 @@ So you simply run these commands:
 .PP
 .PP
 If you're currently in \fC/etc\fP , you can even drop the \fC/etc/\fP in front, and just use the filenames.
-.PP
-This extended path handling on the commandline is not yet available for every command. Most of them still expect you to be in the working copy root.
 .PP
 Please see \fBstatus\fP for explanations on \fC-v\fP and \fC-C\fP . For advanced backup usage see also \fBFSVS_PROP_COMMIT_PIPE\fP.
 .PP
@@ -594,11 +600,9 @@ The default is to print information about the given entry only. With a single \f
 .PP
 This command views the log information associated with the given \fIpath\fP, or, if none, the highest priority URL.
 .PP
-The optional \fIrev1\fP and \fIrev2\fP can be used to restrict the revisions that are shown; if no values are given, the logs are given starting from HEAD downwards.
+The optional \fIrev1\fP and \fIrev2\fP can be used to restrict the revisions that are shown; if no values are given, the logs are given starting from \fCHEAD\fP downwards, and then a limit on the number of revisions is applied (but see the \fBlimit\fP option).
 .PP
 If you use the \fB-v\fP -option, you get the files changed in each revision printed, too.
-.PP
-Currently at most 100 log messages are shown.
 .PP
 There is an option controlling the output format; see \fB'fsvs log' output format\fP.
 .PP
@@ -609,8 +613,6 @@ TODOs:
 Show revision for \fBall\fP URLs associated with a working copy? In which order?
 .IP "\(bu" 2
 A URL-parameter, to specify the log URL. (Name)
-.IP "\(bu" 2
-Limit number of revisions shown?
 .PP
 .SH "prop-get"
 .PP
@@ -654,7 +656,7 @@ Some property prefixes are reserved; currently everything starting with \fCsvn:\
 .PP
 This command removes property value for the given path(s).
 .PP
-See also \fBprop-set\fP
+See also \fBprop-set\fP.
 .SH "prop-list"
 .PP
 .PP
@@ -819,7 +821,7 @@ This is normally not needed; the use cases are
 .IP "\(bu" 2
 debugging and
 .IP "\(bu" 2
-recovering from data loss in \fC$FSVS_WAA\fP (\fC/var/spool/fsvs\fP ).
+recovering from data loss in \fB$FSVS_WAA\fP.
 .PP
 .PP
 It is (currently) important if you want to backup two similar machines. Then you can commit one machine into a subdirectory of your repository, make a copy of that directory for another machine, and sync this other directory on the other machine.
@@ -839,7 +841,7 @@ There's an issue in subversion, to collapse identical files in the repository in
 .PP
 .PP
 .nf
- ## invalid ## fsvs update [-r rev] [working copy base]
+ fsvs update [-r rev] [working copy base]
  fsvs update [-u url@rev ...] [working copy base]
 .fi
 .PP

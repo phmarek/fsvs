@@ -56,6 +56,8 @@ First install subversion (and, by implication, apr).
 Next compile fsvs.
 	cd src
 	make
+And install the binary: (the man-pages are not automatically installed yet.)
+	make install
 Make a repository somewhere, preferably on another machine.
 	svnadmin create /path/to/repos
 Create a local directory for the "working copy administrative area". If you'd

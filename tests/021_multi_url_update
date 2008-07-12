@@ -8,9 +8,11 @@ UP_WC=`expr $DATA_WCs + 1`
 CMP_WC=`expr $UP_WC + 1`
 
 set -e
+
 $PREPARE_CLEAN WC_COUNT=$CMP_WC > /dev/null
 $INCLUDE_FUNCS
 
+logfile=$LOGDIR/021.multiurl.log
 
 for i in `seq 1 $DATA_WCs`
 do
@@ -19,7 +21,7 @@ do
 	svn mkdir $tu -m $i
 	echo $tu | $BINq urls load
 	mkdir dir-$i common
-	touch file-$i dir-$i/file-$i common/file-$i
+	touch bfile-$i dir-$i/dfile-$i common/cfile-$i
 	echo "Overlay $i" > overlayed
 	$BINq ci -m "ci$i"
 done
@@ -34,21 +36,23 @@ cd $_WC
 for prio_has in `seq 1 $DATA_WCs`
 do
 	$INFO "Going with prio_has=$prio_has"
+
 	# Construct the URL list and build the compare-directory
-	urls=
 	parm=--delete
 	echo "" | $BINq urls load
 	for i in `seq 1 $DATA_WCs`
 	do
 # rotate the highest-priority URL
 	  nr=`perl -e 'print 1+(shift()-1+shift()-1) % shift()' $prio_has $i $DATA_WCs`
-		$BINq urls P:$i,$REPURL/$nr
+		$BINq urls N:u$nr,P:$i,$REPURL/$nr
 
-		rsync -a $parm $WCBASE$nr/ $WCBASE$CMP_WC/
+		# We need to give the checksum parameter, so that rsync isn't misled by 
+		# the equal mtimes.
+		rsync -a $parm $WCBASE$nr/ $WCBASE$CMP_WC/ -c -c
 		parm=--ignore-existing
 	done
 
-	$BINq up > /dev/null
+	$BINdflt up > $logfile
 	$COMPARE $WCBASE$UP_WC/ $WCBASE$CMP_WC/
 done
 

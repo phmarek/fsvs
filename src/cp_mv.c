@@ -688,7 +688,6 @@ static int cm___match(struct estat *entry)
 	struct cm___candidate_t candidates[HASH__LIST_MAX*CM___MATCH_NUM];
 	struct cm___candidate_t *cur, *list;
 	size_t candidate_count;
-	int output_error;
 	FILE *output=stdout;
 
 
@@ -700,7 +699,6 @@ static int cm___match(struct estat *entry)
 
 	formatted=NULL;
 	status=0;
-	output_error=0;
 	candidate_count=0;
 	overflows=0;
 	path=NULL;
@@ -765,7 +763,7 @@ static int cm___match(struct estat *entry)
 		STOPIF( hlp__format_path(entry, path, &formatted), NULL);
 
 		/* Print header line for this file. */
-		output_error |= fprintf(output, "%s\n", formatted);
+		STOPIF_CODE_EPIPE( fprintf(output, "%s\n", formatted), NULL);
 
 		/* Output list of matches */
 		for(j=0; j<candidate_count; j++)
@@ -773,7 +771,7 @@ static int cm___match(struct estat *entry)
 			sts=candidates[j].sts;
 			have_match=0;
 
-			output_error |= fputs("  ", output);
+			STOPIF_CODE_EPIPE( fputs("  ", output), NULL);
 
 			for(i=0; i<CM___MATCH_NUM; i++)
 			{
@@ -782,24 +780,25 @@ static int cm___match(struct estat *entry)
 					match=cm___match_array+i;
 
 					if (have_match)
-						output_error |= fputs(",", output);
+						STOPIF_CODE_EPIPE( fputs(",", output), NULL);
 					have_match=1;
 
-					output_error |= fputs(match->name, output);
+					STOPIF_CODE_EPIPE( fputs(match->name, output), NULL);
 					if (opt_verbose && match->format)
-						output_error |= 
-							fputs( match->format(match, candidates+j), output);
+						STOPIF_CODE_EPIPE( 
+								fputs( match->format(match, candidates+j), output), 
+								NULL);
 				}
 			}
 
 			STOPIF( ops__build_path(&path, sts), NULL);
 			STOPIF( hlp__format_path(sts, path, &formatted), NULL);
-			output_error |= fprintf(output, ":%s\n", formatted);
+			STOPIF_CODE_EPIPE( fprintf(output, ":%s\n", formatted), NULL);
 		}
 
 
 		if (overflows)
-			output_error |= fputs("  ...\n", output);
+			STOPIF_CODE_EPIPE( fputs("  ...\n", output), NULL);
 	}
 	else
 	{
@@ -809,17 +808,15 @@ static int cm___match(struct estat *entry)
 		if (opt_verbose>0)
 		{
 			STOPIF( hlp__format_path(entry, path, &formatted), NULL);
-			output_error |= fprintf(output, "- No copyfrom relation found for %s\n", formatted);
+			STOPIF_CODE_EPIPE( fprintf(output, 
+						"- No copyfrom relation found for %s\n", 
+						formatted), NULL);
 		}
 		else
 			DEBUGP("No sources found for %s", path);
 	}
 
-	output_error |= fflush(output);
-
-	/* Could be something else ... but we can't write data, so we quit. */
-	if (output_error<0)
-		status=EPIPE;
+	STOPIF_CODE_EPIPE( fflush(output), NULL);
 
 ex:
 	return status;
@@ -885,11 +882,11 @@ int cm__find_copied(struct estat *root)
 			switch(sts->entry_type)
 			{
 				case FT_DIR:
-					STOPIF(cm__find_dir_source(sts), NULL);
+					STOPIF( cm__find_dir_source(sts), NULL);
 					break;
 				case FT_SYMLINK:
 				case FT_FILE:
-					STOPIF(cm__find_file_source(sts), NULL);
+					STOPIF( cm__find_file_source(sts), NULL);
 					break;
 				default:
 					DEBUGP("Don't handle entry %s", sts->name);
@@ -897,7 +894,7 @@ int cm__find_copied(struct estat *root)
 		}
 
 		if (sts->entry_type == FT_DIR && 
-				(sts->entry_status & FS_CHILD_CHANGED) )
+				(sts->entry_status & (FS_CHILD_CHANGED | FS_CHANGED)) )
 			STOPIF( cm__find_copied(sts), NULL);
 
 		child++;
@@ -967,10 +964,10 @@ int cm__detect(struct estat *root, int argc, char *argv[])
 	STOPIF( cm__find_copied(root), NULL);
 
 	if (!copydetect_count)
-		printf("No copyfrom relations found.\n");
+		STOPIF_CODE_EPIPE( printf("No copyfrom relations found.\n"), NULL);
 	else if (opt_verbose>0)
-		printf("%d copyfrom relation%s found.\n",
-				copydetect_count, copydetect_count == 1 ? "" : "s");
+		STOPIF_CODE_EPIPE( printf("%d copyfrom relation%s found.\n",
+					copydetect_count, copydetect_count == 1 ? "" : "s"), NULL);
 
 ex:
 	for(i=0; i<CM___MATCH_NUM; i++)
@@ -1132,17 +1129,7 @@ int cm___dump_list(FILE *output, int argc, char *normalized[])
 		status |= fprintf(output, "%s\n%s\n", path, key.dptr);
 		IF_FREE(value.dptr);
 
-		if (status < 0)
-		{
-			status=errno;
-			if (status == EPIPE)
-			{
-				status=0;
-				break;
-			}
-
-			STOPIF(status, "output error");
-		}
+		STOPIF_CODE_ERR( status < 0, -EPIPE, "output error");
 
 		status=hsh__next(db, &key, &key);
 		have++;
@@ -1332,8 +1319,9 @@ int cm__work(struct estat *root, int argc, char *argv[])
 
 	/* Load the current data, without updating */
 	status=waa__input_tree(root, NULL, NULL);
-	if (status == ENOENT)
-		STOPIF(status, "!No data about current entries is available.");
+	if (status == -ENOENT)
+		STOPIF(status, "!No entries are currently known, "
+				"so you can't define copy or move relations yet.\n");
 	STOPIF(status, NULL);
 
 	if (is_load)

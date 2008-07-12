@@ -84,14 +84,14 @@ static const char
 struct actionlist_t action_list[]=
 {
 	/* The first action is the default. */
-	ACT(status,   st__work,   st__status, FILTER),
+	ACT(status,   st__work,   st__action, FILTER),
 	ACT(commit,   ci__work,   ci__action, UNINIT, FILTER),
 	ACT(update,   up__work, st__progress, UNINIT, DECODER),
 	ACT(export,  exp__work,         NULL, .is_import_export=1, DECODER),
 	ACT(unvers,   au__work,   au__action, .i_val=RF_UNVERSION),
 	ACT(   add,   au__work,   au__action, .i_val=RF_ADD),
-	ACT(  diff,   df__work,   df__action, DECODER),
-	ACT(sync_r, sync__work,         NULL, .repos_feedback=sync__progress),
+	ACT(  diff,   df__work,         NULL, DECODER),
+	ACT(sync_r, sync__work,         NULL, .repos_feedback=sync__progress, .keep_user_prop=1),
 	ACT(  urls,  url__work,         NULL),
 	ACT(revert,  rev__work,  rev__action, UNINIT, DECODER, .keep_children=1),
 	ACT(ignore,  ign__work,         NULL),

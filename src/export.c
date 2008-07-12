@@ -149,21 +149,15 @@ int exp__do(struct estat *root, struct url_t *url)
 	status_svn=NULL;
 	current_url=url;
 
-	STOPIF( url__open_session(&session), NULL);
+	STOPIF( url__open_session(NULL), NULL);
 
 	rev=url->target_rev;
 	/* See the comment in update.c */
-	if (rev == SVN_INVALID_REVNUM)
-	{
-		STOPIF_SVNERR( svn_ra_get_latest_revnum,
-				(session, &rev, global_pool));
-		DEBUGP("HEAD is at %ld", rev);
-	}
-
+	STOPIF( url__canonical_rev(current_url, &rev), NULL);
 
 	/* export files */
 	STOPIF_SVNERR( svn_ra_do_update,
-			(session,
+			(current_url->session,
 			 &reporter,
 			 &report_baton,
 			 opt_target_revision,

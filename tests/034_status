@@ -199,3 +199,32 @@ ExpLines "-N -N -C" 1
 ExpLines "-N -N" 1
 ExpLines "-N" 2
 ExpLines "" 41
+
+if $BINdflt -o stop_change=true status
+then
+  $ERROR "Expected an error code - 1"
+fi
+
+$BINq ci -m 1
+if $BINdflt -o stop_change=true status
+then
+  $SUCCESS "No error code without change."
+else
+  $ERROR "Expected no error code - 1"
+fi
+
+touch empty-file
+if $BINdflt -o stop_change=true status
+then
+  $ERROR "Expected an error code - 2"
+fi
+if $BINdflt -o stop_change=true -f text status
+then
+  $SUCCESS "Filtering for changes, stopping ok"
+else
+  $ERROR "Expected no error code - 2"
+fi
+
+
+
+

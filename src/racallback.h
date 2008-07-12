@@ -26,5 +26,23 @@ int cb__record_changes(svn_ra_session_t *session,
 		struct estat *root,
 		svn_revnum_t target,
 		apr_pool_t *pool);
+/** Like cb__record_changes(), but allowing mixed reporting. */
+int cb__record_changes_mixed(svn_ra_session_t *session,
+		struct estat *root,
+		svn_revnum_t target,
+		char *other_paths[], svn_revnum_t other_revs,
+		apr_pool_t *pool);
+
+
+/** This function adds a new entry below dir, setting it to
+ * \c FS_NEW or \c FS_REPLACED. */
+int cb__add_entry(struct estat *dir, 
+		const char *utf8_path, char **loc_path,
+		const char *utf8_copy_path, 
+		svn_revnum_t copy_rev,
+		int mode,
+		int *has_existed,
+		int may_create,
+		void **new);
 
 #endif

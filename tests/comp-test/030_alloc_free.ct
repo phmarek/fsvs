@@ -1,0 +1,68 @@
+## Test for struct estat alloc/free.
+## Stops automatically in _do_component_tests.
+
+## We allocate 10 (struct estat)s, free some in a defined order, and check 
+## whether the freelist matches the expectations.
+
+set free_list=0
+
+#= 0
+call ops__allocate( 10, estat_array, int_array+0)
+
+#= 10
+print int_array[0]
+
+
+## set pointers
+set estat_array[1]=estat_array[0]+1
+set estat_array[2]=estat_array[1]+1
+set estat_array[3]=estat_array[2]+1
+set estat_array[4]=estat_array[3]+1
+set estat_array[5]=estat_array[4]+1
+set estat_array[6]=estat_array[5]+1
+set estat_array[7]=estat_array[6]+1
+set estat_array[8]=estat_array[7]+1
+set estat_array[9]=estat_array[8]+1
+
+
+## Now we have () () () () () () () () () ()
+## and free as        3  1  2
+
+
+#= 0
+call ops__free_entry(estat_array+3)
+
+#= 1
+print free_list->count
+#= 0
+print (long)free_list->next - (long)(estat_array[0]+10)
+#= 0
+print (long)free_list - (long)(estat_array[0]+3)
+
+#= 0
+call ops__free_entry(estat_array+4)
+
+
+## Now test merging!
+
+
+#= 2
+print free_list->count
+#= 0
+print (long)free_list->next - (long)(estat_array[0]+10)
+## Entry 3 was set to NULL by ops__free_entry()
+#= 0
+print (long)free_list - (long)(estat_array[0]+3)
+
+#= 0
+call ops__free_entry(estat_array+2)
+
+#= 3
+print free_list->count
+#= 0
+print (long)free_list - (long)(estat_array[0]+2)
+
+
+kill
+
+

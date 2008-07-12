@@ -82,6 +82,10 @@ Additional commands used for recovery and debugging:
           Multi-url-operations are relatively new; there might be rough
           edges.
 
+   The return code is 0 for successfull and 2 for an error. 1 is returned
+   if the option Stopping status reports as soon as changes are found is
+   used, and changes are found; see also Filtering entries.
+
 Universal options
 
 -V -- show version
@@ -242,14 +246,14 @@ Universal options
    Also an environment variable FSVS_WARNINGS is used and parsed; it is
    simply a whitespace-separated list of option specifications.
 
--u URLname[@revision] -- select URLs
+-u URLname[@revision[:revision]] -- select URLs
 
-   Some commands' operations can be reduced to a subset of defined URLs;
-   the update command is the best example.
+   Some commands can be reduced to a subset of defined URLs; the update
+   command is a example.
 
-   If you have more than a single URL in use for your working copy, and
-   update updates all entries from all URLs. By using this parameter you
-   can tell FSVS to update only a single URL.
+   If you have more than a single URL in use for your working copy, update
+   normally updates all entries from all URLs. By using this parameter you
+   can tell FSVS to update only the specified URLs.
 
    The parameter can be used repeatedly; the value can have multiple URLs,
    separated by whitespace or one of ",;".
@@ -258,6 +262,10 @@ Universal options
 
    This would get HEAD of base_install and gcc, and set the target
    revision of the boot URL at 32.
+
+   Note:
+          The second revision specification will be used for eg. the diff
+          command; but this is not yet implemented.
 
 -o [name[=value]] -- other options
 
@@ -390,10 +398,6 @@ commit
 
    If you're currently in /etc , you can even drop the /etc/ in front, and
    just use the filenames.
-
-   This extended path handling on the commandline is not yet available for
-   every command. Most of them still expect you to be in the working copy
-   root.
 
    Please see status for explanations on -v and -C . For advanced backup
    usage see also FSVS_PROP_COMMIT_PIPE.
@@ -570,6 +574,12 @@ diff
    Please see also Options relating to the "diff" action and Using
    colordiff.
 
+   Todo:
+          Two revisions diff is buggy in that it (currently) always
+          fetches the full tree from the repository; this is not only a
+          performance degradation, but you'll see more changed entries
+          than you want. This will be fixed.
+
 export
 
  fsvs export REPOS_URL [-r rev]
@@ -683,12 +693,11 @@ log
 
    The optional rev1 and rev2 can be used to restrict the revisions that
    are shown; if no values are given, the logs are given starting from
-   HEAD downwards.
+   HEAD downwards, and then a limit on the number of revisions is applied
+   (but see the limit option).
 
    If you use the -v -option, you get the files changed in each revision
    printed, too.
-
-   Currently at most 100 log messages are shown.
 
    There is an option controlling the output format; see "fsvs log" output
    format.
@@ -698,7 +707,6 @@ log
      * Show revision for all URLs associated with a working copy? In which
        order?
      * A URL-parameter, to specify the log URL. (Name)
-     * Limit number of revisions shown?
 
 prop-get
 
@@ -730,7 +738,7 @@ prop-del
 
    This command removes property value for the given path(s).
 
-   See also prop-set
+   See also prop-set.
 
 prop-list
 
@@ -917,7 +925,7 @@ sync-repos
 
    This is normally not needed; the use cases are
      * debugging and
-     * recovering from data loss in $FSVS_WAA (/var/spool/fsvs ).
+     * recovering from data loss in $FSVS_WAA.
 
    It is (currently) important if you want to backup two similar machines.
    Then you can commit one machine into a subdirectory of your repository,
@@ -949,7 +957,7 @@ sync-repos
 
 update
 
- ## invalid ## fsvs update [-r rev] [working copy base]
+ fsvs update [-r rev] [working copy base]
  fsvs update [-u url@rev ...] [working copy base]
 
    This command does an update on all specified URLs for the current

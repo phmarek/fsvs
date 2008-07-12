@@ -49,7 +49,7 @@ fi
 
 
 echo "Checkin ..."
-$BIN ci -m many
+$BINq ci -m many
 
 echo "Checkout ..."
 $WC2_UP_ST_COMPARE

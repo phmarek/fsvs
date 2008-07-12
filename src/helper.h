@@ -87,28 +87,33 @@ int hlp__safe_print(FILE *output, char *string, int maxlen);
  * (We have to read some data, but don't know how much we can send 
  * further down the chain - so we have to buffer).*/
 struct encoder_t {
-	/** Whether we're writing or reading. */
-	int is_writer;
 	/** Our datasource/sink. */
 	svn_stream_t *orig;
+
+	/** Where to put the final md5. */
+	md5_digest_t *output_md5;
+
+	/** The un-encoded data digest (context). */ 
+	apr_md5_ctx_t md5_ctx;
+	/** How many bytes are left to send in this buffer. */
+	apr_size_t bytes_left;
+
 	/** PID of child, for \c waitpid(). */
 	pid_t child;
+
+	/** Whether we're writing or reading. */
+	int is_writer;
 	/** STDIN filehandle for child. */
 	int pipe_in;
 	/** STDOUT filehandle for child. */
 	int pipe_out;
 	/** Whether we can get more data. */
 	int eof;
-	/** The un-encoded data digest (context). */ 
-	apr_md5_ctx_t md5_ctx;
-	/** How many bytes are left to send in this buffer. */
-	apr_size_t bytes_left;
 	/** Where unsent data starts. */
 	int data_pos;
+
 	/** The buffer. */
 	char buffer[ENCODE_BLOCKSIZE];
-	/** Where to put the final md5. */
-	md5_digest_t *output_md5;
 };
 
 
