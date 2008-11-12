@@ -23,9 +23,8 @@ function T
 	$BINdflt st $path -opath=$pathparm > $logfile
 	if [[ `wc -l < $logfile` -ne 1 ]]
 	then
-		$ERROR_NB "too many lines:"
 		cat $logfile
-		exit 1
+		$ERROR "too many lines"
 	fi
 
 	if grep "^$chg \+[a-z0-9]\+ \+$pat" < $logfile > /dev/null

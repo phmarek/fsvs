@@ -288,21 +288,27 @@ int up__parse_prop(struct estat *sts,
 	else if (0 == strcmp(utf8_name, propname_special) &&
 			0 == strcmp(utf8_value->data, propval_special))
 	{
-		if (sts->entry_type & FT_ANYSPECIAL)
+		if (S_ISANYSPECIAL(sts->st.mode))
 		{
 			DEBUGP("already marked as special");
 		}
 		else
 		{
-			sts->entry_type = FT_ANYSPECIAL;
 			/* Remove any S_IFDIR and similar bits. */
-			sts->st.mode &= 07777;
+			if (! (S_ISLNK(sts->updated_mode) ||
+						S_ISCHR(sts->updated_mode) ||
+						S_ISBLK(sts->updated_mode)) )
+				sts->updated_mode = sts->st.mode = 
+					(sts->st.mode & 07777) | S_IFANYSPECIAL;
 			DEBUGP("this is a special node");
 		}
 	}
 	else if (0 == strcmp(utf8_name, propname_origmd5))
 	{
-		BUG_ON(sts->entry_type != FT_FILE);
+		/* Depending on the order of the properties we might not know whether 
+		 * this is a special node or a regular file; so we only disallow that 
+		 * for directories. */
+		BUG_ON(S_ISDIR(sts->updated_mode));
 		STOPIF( cs__char2md5( utf8_value->data, sts->md5), NULL);
 		DEBUGP("got a orig-md5: %s", cs__md52hex(sts->md5));
 		sts->has_orig_md5=1;
@@ -525,7 +531,7 @@ int up__set_meta_data(struct estat *sts,
 
 	/* A chmod or utimes on a symlink changes the *target*, not
 	 * the symlink itself. Don't do that. */
-	if (!S_ISLNK(sts->st.mode))
+	if (!S_ISLNK(sts->updated_mode))
 	{
 		/* We have a small problem here, in that we cannot change *only* the user 
 		 * or group. It doesn't matter much; the problem case is that the owner 
@@ -538,16 +544,10 @@ int up__set_meta_data(struct estat *sts,
 			status=chown(filename, sts->st.uid, sts->st.gid);
 			if (status == -1)
 			{
-				if (errno == EPERM)
-					STOPIF( wa__warn( WRN__CHOWN_EPERM, errno, 
-								"Cannot chown \"%s\" to %d:%d", 
-								filename, sts->st.uid, sts->st.gid),
-							NULL );
-				else
-					STOPIF( wa__warn( WRN__CHOWN_OTHER, errno, 
-								"Cannot chown \"%s\" to %d:%d", 
-								filename, sts->st.uid, sts->st.gid),
-							NULL );
+				STOPIF( wa__warn( errno==EPERM ? WRN__CHOWN_EPERM : WRN__CHOWN_OTHER,
+							errno, "Cannot chown \"%s\" to %d:%d", 
+							filename, sts->st.uid, sts->st.gid),
+						NULL );
 			}
 		}
 
@@ -561,16 +561,10 @@ int up__set_meta_data(struct estat *sts,
 			status=chmod(filename, sts->st.mode & 07777);
 			if (status == -1)
 			{
-				if (errno == EPERM)
-					STOPIF( wa__warn( WRN__CHMOD_EPERM, errno, 
-								"Cannot chmod \"%s\" to 0%3o", 
-								filename, sts->st.mode & 07777 ), 
-							NULL );
-				else
-					STOPIF( wa__warn( WRN__CHMOD_OTHER, errno, 
-								"Cannot chmod \"%s\" to 0%3o", 
-								filename, sts->st.mode & 07777 ), 
-							NULL );
+				STOPIF( wa__warn( errno == EPERM ? WRN__CHMOD_EPERM : WRN__CHMOD_OTHER, 
+							errno, "Cannot chmod \"%s\" to 0%3o", 
+							filename, sts->st.mode & 07777 ), 
+						NULL );
 			}
 		}
 
@@ -599,7 +593,9 @@ ex:
 }
 
 
-/* we know it's a special file */
+/** Handling non-file non-directory entries.
+ * We know it's a special file, but not more; we have to take the filedata 
+ * and retrieve the type. */
 int up__handle_special(struct estat *sts, 
 		char *path,
 		char *data,
@@ -612,24 +608,25 @@ int up__handle_special(struct estat *sts,
 	STOPIF( hlp__utf82local(cp, &cp, -1), NULL);
 
 	sts->stringbuf_tgt=NULL;
+	DEBUGP("special %s has mode 0%o", path, sts->updated_mode);
 
 	/* process */
-	switch (sts->entry_type)
+	switch (sts->updated_mode & S_IFMT)
 	{
-		case FT_CDEV:
-		case FT_BDEV:
+		case S_IFBLK:
+		case S_IFCHR:
 			STOPIF_CODE_ERR( mknod(path, sts->st.mode, sts->st.rdev) == -1,
 					errno, "mknod(%s)", path) ;
 			break;
 
-		case FT_SYMLINK:
+		case S_IFLNK:
 			STOPIF_CODE_ERR( symlink(cp, path) == -1, 
 					errno, "symlink(%s, %s)", cp, path);
 			break;
 
 		default:
 			STOPIF_CODE_ERR(1, EINVAL, 
-					"what kind of node is this??? (type=0x%X)", sts->entry_type);
+					"what kind of node is this??? (mode=0%o)", sts->updated_mode);
 	}
 
 ex:
@@ -835,13 +832,13 @@ svn_error_t *up__apply_textdelta(void *file_baton,
 	strcpy(filename_tmp, filename);
 	strcat(filename_tmp, ".up.tmp");
 
-	DEBUGP("target is %s,", filename);
+	DEBUGP("target is %s (0%o),", filename, sts->updated_mode);
 	DEBUGP("  temp is %s", filename_tmp);
 
-	if (sts->entry_type != FT_FILE)
+	if (!S_ISREG(sts->updated_mode))
 	{
 		/* special entries are taken into a svn_stringbuf_t */
-		if (S_ISLNK(sts->st.mode))
+		if (S_ISLNK(sts->updated_mode))
 		{
 			STOPIF( ops__link_to_string(sts, filename, &cp),
 					NULL);
@@ -919,7 +916,7 @@ into_stringbufs:
 		if (sts->decoder)
 		{
 			STOPIF( hlp__encode_filter(svn_s_tgt, sts->decoder, 1, 
-						&svn_s_tgt, &encoder, sts->filehandle_pool), NULL);
+						filename, &svn_s_tgt, &encoder, sts->filehandle_pool), NULL);
 			/* If the file gets decoded, use the original MD5 for comparision. */
 			encoder->output_md5= &(sts->md5);
 		}
@@ -974,16 +971,13 @@ svn_error_t *up__close_file(void *file_baton,
 	else
 	{
 		/* now we have a new md5 */
-		DEBUGP("close file: md5=%s",
-				cs__md52hex(sts->md5));
+		DEBUGP("close file (0%o): md5=%s",
+				sts->updated_mode, cs__md52hex(sts->md5));
 
 
-		/* if there's no special property, it's an ordinary file. */
-		if (sts->entry_type == FT_NONDIR)	
-			sts->entry_type = FT_FILE;
+		BUG_ON(!sts->updated_mode);
 
-
-		if (sts->entry_type == FT_FILE)
+		if (S_ISREG(sts->updated_mode))
 		{
 			status=0;
 			/* See the comment mark FHP. */
@@ -999,6 +993,7 @@ svn_error_t *up__close_file(void *file_baton,
 		}
 		else
 		{
+			DEBUGP("closing special file");
 			sts->stringbuf_tgt->data[ sts->stringbuf_tgt->len ]=0;
 			STOPIF( up__handle_special(sts, filename_tmp, 
 						sts->stringbuf_tgt->data, pool), NULL);
@@ -1116,13 +1111,15 @@ int up__work(struct estat *root, int argc, char *argv[])
 
 	STOPIF_CODE_ERR(!urllist_count, EINVAL,
 			"There's no URL defined");
-	
+
 	STOPIF( url__mark_todo(), NULL);
 
 	STOPIF_CODE_ERR( argc != 0, EINVAL,
 			"Cannot do partial updates!");
 
-	if (!opt_checksum) opt_checksum++;
+
+	opt__set_int(OPT__CHANGECHECK, PRIO_MUSTHAVE,
+			opt__get_int(OPT__CHANGECHECK) | CHCHECK_FILE);
 
 	only_check_status=1;
 	/* Do that here - if some other checks fail, it won't take so long
@@ -1132,8 +1129,7 @@ int up__work(struct estat *root, int argc, char *argv[])
 
 	while ( ! ( status=url__iterator(&rev) ) )
 	{
-
-		STOPIF( cb__record_changes(NULL, root, rev, global_pool), NULL);
+		STOPIF( cb__record_changes(root, rev, global_pool), NULL);
 
 		if (action->is_compare)
 		{

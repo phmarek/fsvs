@@ -55,9 +55,7 @@ then
 	$SUCCESS "No status output after revert."
 else
 	$BINdflt st
-	$ERROR_NB "Some status change??"
-	$BINdflt st
-	exit 1
+	$ERROR "Some status change??"
 fi
 
 rm $filename

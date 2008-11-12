@@ -17,7 +17,7 @@ do
 done
 # commit some of the files
 $BINdflt ci -m 1 -q -o delay=yes
-( cd $WC2 && $BINq up )
+$WC2_UP_ST_COMPARE
 
 for n in new changed
 do
@@ -36,10 +36,21 @@ function check
 {
 # Action, Parameter, Nr. of expected lines, Message
 	msg="$4"
-	$BINdflt $1 $2 > $LOGFILE
-	if [[ `wc -l < $LOGFILE` -ne "$3" ]]
+
+# If we do a status, we'll have a logfile anyway.
+# If it's a revert, it might be nice to see whe WC before.
+	if [[ "$1" == "status" ]]
 	then
-		$ERROR "$msg failed - wrong number of output lines."
+		rm $LOGFILE.status 2> /dev/null || true
+	else
+		$BINdflt status -C -C > $LOGFILE.status
+	fi
+
+	$BINdflt $1 $2 > $LOGFILE
+	lns=`wc -l < $LOGFILE`
+	if [[ $lns -ne "$3" ]]
+	then
+		$ERROR "$msg failed - wrong number of output lines (exp $3, got $lns)."
 	fi
 
 	shift 4
@@ -79,9 +90,22 @@ status "1/2/3/4/5/6?* -N -N -v" 3 "Verbose status with wildcard" changed 1 new 1
 revert "1/2/3/4/5/d" 2 "Revert of directory deletion" /d 1 changed 0 same 0 new 0
 revert "1/2/3/4/5/6-changed" 2 "Single revert" changed 1 same 0 new 0
 status "1/2/3/4/5/6-changed -v" 1 "Status after revert" changed 1 same 0 new 0 "-F ....." 1
+status "1/2/3/4/5 -v" 6 "Status after revert" changed 1 same 1 new 1 /d 1 \
+			"-F ......" 3 "-F ....C." 1 "-F .t...." 1
+
 echo $RANDOM > 1/2/3/4/5/6-changed
 revert "1/2/3/" 4 "Non-recursive revert" changed 1 same 0 new 0 ".m.?" 2 dir 2
-revert ". -R" 6 "Recursive revert" changed 2 same 0 new 0
+
+status "1/2/3/4/5 -v" 6 "Status after revert" changed 1 same 1 new 1 /d 1 \
+			"-F ......" 2 "-F ....C." 1 "-F .t..C." 1 "-F .t...." 1
+
+# The two changed entries get reverted, and their directories the mtime 
+# reset. The directory 3 has already been done, so 1, 2 and 6 get reported 
+# as possibly changed.
+
+# WHY is 6-new not found???
+
+revert ". -R" 6 "Recursive revert" changed 2 same 0 new 0 mC 2 "^\.m\." 3
 status "." 6 "Status after revert" new 3 changed 0 same 0
 status ". -v" 17 "Verbose status after revert" new 3 changed 3 same 3 "-F ......" 11
 
@@ -99,8 +123,8 @@ do
 	echo something-else > $f-same
 done
 
-# Directories whose entries got changed get a new mtime.
-revert ". -R -o delay=yes" 10 "Full revert 2" changed 3 same 3 /d 0 new 0 ./1/2 8
+# Directories whose entries got changed don't get a new mtime!
+revert ". -R -o delay=yes" 7 "Full revert 2" changed 3 same 3 /d 0 new 0 ./1/2 6
 # But that doesn't work for the root directory ... so we touch it, then we 
 # know exactly what to test for.
 touch .

@@ -15,10 +15,9 @@ dirN=dNew
 
 file11=$dir1/1
 file12=$dir1/2
-file111=$dir11/1
-file112=$dir11/2
 file21=$dir2/1
 file22=$dir2/2
+file41=$dir4/1
 
 log=$LOGDIR/020.logfile
 
@@ -36,7 +35,8 @@ function ChangeData
 		[ -e $dir ] || continue
 		for file in 1 2
 		do
-			echo "A testline $RANDOM $RANDOM" > $dir/$file
+			echo "A testline " > $dir/$file
+			dd if=/dev/zero bs=$RANDOM count=1 >> $dir/$file 2>/dev/null
 		done
 	done
 }
@@ -77,9 +77,8 @@ if [[ `grep $dir1/ < $log | wc -l` -eq 1 ]]
 then
   $SUCCESS "Ok, commit of a file beneath another new file works"
 else
-  $ERROR_NB "wrong data committed (1); only $file11 expected!"
 	cat $log
-	exit 1
+  $ERROR "wrong data committed (1); only $file11 expected!"
 fi
 
 $BINdflt ci -m "new file2" $dir1 -o delay=yes > $log
@@ -87,9 +86,8 @@ if [[ `grep $dir1 < $log | wc -l` -eq 2 ]]
 then
   $SUCCESS "commit of a file beneath a committed file works"
 else
-  $ERROR_NB "wrong data committed (2); only $dir1 and $file12 expected!"
 	cat $log
-	exit 1
+  $ERROR "wrong data committed (2); only $dir1 and $file12 expected!"
 fi
 
 
@@ -103,9 +101,8 @@ if [[ `grep $dir2 < $log | wc -l` -eq 2 ]]
 then
   $SUCCESS "commit of a changed file beneath another changed file works"
 else
-  $ERROR_NB "wrong data committed (3); only $file21 expected!"
 	cat $log
-	exit 1
+  $ERROR "wrong data committed (3); only $file21 expected!"
 fi
 
 if false
@@ -119,8 +116,7 @@ then
 		$SUCCESS "directory still shows as changed"
 	else
 		$BINdflt st
-		$ERROR_NB "directory isn't seen as changed"
-		exit 1
+		$ERROR "directory isn't seen as changed"
 	fi
 fi
 
@@ -131,9 +127,8 @@ if [[ `grep $dir2 $log | wc -l` -eq 2 ]]
 then
   $SUCCESS "commit of a single directory works"
 else
-  $ERROR_NB "wrong data committed (4); only 2 lines expected!"
 	cat $log
-	exit 1
+  $ERROR "wrong data committed (4); only 2 lines expected!"
 fi
 
 
@@ -146,9 +141,8 @@ if [[ `grep -F " $dirN" < $log | wc -l` -eq 3 ]]
 then
   $SUCCESS "initial commit works"
 else
-  $ERROR_NB "wrong data committed (5); only 3 lines expected!"
 	cat $log
-	exit 1
+  $ERROR "wrong data committed (5); only 3 lines expected!"
 fi
 
 
@@ -160,32 +154,113 @@ if [[ `grep -F " $dir31" < $log | wc -l` -eq 1 ]]
 then
   $SUCCESS "complex initial commit works"
 else
-  $ERROR_NB "wrong data committed (6); only 2 lines expected!"
 	cat $log
-	exit 1
+  $ERROR "wrong data committed (6); only 2 lines expected!"
 fi
 
-
-if false
-then
-## sync-repos and commit, currently always fails.
-## I originally wanted to show another failure here, no "directory
-## not found". In my tests, even a patched fsvs 1.0.15 committed
-## expluded stuff on a partial commit after a sync-repos.
-## In this environment it simply fails with an error message, I
-## don't know why...
 
 ChangeData
 
-$BINdflt sync-repos > /dev/null
+$BINdflt sync-repos -q
 
-$BINdflt ci -m "changed files after sync-repos" $dir31 > $log
-if [[ `grep ./ < $log | wc -l` -eq 2 ]]
+$BINdflt ci -m "changed files after sync-repos" ./$dir31 > $log
+if [[ `grep -F ./ < $log | wc -l` -eq 3 ]]
 then
   $SUCCESS "complex partial commit after sync-repos works"
 else
-  $ERROR_NB "wrong data committed (7); only 2 lines expected!"
 	cat $log
-	exit 1
+  $ERROR "wrong data committed (7); expected 'committing to,dir,2files,revX'"
 fi
-fi
+
+
+$BINq ci -m "known state"
+$WC2_UP_ST_COMPARE
+
+
+# Now change data, and look whether filtering works.
+function TT
+{
+  expected=$1
+	do_changes=$3
+	other_changes=$4
+
+	if [[ "$do_changes" == "" ]] ; then ChangeData ; fi
+
+	$BINdflt st $2 > $log
+	if [[ `grep -F ./ < $log | wc -l` -ne $expected ]]
+	then
+		cat $log
+		$ERROR "Filtered status for '$2' expected $expected entries."
+	fi
+
+	$BINdflt ci -m "options are $2, expect $expected" $2 > $log
+	if [[ `grep -F ./ < $log | wc -l` -ne $expected ]]
+	then
+		cat $log
+		$ERROR "Filtered commit for '$2' expected $expected entries."
+	fi
+
+	# We cannot easily compare with WC2 here, because there are many changed 
+	# entries, and only a few get committed.
+	# But we can check if there are still changes here.
+	$BINdflt st $2 > $log
+	if [[ `wc -l < $log` -ne 0 ]]
+	then
+		cat $log
+		$ERROR "Still changes after 'commit $2'."
+	fi
+
+	if [[ "$other_changes" != "" ]]
+	then
+	  # Expect some changes.
+		$BINdflt st > $log
+		if [[ `wc -l < $log` -ne $other_changes ]]
+		then
+			$ERROR "Expected $other_changes changes after 'commit $2'"
+		fi
+	fi
+
+	$SUCCESS "Filtered commit for '$2' successful."
+	$BINq	delay
+}
+
+# Simple: all data files changed, no new or deleted entries - so no 
+# directory modifications.
+TT 10 "."
+
+# The directory is, depending on the time dependency, marked as changed, 
+# too. To get a definitive answer we'll manually touch it.
+echo aaaa > dB/Newwww
+touch -d"2008-1-1 4:5:6" dB
+# expect 1 file, afterwards 1 timestamp
+TT 1 "-f new ." 1
+rm dB/Newwww
+# expect 1 file, afterwards 1 timestamp
+TT 1 "-f deleted ." 1
+
+# Other entries may not be recorded.
+$INFO "Testing that other entries are not recorded"
+echo > $file41
+echo aaaa > dB/Newwww2
+# We expect a single file to be committed; afterwards all other 9 data 
+# files are changed, and "dB" (mtime).
+TT 1 "-f new ." "" 11
+
+# Now commit all changed entries; keeps "dB" as mtime.
+TT 10 "-f text ." 1
+
+# Now sync ... - no changes anymore.
+$BINq ci -m sync1
+$WC2_UP_ST_COMPARE
+
+
+echo a > new1
+echo a > $dir31/new2
+rm $file41
+# We expect ".", "dD" and "dC/dA" to be "mtime"
+TT 3 "-f new,deleted ." no-change-data 3
+
+# Sync again ...
+$BINq ci -m sync2
+$WC2_UP_ST_COMPARE
+

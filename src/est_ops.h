@@ -12,6 +12,7 @@
 
 #include "global.h"
 #include "waa.h"
+#include "options.h"
 
 /** \file
  * Functions for handling of indiviual <tt>struct estat</tt>s. */
@@ -22,8 +23,6 @@ int ops__build_path(char **path,
 		struct estat *sts);
 /** Calculate the length of the path for this entry. */
 int ops__calc_path_len(struct estat *sts);
-/** Get the filetype from \c st->mode. */
-int ops___filetype(struct sstat_t *st);
 /** Compare the \c struct \c sstat_t , and set the \c entry_status. */
 int ops__stat_to_action(struct estat *sts, struct sstat_t *new);
 
@@ -69,7 +68,9 @@ int ops__save_1entry(struct estat *sts,
 int ops__load_1entry(char **where, struct estat *sts, char **filename,
 		ino_t *parent_i);
 /** Does a \c lstat() on the given entry, and sets the \c entry_status. */
-int ops__update_single_entry(struct estat *sts, char *fullpath);
+int ops__update_single_entry(struct estat *sts, struct sstat_t *output);
+/** Wrapper for \c ops__update_single_entry and some more. */
+int ops__update_filter_set_bits(struct estat *sts);
 
 /** Converts a string describing a special node to the \c struct \c sstat_t 
  * data. */
@@ -102,10 +103,33 @@ int ops__traverse(struct estat *parent, char *relative_path,
 		int flags, int sts_flags,
 		struct estat **ret);
 
-/** Set the \ref estat::do_tree and \ref estat::do_this_entry attributes 
- * depending on \ref opt_recursive and the parent's bits. */
-int ops__set_to_handle_bits(struct estat *sts);
+/** Set the \ref estat::do_userselected and \ref estat::do_this_entry 
+ * attributes depending on \ref opt_recursive and the parent's bits. */
+int ops__set_todo_bits(struct estat *sts);
+/** Determines whether child entries of this entry should be done, based on 
+ * the recursive settings and \a dir's todo-bits. */
+int ops__are_children_interesting(struct estat *dir);
 
+inline static int ops__allowed_by_filter(struct estat *sts)
+{
+#ifdef ENABLE_DEBUG
+	BUG_ON(!sts->do_filter_allows_done, 
+			"%s: do_filter_allows not done", sts->name);
+#endif
+	return sts->do_filter_allows;
+}
+
+inline static int ops__calc_filter_bit(struct estat *sts)
+{
+	sts->do_filter_allows_done=1;
+
+	sts->do_filter_allows = 
+		opt__get_int(OPT__FILTER) == FILTER__ALL ||
+		/* or it's an interesting entry. */
+		(sts->entry_status & opt__get_int(OPT__FILTER));
+
+	return sts->do_filter_allows;
+}
 
 /** Correlating entries from two directories \a dir_a and \a dir_B.
  * @{ */

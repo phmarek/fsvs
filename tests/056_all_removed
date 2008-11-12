@@ -1,0 +1,35 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/056.all_removed
+
+# Testing the all_removed option.
+mkdir -p 1/2/3/4/5/6/7
+$BINq ci -m1
+rm -r 1/2
+
+for FSVS_DIR_SORT in yes no
+do
+	$INFO "testing all_removed for dir_sort=$FSVS_DIR_SORT."
+
+	$BINdflt st -o all_removed=yes > $logfile
+	if [[ `wc -l < $logfile` != 7 ]]
+	then
+		cat $logfile
+		$ERROR "all_removed=yes doesn't work."
+	fi
+
+	$BINdflt st -o all_removed=no > $logfile
+	if [[ `wc -l < $logfile` != 2 ]]
+	then
+		cat $logfile
+		$ERROR "all_removed=no doesn't work."
+	fi
+done
+
+$SUCCESS "all_removed seems ok."
+

@@ -59,7 +59,7 @@ pushd typechange > /dev/null
  do
 	 echo file > $i-file
 	 $ONLY_ROOT cp -a /dev/zero $i-device
-	 ln -s $i-1 $i-symlink
+	 ln -s $i-file $i-symlink
 	 mkdir $i-dir
 	 echo sub > $i-dir/sub-entry
 	 mkdir $i-dir/sub
@@ -80,11 +80,10 @@ $INFO "update done"
 
 $WC2_UP_ST_COMPARE
 $SUCCESS "all types changed to other types."
-exit
 
 export FSVS_WARNING="mixed-rev-wc=ignore"
 
-# Now we change WC1 back via update, and revert everything in WC2.
+# Now we change WC1 by using revert, and WC2 via update.
 $BINq up -r$rev $WC2
 $BINq revert -r$rev -R -R .
 

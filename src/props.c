@@ -157,7 +157,7 @@
  *     gpg --import-key  .....
  *     fsvs propset fsvs:commit-pipe 'gpg -er <backup-key>' shadow
  * \endcode
- * You might want/need to set an update-pipe, too; see 
+ * You might want/need to set an update-pipe, too; see \ref 
  * FSVS_PROP_UPDATE_PIPE for details.
  *
  * The only thing left is to take the first backup:
@@ -178,6 +178,12 @@
  * \note Encrypted data cannot be deltified, so the few marked files will 
  * take their full space in the repository. (Although \c gpg compresses the 
  * files before encryption, so it won't be \b that bad.)
+ *
+ * You might be interested in \ref exp_env "exported
+ * environment variables", too.
+ *
+ * \note Another idea is to ignore files that are not readable by everyone; 
+ * see \ref ign_mod "ignore pattern modifiers" for details.
  * */
 #define FSVS_PROP_COMMIT_PIPE FSVS_PROP_PREFIX "commit-pipe"
 

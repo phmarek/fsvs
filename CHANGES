@@ -1,3 +1,54 @@
+Changes since 1.1.16
+- New "uncopy" command, to disambiguate "revert". Manually added or 
+	"prop-set" entries are kept known.
+- Small cleanups and documentation updates.
+- New option "config_dir", important for client certificate authentication.
+- Performance fix for "fsvs diff -rX:Y entry" - don't diff the whole
+  working copy, only the given entries.
+- "fsvs info" for the working copy root now prints the revision of the 
+	highest priority URL, and not "0".
+- Bugfix for "dir_sort" option; the root directory wasn't printed.
+- New command "delay", for use in scripts.
+- The option "dir_sort" now uses strcoll(), ie. sorts according to the 
+	current locale.
+- A new flag for ignore patterns, for matching directories only.
+- "diff" showed for replaced entries "only in rX" - fixed.
+- Changed the recursive behaviour to do the whole hierarchy before the 
+	parent directory - needed for revert.
+- Configure and install fixes, patch by Maurice. Thank you.
+- Fixed duplicate "fsvs info deleted-directory" output.
+- New option "all_removed", to trim the output for deleted hierarchies.
+- Fixed a small memory usage problem, not directly a leak, but noticeable 
+  with "sync-repos"; and a workaround for svn_ra_local__get_file() eating
+	memory. Thank you, Plamen.
+- User-readable error on non-writeable $FSVS_CONF. Thank you, Thomas.
+- New command "rel-ignore" for converting input to relative ignore 
+	patterns.
+- Try to get the directory mtimes correct again; that's a bit ugly, because 
+  of arbitrary changes.
+- Bugfix: for http URLs the temporary directory was filled with files.
+- Export some environment variables for use in diff, commit- and 
+  update-pipes.
+- The filter option now allows "mode"; and it should work correctly 
+  for commit, too.
+- Splitted "-C" into finer grained option settings "-o change_check".
+  Changed the default to use MD5 on possibly-changed files.
+- Started a "tips & tricks" document.
+- Fixed the directory mtime for meta-data-less ("svn import"ed), empty 
+  directories.
+- Bugfix: new parent directories sent wrong meta-data to the repository on 
+	a deep commit (ie. the parent directory wasn't directly mentioned).
+- Bugfix for filtered commit (eg. "-f text").
+- Another try to detect invalid "colordiff" program names, and a better 
+  message than a simple "EPIPE".
+- Lots of internal data structure changes, and how the entries are handled.
+- New "fsvs cat" command, to fetch really pristine copies from the 
+  repository.
+- Some documentation fixes, and repairs for the man pages.
+- FSVS now shows "maybe changed" for unreadable files or directories; 
+  should we throw a warning? 
+- Ignore patterns can now match the entries' mode.
+
 Changes since 1.1.15
 - FSVS_WARNINGS removed. Use FSVS_WARNING.
 - Small fixes and cleanups.
@@ -78,6 +129,7 @@ Changes since 1.1.13
 	wrong options.
 - Bugfix for revert - would save the dir-list, even when an error occurs.
 - update can now be restricted to an arbitrary subset of URLs.
+- Fix for "revert -rX" for changed file types.
 - Tried to get compatibility with systems that don't expose MAJOR, MINOR 
 	and MKDEV (eg. Solaris).
 

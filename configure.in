@@ -100,6 +100,8 @@ AC_CHECK_LIB([pcre], [pcre_compile],
 	[AC_MSG_FAILURE([Sorry, can't find PCRE.])])
 AC_CHECK_LIB([aprutil-1], [apr_md5_init], [],
 	[AC_MSG_FAILURE([Sorry, can't find APR.])])
+AC_CHECK_LIB([svn_delta-1], [svn_txdelta_apply], [],
+	[AC_MSG_FAILURE([Sorry, can't find subversion.])])
 AC_CHECK_LIB([svn_ra-1], [svn_ra_initialize], [],
 	[AC_MSG_FAILURE([Sorry, can't find subversion.])])
 AC_CHECK_LIB([gdbm], [gdbm_firstkey], [],

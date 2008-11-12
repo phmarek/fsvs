@@ -16,7 +16,7 @@ set charp_array_1[0]="$#$ENV{'WC'}#/a"
 set charp_array_1[1]="$#$ENV{'WC'}#/b"
 set charp_array_1[2]="$#$ENV{'WC'}#/c"
 #= 0
-print waa__find_common_base(3, charp_array_1, &charpp)
+print waa__find_common_base2(3, charp_array_1, &charpp, 0)
 #~ 0x\w+ "a"
 print charpp[0]
 #~ 0x\w+ "b"
@@ -27,7 +27,7 @@ print charpp[2]
 set charp_array_1[0]="$#$ENV{'WC'}#/a/h"
 set charp_array_1[1]="$#$ENV{'WC'}#/b"
 #= 0
-print waa__find_common_base(2, charp_array_1, &charpp)
+print waa__find_common_base2(2, charp_array_1, &charpp, 0)
 #~ 0x\w+ "a/h"
 print charpp[0]
 #~ 0x\w+ "b"
@@ -36,7 +36,7 @@ print charpp[1]
 set charp_array_1[0]="$#$ENV{"WC"}#/a/h"
 set charp_array_1[1]="$#$ENV{"WC"}#/a/j"
 #= 0
-print waa__find_common_base(2, charp_array_1, &charpp)
+print waa__find_common_base2(2, charp_array_1, &charpp, 0)
 #~ 0x\w+ "a/h"
 print charpp[0]
 #~ 0x\w+ "a/j"
@@ -45,7 +45,7 @@ print charpp[1]
 set charp_array_1[0]="/does_never/exist"
 set charp_array_1[1]="/never/so_we/get_an/error"
 #= 2
-print waa__find_common_base(2, charp_array_1, &charpp)
+print waa__find_common_base2(2, charp_array_1, &charpp, 0)
 
 
 kill

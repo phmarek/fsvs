@@ -40,10 +40,6 @@
  * */
 
 
-/** \defgroup perf Performance points
- * Some effort has been taken to get \c fsvs as fast as possible.
- * */
-
 /** \defgroup add_unv_ign Adding and removing entries from versioning
  *
  * Normally all new entries are taken for versioning.
@@ -90,11 +86,11 @@
  *
  * \section cmds_au Defining which entries to take:
  * <dl>
- *   <dt>\ref ignore<dd><tt>Define ignore patterns</tt>
+ *   <dt>\ref ignore and \ref rign<dd><tt>Define ignore patterns</tt>
  *   <dt>\ref unversion<dd><tt>Remove entries from versioning</tt>
  *   <dt>\ref add<dd><tt>Add entries that would be ignored</tt>
  *   <dt>\ref cp, \ref mv<dd><tt>Tell \c fsvs that entries were 
- *   copied.</tt>
+ *   copied</tt>
  * </dl>
  *
  * \section cmds_rep Commands working with the repository:
@@ -103,12 +99,14 @@
  *   <dt>\ref update<dd><tt>Get updates from the repository</tt>
  *   <dt>\ref checkout<dd><tt>Fetch some part of the repository, and 
  *     register it as working copy</tt>
- *   <dt>\ref revert<dd><tt>Undo local changes</tt>
+ *   <dt>\ref cat<dd><tt>Get a file from the directory
+ *   <dt>\ref revert and \ref uncp<dd><tt>Undo local changes and 
+ *     entry markings</tt>
  *   <dt>\ref remote-status<dd><tt>Ask what an \ref update 
  *   would bring</tt>
  * </dl>
  *
- * \section cmds_prop Property handling
+ * \section cmds_prop Property handling:
  * <dl>
  *   <dt>\ref prop-set<dd><tt>Set user-defined properties</tt>
  *   <dt>\ref prop-get<dd><tt>Ask value of user-defined properties</tt>
@@ -125,7 +123,7 @@
  * \note Multi-url-operations are relatively new; there might be rough edges.
  *
  *
- * The <b>return code</b> is \c 0 for successfull and \c 2 for an error.
+ * The <b>return code</b> is \c 0 for success, or \c 2 for an error.
  * \c 1 is returned if the option \ref o_stop_change is used, and 
  * changes are found; see also \ref o_filter.
  * 
@@ -180,26 +178,8 @@
  *
  *
  * \subsection glob_opt_chksum -C -- checksum
- * \c -C increments the checksum flag.
- * Normally \a status tells that a file has \b possible modification, if 
- * its mtime has changed but its size not.
- * Using \c -C you can tell the commands to be extra careful and \b always 
- * check for modifications.
- *
- * The values are
- * <table>
- * <tr><td>0 </td><td> Normal operations
- * <tr><td>1 </td><td> Check files for modifications if possibly changed
- * <tr><td>2 </td><td> Do an MD5 verification for all files, and check all 
- * directories for new entries.
- * </table>
- *
- * If a files size has changed, we can be sure that it's changed;
- * a directory is checked for changes if any of its meta-data has changed 
- * (mtime, ctime, owner, group, size, mode).
- *
- * \note \a commit and \a update set the checksum flag to <b>at least</b> 
- * 1, to avoid missing changed files.
+ * \c -C chooses to use more change detection checks; please see \ref 
+ * o_chcheck "the change_check option" for more details.
  *
  * 
  * \subsection glob_opt_filter -f -- filter entries
@@ -207,15 +187,14 @@
  * operations, modification of the work done on given entries.
  *
  * It requires a specification at the end, which can be any combination of 
- * \c any, \c text, \c new, \c deleted, \c meta, \c mtime, \c group or \c 
- * owner.
+ * \c any, \c text, \c new, \c deleted (or \c removed), \c meta, \c mtime, \c group, \c mode,
+ * \c changed or \c owner.
  *
  * By giving eg. the value \c text, with a \ref status action only entries 
  * that are new or changed are shown; with \c mtime,group only entries 
  * whose group or modification time has changed are printed.
  *
- * \note The list does not include \b possibly changed entries; see \ref 
- * glob_opt_chksum \c -C.
+ * \note Please see \ref o_chcheck for some more information.
  *
  * \note If an entry gets replaced with an entry of a different type (eg. a 
  * directory gets replaced by a file), that counts as \c deleted \b and \c 
@@ -353,8 +332,7 @@ int debuglevel=0,
 		only_check_status=0,
 		/** -. We start with recursive by default. */
 		opt_recursive=1,
-		opt_verbose=0,
-		opt_checksum=0;	
+		opt_verbose=0;
 
 svn_revnum_t target_revision;
 svn_revnum_t opt_target_revision=SVN_INVALID_REVNUM;
@@ -571,7 +549,7 @@ eol:
 /** For keyword expansion - the version string. */
 const char* Version(FILE *output)
 {
-	static const char Id[] ="$Id: fsvs.c 1742 2008-06-12 05:54:03Z pmarek $";
+	static const char Id[] ="$Id: fsvs.c 1953 2008-10-25 11:12:13Z pmarek $";
 
 	fprintf(output, "FSVS (licensed under the GPLv3), (C) by Ph. Marek;"
 			" version " FSVS_VERSION "\n");
@@ -661,7 +639,7 @@ int ac__Usage(struct estat *root UNUSED,
 		int argc UNUSED, char *argv[])
 {
 	int status;
-	int i, hpos;
+	int i, hpos, len;
 	char const* const*names;
 
 
@@ -701,9 +679,10 @@ int ac__Usage(struct estat *root UNUSED,
 		hpos=2;
 		for(i=0; i<action_list_count; i++)
 		{
-			hpos += 2 + strlen(action_list[i].name[0]);
+			len = strlen(action_list[i].name[0]);
+
 			/* I know, that could be dependent on terminal width. */
-			if (hpos >= 75) 
+			if (hpos+2+len >= 75) 
 			{
 				printf("\n  ");
 				hpos=2;
@@ -711,6 +690,7 @@ int ac__Usage(struct estat *root UNUSED,
 
 			printf("%s%s", action_list[i].name[0], 
 					i+1 == action_list_count ? "\n" : ", ");
+			hpos += 2 + len;
 		}
 
 		puts(
@@ -952,7 +932,7 @@ int main(int argc, char *args[], char *env[])
 	int status, help;
 	char *cmd;
 	svn_error_t *status_svn;
-	int eo_args;
+	int eo_args, i;
 	void *mem_start, *mem_end;
 
 
@@ -1040,8 +1020,12 @@ int main(int argc, char *args[], char *env[])
 	root.name=root.strings=strdup(".");
 	root.st.size=0;
 	root.st.mode=S_IFDIR | 0700;
-	root.entry_type=FT_DIR;
 	root.entry_count=0;
+	/* The problem is that the root entry is never done explicitly; so we 
+	 * have to hard-code that here; but it is the default for all entries 
+	 * anyway. */
+	root.do_filter_allows=1;
+	root.do_filter_allows_done=1;
 
 
 	while (1)
@@ -1084,9 +1068,27 @@ int main(int argc, char *args[], char *env[])
 				STOPIF( wa__set_warn_option(optarg, PRIO_CMDLINE),
 						"Warning option '%s' is invalid", optarg);
 				break;
+
 			case 'C':
-				opt_checksum++;
+				/* Find the rightmost 0 bit, and set it. */
+
+				i = opt__get_int(OPT__CHANGECHECK);
+				/* Algorithm for finding the rightmost 1 bit:
+				 * orig i=   ... x 0 1 1 1
+				 * XOR i+1   ... x 1 0 0 0
+				 *   gives   ... 0 1 1 1 1
+				 * AND i+1   ... 0 1 0 0 0
+				 *
+				 * Maybe there's an easier way ... don't have "Numerical Recipes"
+				 * here with me. */
+				i = (i ^ (i+1)) & (i+1);
+
+				DEBUGP("checksum bits %X | %X", 
+						opt__get_int(OPT__CHANGECHECK), i);
+				opt__set_int(OPT__CHANGECHECK, PRIO_CMDLINE,
+						opt__get_int(OPT__CHANGECHECK) | i);
 				break;
+
 			case 'o':
 				STOPIF( opt__parse( optarg, NULL, PRIO_CMDLINE, 0), 
 						"!Cannot parse option string '%s'.", optarg);
@@ -1200,11 +1202,12 @@ int main(int argc, char *args[], char *env[])
 		action=action_list+0;
 	}
 
-	DEBUGP("optind=%d per_sts=%d action=%s rec=%d", 
+	DEBUGP("optind=%d per_sts=%d action=%s rec=%d filter=%s", 
 			optind, 
 			(int)sizeof(root),
 			action->name[0],
-			opt_recursive);
+			opt_recursive,
+			st__status_string_fromint( opt__get_int(OPT__FILTER)) );
 
 	for(eo_args=1; eo_args<argc; eo_args++)
 		DEBUGP("argument %d: %s", eo_args, args[eo_args]);

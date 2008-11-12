@@ -78,9 +78,9 @@ do
 	fi
 	Check "$cur_dest" "...+" "revert on copied"
 	$BINq revert $cur_dest
-	Check "$cur_dest" "N..." "revert*2 on copied"
-	$BINq revert $cur_dest
-	Check "$cur_dest" "N..." "revert*3 on copied"
+	Check "$cur_dest" "...+" "revert*2 on copied"
+	$BINq uncopy $cur_dest
+	Check "$cur_dest" "N..." "revert, uncopy on copied"
 done
 
 if [[ "$failed" == "1" ]]
@@ -96,7 +96,7 @@ fi
 
 dir=directory
 mkdir -m 0777 $dir
-$BINq ci -m2
+$BINq ci -m2 -odelay=yes
 
 ls -lad $dir $dest > $logfile
 
@@ -107,7 +107,10 @@ then
 else
   chown bin.bin $dir $dest
 fi
-chmod 000 $dir $dest
+
+# For files with umask 000 FSVS should show "maybe changed", not fail.
+chmod 000 $dest $dir
+$BINdflt st
 $BINq revert $dir
 $BINq revert $dest
 
@@ -118,4 +121,3 @@ else
   $ERROR "Meta-data not reverted"
 fi
 
-exit

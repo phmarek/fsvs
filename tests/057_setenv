@@ -1,0 +1,43 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+dir=1/a/X
+fn=kairo22
+path=$dir/$fn
+logenv=$LOGDIR/056.env
+logrev=$LOGDIR/056.rev
+
+mkdir -p $dir
+echo Data=$$ > $path
+
+# We use update, to see whether the revision is set too.
+# We have to read from STDIN, else FSVS cries.
+$BINdflt ps fsvs:update-pipe "cat > /dev/null ; set | grep ^FSVS_ > $logenv " $path
+$BINq ci -mx
+
+$BINdflt up $WC2 > $logrev
+rev=`grep "revision	" $logrev | tail -1 | cut -f2 -d"	" | cut -f1 -d.` 
+
+function Check
+{
+  if ! grep --line-regexp "$@" "$logenv"
+  then
+    cat $logenv
+		$ERROR "Didn't see $@"
+  fi
+}
+
+Check FSVS_CONF=$FSVS_CONF
+Check FSVS_WAA=$FSVS_WAA
+Check FSVS_CURRENT_ENTRY=$path
+Check FSVS_SOFTROOT=
+Check FSVS_WC_ROOT=$WC2
+Check FSVS_WC_CONF=$($TEST_PROG_DIR/path2spool $WC2 "^")
+Check FSVS_TARGET_REVISION=$rev
+
+$SUCCESS "Environment correctly set."

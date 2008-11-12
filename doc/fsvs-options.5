@@ -1,4 +1,4 @@
-.TH "Further options for FSVS." 1 "13 Jun 2008" "Version trunk:1496" "fsvs" \" -*- nroff -*-
+.TH "FSVS - Options and configfile" 5 "29 Oct 2008" "Version trunk:2782" "fsvs" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -9,7 +9,11 @@ FSVS currently knows:
 .PD 0
 
 .IP "\(bu" 2
+\fCall_removed\fP - \fBTrimming the list of deleted entries\fP 
+.IP "\(bu" 2
 \fCauthor\fP - \fBAuthor\fP 
+.IP "\(bu" 2
+\fCchange_check\fP - \fBChange detection\fP 
 .IP "\(bu" 2
 \fCcolordiff\fP - \fBUsing colordiff\fP 
 .IP "\(bu" 2
@@ -18,6 +22,8 @@ FSVS currently knows:
 \fCconflict\fP - \fBHow to resolve conflicts on update\fP 
 .IP "\(bu" 2
 \fCconf\fP - \fBPath definitions for the config and WAA area\fP. 
+.IP "\(bu" 2
+\fCconfig_dir\fP - \fBConfiguration directory for the subversion libraries\fP. 
 .IP "\(bu" 2
 \fCcopyfrom_exp\fP - \fBAvoiding expensive compares on \fBcopyfrom-detect\fP\fP 
 .IP "\(bu" 2
@@ -109,12 +115,13 @@ You can specify how paths printed by FSVS should look like; this is used for the
 .PP
 There are several possible settings, of which one can be chosen via the \fCpath\fP option.
 .PP
+.PD 0
 .IP "\(bu" 2
  \fCwcroot\fP 
 .br
  This is the old, traditional FSVS setting, where all paths are printed relative to the working copy root.
 .PP
-.PP
+
 .IP "\(bu" 2
  \fCparameter\fP 
 .br
@@ -132,16 +139,18 @@ Internally FSVS still first parses all arguments, and then does a single run thr
 .IP "\(bu" 2
  \fCabsolute\fP 
 .br
- All paths are printed in absolute form. This is useful if you want to paste them into other consoles without worrying whether the current directory matches.
+ All paths are printed in absolute form. This is useful if you want to paste them into other consoles without worrying whether the current directory matches. 
 .PP
 .PP
-The next two are nearly identical to \fCabsolute\fP, but the beginning of paths are substituted by environment variables. This makes sense if you want the advantage of full paths, but have some of them abbreviated.
+The next two are nearly identical to \fCabsolute\fP, but the beginning of paths are substituted by environment variables. This makes sense if you want the advantage of full paths, but have some of them abbreviated. 
+.PD 0
+
 .IP "\(bu" 2
  \fCenvironment\fP 
 .br
  Match variables to directories after reading the known entries, and use this cached information. This is faster, but might miss the best case if new entries are found (which would not be checked against possible longer hits). 
 .br
- Furthermore, as this works via associating environment variables to entries, the environment variables must at least match the working copy base - shorter paths won't be substituted.
+ Furthermore, as this works via associating environment variables to entries, the environment variables must at least match the working copy base - shorter paths won't be substituted. 
 .IP "\(bu" 2
 \fCfull-environment\fP 
 .br
@@ -153,8 +162,11 @@ The next two are nearly identical to \fCabsolute\fP, but the beginning of paths 
 .RS 4
 The string of the environment variables must match a directory name; the filename is always printed literally, and partial string matches are not allowed. Feedback wanted. 
 .PP
-Only environment variables whose names start with \fCWC\fP are used for substitution, to avoid using variables like \fC$PWD\fP, \fC$OLDPWD\fP, \fC$HOME\fP and similar which might differ between sessions. Maybe the allowed prefixes for the environment variables should be settable in the configuration. Opinions to the users mailing list, please.
+Only environment variables whose names start with \fCWC\fP are used for substitution, to avoid using variables like \fC$PWD\fP, \fC$OLDPWD\fP, \fC$HOME\fP and similar which might differ between sessions. Maybe the allowed prefixes for the environment variables should be settable in the configuration. Opinions to the users mailing list, please. 
 .RE
+.PP
+
+.PP
 .PP
 Example, with \fC/\fP as working copy base: 
 .PP
@@ -203,8 +215,6 @@ $ fsvs -o path=parameters st X11 /etc/X11/xinit
 
 .fi
 .PP
-
-.PP
 .PP
 \fBNote:\fP
 .RS 4
@@ -216,12 +226,14 @@ At least for the command line options the strings can be abbreviated, as long as
 The diff is not done internally in FSVS, but some other program is called, to get the highest flexibility.
 .PP
 There are several option values:
+.PD 0
+
 .IP "\(bu" 2
-\fCdiff_prg\fP: The executable name, default \fC'diff'\fP.
+\fCdiff_prg\fP: The executable name, default \fC'diff'\fP. 
 .IP "\(bu" 2
-\fCdiff_opt\fP: The default options, default \fC'-pu'\fP.
+\fCdiff_opt\fP: The default options, default \fC'-pu'\fP. 
 .IP "\(bu" 2
-\fCdiff_extra\fP: Extra options, no default.
+\fCdiff_extra\fP: Extra options, no default. 
 .PP
 .PP
 The call is done as 
@@ -237,15 +249,18 @@ The call is done as
 In \fCdiff_opt\fP you should use only use command line flags without parameters; in \fCdiff_extra\fP you can encode a single flag with parameter (like \fC'-U5'\fP). If you need more flexibility, write a shell script and pass its name as \fCdiff_prg\fP.
 .RE
 .PP
+Very advanced users might be interested in \fBexported environment\fPvariables', too.
 .SH "Using colordiff"
 .PP
 If you have \fCcolordiff\fP installed on your system, you might be interested in the \fCcolordiff\fP option.
 .PP
 It can take on of these values:
+.PD 0
+
 .IP "\(bu" 2
-\fCno\fP, \fCoff\fP or \fCfalse:\fP Don't use \fCcolordiff\fP.
+\fCno\fP, \fCoff\fP or \fCfalse:\fP Don't use \fCcolordiff\fP. 
 .IP "\(bu" 2
-'', ie. empty (default value): Try to use \fCcolordiff\fP as executable, but don't throw an error if it can't be started; just pipe the data as-is to \fCSTDOUT\fP.
+empty (default value): Try to use \fCcolordiff\fP as executable, but don't throw an error if it can't be started; just pipe the data as-is to \fCSTDOUT\fP. 
 .IP "\(bu" 2
 anything else: Pipe the output of the \fCdiff\fP program (see \fBOptions relating to the 'diff' action\fP) to the given executable.
 .PP
@@ -259,6 +274,40 @@ Please see the command line parameter for \fB-f\fP, which is identical.
 .nf
     fsvs -o filter=mtime
 .fi
+.PP
+.SH "Trimming the list of deleted entries"
+.PP
+If you remove a directory, all entries below are implicitly known to be deleted, too. To make the \fBstatus\fP output shorter there's the \fCall_removed\fP option; which, if set to \fCyes\fP, will cause children of removed entries to be omitted.
+.PP
+Example for the config file: 
+.PP
+.nf
+    all_removed=yes
+
+.fi
+.PP
+.SH "Change detection"
+.PP
+This options allows to specify the trade-off between speed and accuracy.
+.PP
+A file with a changed size can immediately be known as changed; but if only the modification time is changed, this is not so easy. Per default FSVS does a MD5 check on the file in this case; if you don't want that, or if you want to do the checksum calculation for \fBevery\fP file (in case a file has changed, but its mtime not), you can use this option to change FSVS' behaviour.
+.PP
+On the command line there's a shortcut for that: for every \fC'-C'\fP another check in this option is chosen.
+.PP
+The recognized specifications are noneResets the check bitmask to 'no checks'. file_mtimeCheck files for modifications via MD5 if the mtime is different - default dirCheck all directories for new entries - this happens normally if a directory ha allfilesCheck \fBall\fP files with MD5 for changes (\fCtripwire\fP -like operation). fullAll available checks. 
+.PP
+You can give multiple options; they're accumulated unless overridden by \fCnone\fP. 
+.PP
+.nf
+    fsvs -o change_check=allfiles status
+
+.fi
+.PP
+.PP
+\fBNote:\fP
+.RS 4
+\fIcommit\fP and \fIupdate\fP set additionally the \fCdir\fP option, to avoid missing new files.
+.RE
 .PP
 .SH "Setting warning behaviour"
 .PP
@@ -280,10 +329,16 @@ With this parameter you can tell \fCfsvs\fP that it should load its libraries fr
 This is used for recovery; see the example in \fBRecovery for a non-booting system\fP.
 .PP
 So how does this work?
+.PD 0
+
 .IP "\(bu" 2
-The internal data paths derived from \fC$FSVS_WAA\fP and \fC$FSVS_CONF\fP use the value given for \fCsoftroot\fP as a base directory, if they do not already start with it. (If that creates a conflict for you, eg. in that you want to use \fC/var\fP as the \fCsoftroot\fP, and your \fC$FSVS_WAA\fP should be \fC/var/fsvs\fP, you can make the string comparison fail by using \fC/./var\fP for either path.)
+The internal data paths derived from \fC$FSVS_WAA\fP and \fC$FSVS_CONF\fP use the value given for \fCsoftroot\fP as a base directory, if they do not already start with it. 
+.br
+ (If that creates a conflict for you, eg. in that you want to use \fC/var\fP as the \fCsoftroot\fP, and your \fC$FSVS_WAA\fP should be \fC/var/fsvs\fP, you can make the string comparison fail by using \fC/./var\fP for either path.)
+.PP
+
 .IP "\(bu" 2
-When a directory name for \fC$FSVS_CONF\fP or \fC$FSVS_WAA\fP is derived from some file path, the part matching \fCsoftroot\fP is cut off, so that the generated names match the situation after rebooting.
+When a directory name for \fC$FSVS_CONF\fP or \fC$FSVS_WAA\fP is derived from some file path, the part matching \fCsoftroot\fP is cut off, so that the generated names match the situation after rebooting. 
 .PP
 .PP
 Previously you'd have to \fBexport\fP your data back to the filesystem and call \fBurls\fP \fC'fsvs urls'\fP and \fCfsvs\fP \fBsync-repos\fP again, to get the WAA data back.
@@ -293,6 +348,8 @@ Previously you'd have to \fBexport\fP your data back to the filesystem and call 
 A plain \fCchroot()\fP would not work, as some needed programs (eg. the decoder for update, see \fBSpecial property names\fP) would not be available.
 .PP
 The easy way to understand \fCsoftroot\fP is: If you want to do a \fCchroot()\fP into the given directory (or boot with it as \fC/\fP), you'll want this set.
+.PP
+As this value is used for finding the correct working copy root (by trying to find a \fBconf-path\fP, it cannot be set from a per-wc config file. Only the environment, global configuration or command line parameter make sense.
 .RE
 .PP
 .SH "'fsvs log' revision limit"
@@ -312,17 +369,19 @@ So this command is mostly useful to get more than the default number of revision
 .SH "'fsvs log' output format"
 .PP
 You can modify aspects of the \fBfsvs log\fP output format by setting the \fClog_output\fP option to a combination of these flags:
+.PD 0
+
 .IP "\(bu" 2
 \fCcolor:\fP This uses color in the output, similar to \fCcg-log\fP (cogito-log); the header and separator lines are highlighted. 
 .PP
 \fBNote:\fP
 .RS 4
-This uses ANSI escape sequences, and tries to restore the default color; if you know how to do that better (and more compatible), please tell the developer mailing list.
+This uses ANSI escape sequences, and tries to restore the default color; if you know how to do that better (and more compatible), please tell the developer mailing list. 
 .RE
 .PP
 
 .IP "\(bu" 2
-\fCindent:\fP Additionally you can shift the log message itself a space to the right, to make the borders clearer.
+\fCindent:\fP Additionally you can shift the log message itself a space to the right, to make the borders clearer. 
 .PP
 .PP
 Furthermore the value \fCnormal\fP is available; this turns off all special handling.
@@ -345,7 +404,7 @@ If you'd like to have the output of \fBstatus\fP sorted, you can use the option 
 .PP
 \fBNote:\fP
 .RS 4
-If \fCfsvs\fP aborts with an error during \fBstatus\fP output, you might want to turn this option off again (eg. on the commandline with \fC-odir_sort=no\fP) to see where \fCfsvs\fP stops.
+If \fCFSVS\fP aborts with an error during \fBstatus\fP output, you might want to turn this option off again, to see where \fCfsvs\fP stops; the easiest way is on the commandline with \fC-odir_sort=no\fP.
 .RE
 .PP
 .SH "Author"
@@ -369,6 +428,12 @@ Empty strings are ignored; that allows an \fC/etc/fsvs/config\fP like this:
 .fi
 .PP
  that would override the config values.
+.PP
+\fBNote:\fP
+.RS 4
+Your \fCsshd_config\fP needs the \fCPermitUserEnvironment\fP setting; you can also take a look at the \fCAcceptEnv\fP and \fCSendEnv\fP documentation.
+.RE
+.PP
 .SH "Destination URL for commit"
 .PP
 If you defined multiple URLs for your working copy, \fCFSVS\fP needs to know which URL to commit to.
@@ -497,10 +562,12 @@ As in the subversion command line client \fCsvn\fP the auxiliary files are seen 
 Like with \fBdiff\fP, the \fCmerge\fP operation is not done internally in FSVS.
 .PP
 To have better control
+.PD 0
+
 .IP "\(bu" 2
-\fCmerge_prg\fP: The executable name, default \fC'merge'\fP.
+\fCmerge_prg\fP: The executable name, default \fC'merge'\fP. 
 .IP "\(bu" 2
-\fCmerge_opt\fP: The default options, default \fC'-A'\fP.
+\fCmerge_opt\fP: The default options, default \fC'-A'\fP. 
 .PP
 .PP
 The option \fC'-p'\fP is always used: 
@@ -513,7 +580,7 @@ The option \fC'-p'\fP is always used:
 .SH "Path definitions for the config and WAA area"
 .PP
 .PP
-The path given here is used to store the persistent configuration data needed by FSVS; please see \fBFiles used by fsvs\fP and \fBPriorities for option setting\fP for more details, and the \fBUsing an alternate root directory\fP parameter as well as the \fBRecovery for a non-booting system\fP for further discussion.
+The paths given here are used to store the persistent configuration data needed by FSVS; please see \fBFiles used by fsvs\fP and \fBPriorities for option setting\fP for more details, and the \fBUsing an alternate root directory\fP parameter as well as the \fBRecovery for a non-booting system\fP for further discussion.
 .PP
 .PP
 .nf
@@ -523,9 +590,22 @@ The path given here is used to store the persistent configuration data needed by
 .PP
 \fBNote:\fP
 .RS 4
-Please note that these paths can be given \fBonly\fP as environment variables (\fC$FSVS_CONF\fP resp. \fC$FSVS_WAA\fP) or as command line parameter; settings in config files are ignored. 
+Please note that these paths can be given \fBonly\fP as environment variables (\fC$FSVS_CONF\fP resp. \fC$FSVS_WAA\fP) or as command line parameter; settings in config files are ignored.
 .RE
 .PP
+.SH "Configuration directory for the subversion libraries"
+.PP
+This path specifies where the subversion libraries should take their configuration data from; the most important aspect of that is authentication data, especially for certificate authentication.
+.PP
+The default value is \fC$FSVS_CONF/auth/\fP.
+.PP
+\fC/etc/fsvs/config\fP could have eg. 
+.PP
+.nf
+    config_dir=/root/.subversion
 
+.fi
+.PP
+ 
 .PP
 

@@ -1,0 +1,82 @@
+.TH "FSVS - URL format" 5 "29 Oct 2008" "Version trunk:2782" "fsvs" \" -*- nroff -*-
+.ad l
+.nh
+.SH NAME
+Format of URLs \- The given URLs are 'overlayed' according to their priority, and they get a name (to ease updating only parts).
+.PP
+Such an \fIextended URL\fP has the form 
+.PP
+.nf
+   ['name:'{name},]['target:'{t-rev},]['prio:'{prio},]URL
+
+.fi
+.PP
+ where URL is a standard URL known by subversion -- something like \fChttp://....\fP, \fCsvn://...\fP or \fCsvn+ssh://...\fP.
+.PP
+The arguments before the URL are optional and can be in any order; the URL must be last.
+.PP
+Example: 
+.PP
+.nf
+   name:perl,prio:5,svn://...
+
+.fi
+.PP
+ or, using abbreviations, 
+.PP
+.nf
+   N:perl,P:5,T:324,svn://...
+
+.fi
+.PP
+.PP
+Please mind that the full syntax is in lower case, whereas the abbreviations are capitalized! 
+.br
+ Internally the \fC\fP: is looked for, and if the part before this character is a known keyword, it is used. 
+.br
+ As soon as we find an unknown keyword we treat it as an URL, ie. stop processing.
+.PP
+The priority is in reverse numeric order - the lower the number, the higher the priority. (See \fC\fBurl__current_has_precedence()\fP\fP )
+.SH "Why a priority?"
+.PP
+When we have to overlay several URLs, we have to know \fBwhich\fP URL takes precedence - in case the same entry is in more than one. \fB(Which is \fBnot\fP recommended!)\fP
+.SH "Why a name?"
+.PP
+We need a name, so that the user can say '<b>commit all outstanding changes to the repository at URL x</b>', without having to remember the full URL. After all, this URL should already be known, as there's a list of URLs to update from.
+.PP
+You should only use alphanumeric characters and the underscore here; or, in other words, \fC\\w\fP or \fC\fP[a-zA-Z0-9_]. (Whitespace, comma and semicolon get used as separators.)
+.SH "What can I do with the target revision?"
+.PP
+Using the target revision you can tell fsvs that it should use the given revision number as destination revision - so update would go there, but not further. Please note that the given revision number overrides the \fC-r\fP parameter; this sets the destination for all URLs.
+.PP
+The default target is \fCHEAD\fP.
+.PP
+\fBNote:\fP
+.RS 4
+In subversion you can enter \fCURL@revision\fP - this syntax may be implemented in fsvs too. (But it has the problem, that as soon as you have a \fC@\fP in the URL, you \fBmust\fP give the target revision everytime!)
+.RE
+.PP
+.SH "There's an additional internal number - why that?"
+.PP
+This internal number is not for use by the user. It is just used to have an unique identifier for an URL, without using the full string.
+.PP
+\fBNote:\fP
+.RS 4
+On my system the package names are on average 12.3 characters long (1024 packages with 12629 bytes, including newline): 
+.PP
+.nf
+   COLUMNS=200 dpkg-query -l | cut -c5- | cut -f1 -d' ' | wc
+
+.fi
+.PP
+.RE
+.PP
+So if we store an \fIid\fP of the url instead of the name, we have approx. 4 bytes per entry (length of strings of numbers from 1 to 1024). Whereas we'd now use 12.3 characters, that's a difference of 8.3 per entry.
+.PP
+Multiplied with 150 000 entries we get about 1MB difference in filesize of the dir-file. Not really small ...
+.PP
+Currently we use about 92 bytes per entry. So we'd (unnecessarily) increase the size by about 10%.
+.PP
+That's why there's an \fBurl_t::internal_number\fP. 
+.PP
+

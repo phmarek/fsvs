@@ -11,14 +11,14 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.16/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 1690 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.17/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 1951 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
 CFLAGS	:= @CFLAGS@
 CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"' 
 LDFLAGS	:= @LDFLAGS@
-FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_ra-1 -lpcre -lgdbm
+FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm
 
 ifdef RPATH
 LDFLAGS	+= -Wl,-rpath,$(RPATH)
@@ -55,6 +55,7 @@ endif
 tags:	$(C_FILES) $(wildcard *.h)
 	@echo "     $@"
 	@-ctags $^
+	@echo ":au BufNewFile,BufRead *.c syntax keyword Constant" $(shell grep -v "^!" < $@ | cut -f1 | grep _) > .vimrc
 .IGNORE: tags
 clean:
 	rm -f *.o *.s $(D_FILES) $(DEST) 2> /dev/null || true
@@ -79,22 +80,24 @@ exec_prefix= @exec_prefix@
 prefix	= @prefix@
 mandir	= @mandir@
 install:
-	for d in /etc/fsvs /var/spool/fsvs $(bindir) ; do test -d $d || mkdir $d ; done
+	for d in /etc/fsvs /var/spool/fsvs $(bindir) ; do test -d $$d || mkdir -p $$d; done
 	cp -a $(DEST) $(bindir)
 #	cp -a ../doc/fsvs.1 $(mandir)
 
 # No automatic rebuild (?)
 #../doc/USAGE: $(C_FILES) $(H_FILES)
 #.PHONY: ../doc/USAGE
-DOXDIR=../../www/doxygen/html/
-MANDIR=../../www/doxygen/man/man1/
+DOXDIR=../../doxygen/html/
+MANDIR=../../doxygen/man/man1/
 MANDEST=../doc/
-DOXFLAG=../../www/doxygen/html/index.html
+DOXFLAG=../../doxygen/html/index.html
 $(DOXFLAG):
 	( cat doxygen-data/Doxyfile ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
 	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
 	# Change the /§* to the correct /*
 	cd $(DOXDIR) && perl -i.bak -pe '1 while s#([/*])\xc2?\xa7([/*])#\1\2#;' *.html
+	cd $(MANDIR) && perl -i.bak -pe '1 while s#([/*])\xc2?\xa7([/*])#\1\2#;' *.?
+	rm $(DOXDIR)/*.bak $(DOXDIR)/html-doc.zip || true
 	cd $(DOXDIR)/.. && zip -rq9 html-doc.zip html -x 'html/.svn/*' && tar -cf html-doc.tar --exclude .svn html && bzip2 -vkf9 html-doc.tar && gzip -vf9 html-doc.tar
 $(DOXDIR)/group__cmds.html: $(DOXFLAG)
 	touch $@
@@ -102,16 +105,17 @@ $(DOXDIR)/group__ignpat.html: $(DOXFLAG)
 	touch $@
 
 # Fix for badly generated man page (Doxygen)
-# Some other idea? Is there some other workarount?
+# Some other idea? Is there some other workaround?
 $(MANDEST)/fsvs.1: $(MANDIR)/cmds.1
-	perl -pe 's#^Commands and .*\\- (.SH "SYNOPSIS")#fsvs - fast versioning tool\n\1#' $< > $@
-#	cp -a $< $@
-$(MANDEST)/fsvs-options.5: $(MANDIR)/options.1
-	cp -a $< $@
+	tools/man-repair.pl $@ "FSVS - fast versioning tool" < $<
 $(MANDEST)/fsvs-howto-backup.5: $(MANDIR)/howto_backup.1
-	cp -a $< $@
+	tools/man-repair.pl $@ "FSVS - Backup HOWTO" < $<
 $(MANDEST)/fsvs-howto-master_local.5: $(MANDIR)/howto_master_local.1
-	cp -a $< $@
+	tools/man-repair.pl $@ "FSVS - Master/Local HOWTO" < $<
+$(MANDEST)/fsvs-options.5: $(MANDIR)/options.1
+	tools/man-repair.pl $@ "FSVS - Options and configfile" < $<
+$(MANDEST)/fsvs-url-format.5: $(MANDIR)/url_format.1
+	tools/man-repair.pl $@ "FSVS - URL format" < $<
 
 ../doc/USAGE: $(DOXDIR)/group__cmds.html
 	dev/dox2txt.pl $< > $@
@@ -120,8 +124,10 @@ $(MANDEST)/fsvs-howto-master_local.5: $(MANDIR)/howto_master_local.1
 doc.g-c: ../doc/USAGE
 	# Generate static text strings
 	( cat $< ; echo "end" ) | dev/make_doc.pl > $@
-docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c $(MANDEST)/fsvs.1 $(MANDEST)/fsvs-options.5 
-# $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
+docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c 
+docs: $(MANDEST)/fsvs.1 $(MANDEST)/fsvs-options.5 
+docs: $(MANDEST)/fsvs-url-format.5 
+docs: $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 .PHONY: docs $(DOXFLAG)
 
 
@@ -142,7 +148,7 @@ endif
 
 # For debugging: generate preprocessed, generate assembler
 %.s:	%.c
-	$(CC) $(CFLAGS) -S -o $@ $< || true
+	$(CC) $(CFLAGS) -S -fverbose-asm -o $@ $< || true
 %.P	: %.c
 	$(CC) $(CFLAGS) -E -o $@ $<
 

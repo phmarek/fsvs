@@ -73,8 +73,9 @@ int info__action(struct estat *sts)
 	sts->was_output=0;
 	sts->flags |= RF_PRINT;
 
+	/* TODO: entry_type is already overwritten by ops__stat_to_action() */
 	STOPIF( st__status(sts), NULL);
-	STOPIF( st__print_entry_info(sts, 1), NULL);
+	STOPIF( st__print_entry_info(sts), NULL);
 
 ex:
 	return status;

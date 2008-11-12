@@ -29,9 +29,8 @@ if [[ `$BINdflt st | wc -l` -le 1 ]]
 then
 	$SUCCESS "all ignored"
 else
-	$ERROR_NB "Not all entries ignored?"
 	$BINdflt st
-	exit 1
+	$ERROR "Not all entries ignored?"
 fi
 
 
@@ -56,10 +55,12 @@ $BINq add $file1
 
 
 # The directory is marked as added, too.
-if [[ `$BINdflt st | egrep "^n[m.]\.\." | wc -l` -eq 3 ]]
+$BINdflt st | egrep "^n[m.]\.\." > $logfile
+if [[ `wc -l < $logfile` -eq 3 ]]
 then
 	$SUCCESS "3 added"
 else
+	cat $logfile
 	$ERROR "not added?"
 fi
 
@@ -68,9 +69,8 @@ if [[ `egrep "^n\.\.\." < $logfile | grep $PRE | wc -l` -eq 2 ]]
 then
 	$SUCCESS "2 committed"
 else
-	$ERROR_NB "adds not committed!"
 	cat $logfile
-	exit 1
+	$ERROR "adds not committed!"
 fi
 
 if [[ `svn ls $REPURL/$DIR | grep $PRE | wc -l` -eq 2 ]]
@@ -125,8 +125,7 @@ fi
 
 if svn ls $REPURL/$file2 > $logfile 2>&1
 then 
-	$ERROR_NB "file still exists in the repository!"
-	exit 1
+	$ERROR "file still exists in the repository!"
 else
 	$SUCCESS "file was removed from repository."
 fi
@@ -193,8 +192,18 @@ $BINq	ci -m2
 mkdir lolcat
 $BINdflt add lolcat
 rmdir lolcat
-if [[ `$BINdflt st | grep lolcat | wc -l` -ne 1 ]]
+if [[ `$BINdflt st | grep lolcat | wc -l` -eq 1 ]]
 then
+  $SUCCESS "added directory shown after rmdir."
+else
   $ERROR "added directory not shown after rmdir."
+fi
+
+$BINdflt info lolcat | wc -l
+if [[ `$BINdflt info lolcat | wc -l` -eq 16 ]]
+then
+  $SUCCESS "added directory info ok."
+else
+  $ERROR "added directory after rmdir has wrong info output."
 fi
 

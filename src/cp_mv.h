@@ -19,9 +19,9 @@
 work_t cm__work;
 /** For automatically finding relations. */
 work_t cm__detect;
+/** For removing copyfrom relations. */
+work_t cm__uncopy;
 
-/** Worker function. */
-action_t cm__action;
 
 /** Returns the source of the given entry. */
 int cm__get_source(struct estat *sts, char *name,

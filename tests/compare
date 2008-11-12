@@ -7,6 +7,8 @@ $d=shift;
 # !! crashes syntax highlightning in vim
 $expect_fail= ! !(shift());
 
+$ignore_dmtime= shift();
+
 # find /tmp/fsvs-test-1000/wc-1/ -printf "% y%04m %7s %5G %5U %T+ %P\0\t%l\0\n"
 # strace -o /tmp/asdga -f -tt 
 $cmd=qq'LANG=C rsync -ain --delete "$s" "$d" -c';
@@ -21,6 +23,8 @@ for (`$cmd`)
 
 # ignore mtime of links
   next if m(\.L\.\.t\.\.\.\.\.\. .* -> );
+# and directories
+  next if $ignore_dmtime && m(\.d\.\.t\.\.\.\.\.\. .*);
 
 # everything else is a change.
 	push @changes, $_;

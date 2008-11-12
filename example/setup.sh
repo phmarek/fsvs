@@ -41,7 +41,7 @@ else
 # Create local filelist, to make "fsvs ps" work.
 	fsvs checkout file://$location/trunk/etc 
 
-  fsvs ignore '/etc/**.dpkg-old' '/etc/**.dpkg-bak'
+  fsvs ignore '/etc/**.dpkg-old' '/etc/**.dpkg-new' '/etc/**.dpkg-dist' '/etc/**.dpkg-bak'
   fsvs ignore '/etc/**.bak' '/etc/**.old' '/etc/**~' '/**.swp'
 # easy to remake, no big deal (?)
   fsvs ignore '/etc/ssh/ssh_host_*key'
@@ -64,6 +64,9 @@ else
 # Are there non-shadow systems?
 #  fsvs ignore './shadow' './gshadow'
   fsvs ps fsvs:commit-pipe /var/lib/fsvs-versioning/scripts/shadow-clean.pl shadow gshadow 
+
+# Ignore entries that are not world-readable.
+	fsvs ignore 'm:4:0'
 
 # Lock-files are not needed, are they?
   fsvs ignore './**.lock' './**.LOCK'

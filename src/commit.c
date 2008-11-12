@@ -171,7 +171,7 @@ int ci__action(struct estat *sts)
 			"!The entry \"%s\" is still marked as conflict.", path);
 
 	if (sts->entry_status ||
-			(sts->flags & (RF_ADD | RF_UNVERSION | RF_PUSHPROPS)) )
+			(sts->flags & RF___COMMIT_MASK) )
 		ops__mark_parent_cc(sts, entry_status);
 
 	STOPIF( st__progress(sts), NULL);
@@ -197,7 +197,7 @@ void ci___unset_copyflags(struct estat *root)
 	/* Set the current url for this entry. */
 	root->url=current_url;
 
-	if (root->entry_type == FT_DIR && root->entry_count)
+	if (S_ISDIR(root->st.mode) && root->entry_count)
 	{
 		sts=root->by_inode;
 		while (*sts)
@@ -318,7 +318,7 @@ svn_error_t *ci___set_props(void *baton,
 
 	status=0;
 	/* The meta-data properties are not sent for a symlink. */
-	if (sts->entry_type != FT_SYMLINK)
+	if (!S_ISLNK(sts->updated_mode))
 	{
 		/* owner */
 		str=svn_string_createf (pool, "%u %s", 
@@ -397,7 +397,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	STOPIF( ci___send_user_props(baton, sts, 
 				editor->change_file_prop, &db, pool), NULL);
 
-	if (sts->entry_type != FT_SYMLINK)
+	if (!S_ISLNK(sts->updated_mode))
 		STOPIF_SVNERR( ci___set_props, 
 				(baton, sts, editor->change_file_prop, pool) ); 
 
@@ -439,9 +439,9 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	else
 	{
 		has_manber=0;
-		switch (sts->entry_type)
+		switch (sts->st.mode & S_IFMT)
 		{
-			case FT_SYMLINK:
+			case S_IFLNK:
 				STOPIF( ops__link_to_string(sts, filename, &cp), NULL);
 				STOPIF( hlp__local2utf8(cp, &cp, -1), NULL);
 				/* It is not defined whether svn_stringbuf_create copies the string,
@@ -449,14 +449,14 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 				 * Knowing people wanted. */
 				str=svn_stringbuf_create(cp, pool);
 				break;
-			case FT_BDEV:
-			case FT_CDEV:
+			case S_IFBLK:
+			case S_IFCHR:
 				/* See above */
 				/* We only put ASCII in this string */
 				str=svn_stringbuf_create(
 						ops__dev_to_filedata(sts), pool);
 				break;
-			case FT_FILE:
+			case S_IFREG:
 				STOPIF( apr_file_open(&a_stream, filename, APR_READ, 0, pool),
 						"open file \"%s\" for reading", filename);
 
@@ -480,13 +480,13 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 					if (status == 0)
 					{
 						STOPIF( hlp__encode_filter(s_stream, encoder_prop.dptr, 0,
-									&s_stream, &encoder, pool), NULL );
+									filename, &s_stream, &encoder, pool), NULL );
 						encoder->output_md5= &(sts->md5);
 					}
 				}
 				break;
 			default:
-				BUG("invalid/unknown file type 0x%X", sts->entry_type);
+				BUG("invalid/unknown file type 0%o", sts->st.mode);
 		}
 
 		/* for special nodes */
@@ -578,10 +578,10 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	char *filename;
 	char* utf8_filename;
 	svn_error_t *status_svn;
-	struct sstat_t dummy_stat64;
 	char *src_path;
 	svn_revnum_t src_rev;
-
+	struct sstat_t stat;
+  
 
 	status=0;
 	subpool=NULL;
@@ -589,7 +589,6 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	for(i=0; i<dir->entry_count; i++)
 	{
 		sts=dir->by_inode[i];
-
 
 		/* The flags are stored persistently; we have to check whether this 
 		 * entry shall be committed. */
@@ -604,6 +603,8 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		{
 			/* The entry_status is set depending on the do_this_entry already;
 			 * if it's not 0, it's got to be committed. */
+			/* Maybe a child needs attention (with FS_CHILD_CHANGED), so we have 
+			 * to recurse.  */
 		}
 		else
 			/* Completely ignore item if nothing to be done. */
@@ -620,10 +621,12 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		/* as the path needs to be canonical we strip the ./ in front */
 		STOPIF( hlp__local2utf8(filename+2, &utf8_filename, -1), NULL );
 
-		STOPIF( st__status(sts), NULL);
+		DEBUGP("%s: action %X, updated mode 0%o, flags %X, filter %d", 
+				filename, sts->entry_status, sts->updated_mode, sts->flags,
+				ops__allowed_by_filter(sts));
 
-		DEBUGP("%s: action is %X, type is %X, flags %X", 
-				filename, sts->entry_status, sts->entry_type, sts->flags);
+		if (ops__allowed_by_filter(sts))
+			STOPIF( st__status(sts), NULL);
 
 		exists_now= !(sts->flags & RF_UNVERSION) && 
 			( (sts->entry_status & (FS_NEW | FS_CHANGED | FS_META_CHANGED)) ||
@@ -675,7 +678,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		/* access() would possibly be a bit lighter, but doesn't work
 		 * for broken symlinks. */
 		/* TODO: Could we use FS_REMOVED here?? */
-		if (hlp__lstat(filename, &dummy_stat64))
+		if (hlp__lstat(filename, &stat))
 		{
 			/* If an entry doesn't exist, but *should*, as it's marked RF_ADD,
 			 * we fail (currently).
@@ -688,11 +691,20 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			continue;
 		}
 
+		/* In case this entry is a directory that's only done because of its 
+		 * children we shouldn't change its known data - we'd silently change 
+		 * eg. the mtime. */
+		if (sts->do_this_entry && ops__allowed_by_filter(sts))
+		{
+			sts->st=stat;
+			DEBUGP("set st for %s", sts->name);
+		}
+
 
 		/* We need a baton. */
 		baton=NULL;
-		/* If this entry has the RF_ADD flag set, is the base entry for a copy, 
-		 * or is FS_NEW, it is new (as far as subversion is concerned).
+		/* If this entry has the RF_ADD or RF_COPY_BASE flag set, or is FS_NEW, 
+		 * it is new (as far as subversion is concerned).
 		 * If this is an implicitly copied entry, subversion already knows 
 		 * about it, so use open_* instead of add_*. */
 		if ((sts->flags & (RF_ADD | RF_COPY_BASE) ) || 
@@ -703,7 +715,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		else
 		{
 			status_svn=
-				(sts->entry_type == FT_DIR ?
+				(S_ISDIR(sts->updated_mode) ?
 				 editor->open_directory : editor->open_file)
 				( utf8_filename, dir_baton, 
 					current_url->current_rev,
@@ -718,7 +730,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 				 * Now these directories need not exist in URL2 - we create them on 
 				 * demand.  
 				 * */
-				if (sts->entry_type == FT_DIR &&
+				if (S_ISDIR(sts->st.mode) &&
 						(
 						 status_svn->apr_err == SVN_ERR_FS_PATH_SYNTAX ||
 						 status_svn->apr_err == SVN_ERR_FS_NOT_DIRECTORY ) &&
@@ -731,7 +743,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 				}
 				else
 					STOPIF_CODE_ERR(1, status_svn->apr_err,
-							sts->entry_type == FT_DIR ?
+							S_ISDIR(sts->st.mode) ?
 							"open_directory" : "open_file");
 			}
 
@@ -770,15 +782,17 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 					filename, src_path, src_rev);
 			/** \name STOPIF_SVNERR_INDIR */
 			STOPIF_SVNERR_TEXT( 
-					(sts->entry_type == FT_DIR ?
+					(S_ISDIR(sts->updated_mode) ?
 					 editor->add_directory : editor->add_file),
-					sts->entry_type == FT_DIR ? "add_directory" : "add_file",
 					(utf8_filename, dir_baton, 
 					 src_path, src_rev, 
-					 subpool, &baton) 
-					);
+					 subpool, &baton),
+					"%s(\"%s\", source=\"%s\"@%s)",
+					S_ISDIR(sts->updated_mode) ? "add_directory" : "add_file",
+					filename, src_path, hlp__rev_to_string(src_rev));
 			DEBUGP("baton for new %s %p (parent %p)", 
 					sts->name, baton, dir_baton);
+
 
 			/* If it's copy base, we need to clean up all flags below; else we 
 			 * just remove an (ev. set) add-flag. */
@@ -787,6 +801,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			else
 			{
 				sts->flags &= ~RF_ADD;
+
 				sts->entry_status |= FS_NEW | FS_META_CHANGED;
 			}
 		}
@@ -795,7 +810,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		committed_entries++;
 		DEBUGP("doing changes, flags=%X", sts->flags);
 		/* Now we have a baton. Do changes. */
-		if (sts->entry_type == FT_DIR)
+		if (S_ISDIR(sts->updated_mode))
 		{
 			STOPIF_SVNERR( ci__directory, (editor, sts, baton, subpool) );
 			STOPIF_SVNERR( editor->close_directory, (baton, subpool) );
@@ -806,47 +821,13 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			STOPIF_SVNERR( editor->close_file, (baton, NULL, subpool) );
 		}
 
-		/* Update data structures.
-		 * This must be done here, as updating a directory will change
-		 * its mtime, link count, ...
-		 * In case a directory had many changed files it's possible that
-		 * the old filename cache is no longer valid, so get it afresh. */
-		STOPIF( ops__build_path(&filename, sts), NULL);
-		STOPIF( hlp__lstat(filename, &(sts->st)), NULL);
 
+		/* Now this paths exists in this URL. */
 		if (url__current_has_precedence(sts->url))
 		{
 			DEBUGP("setting URL of %s", filename);
 			sts->url=current_url;
 			sts->repos_rev = SET_REVNUM;
-		}
-	}
-
-
-	/* If we try to send properties for the root directory, we get "out of 
-	 * date" ... even if nothing changed. So don't do that now, until we
-	 * know a way to make that work. 
-	 *
-	 * Problem case: user creates an empty directory in the repository "svn 
-	 * mkdir url:///", then sets this directory as base, and we try to commit - 
-	 * "it's empty, after all".
-	 * Needing an update is not nice - but maybe what we'll have to do. */
-	if (dir->parent)
-	{
-		/* Do the meta-data and other properties of the current directory. */
-		// TODO			if (sts->do_tree)
-		STOPIF( ci___send_user_props(dir_baton, dir, 
-					editor->change_dir_prop, NULL, pool), NULL);
-
-		if (dir->entry_status & (FS_META_CHANGED | FS_NEW))
-			STOPIF_SVNERR( ci___set_props, 
-					(dir_baton, dir, editor->change_dir_prop, pool) ); 
-
-		if (url__current_has_precedence(dir->url))
-		{
-			DEBUGP("setting URL");
-			dir->url=current_url;
-			dir->repos_rev=SET_REVNUM;
 		}
 	}
 
@@ -858,10 +839,47 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	 * structure must possibly be built in the repository, so we have to do 
 	 * each layer, and after a commit we take the current timestamp -- so we 
 	 * wouldn't see changes that happened before the partly commit.) */
-	if (dir->do_this_entry)
-		dir->flags &= ~RF_CHECK;
-	else
+	if (! (dir->do_this_entry && ops__allowed_by_filter(dir)) )
 		dir->flags |= RF_CHECK;
+	else
+		dir->flags &= ~RF_CHECK;
+
+
+	/* That this entry belongs to this URL has already been set by the 
+	 * parent loop.  */
+
+
+	/* Given this example:
+	 *   $ mkdir -p dir/sub/subsub
+	 *   $ touch dir/sub/subsub/file
+	 *   $ fsvs ci dir/sub/subsub
+	 *
+	 * Now "sub" gets committed because of its children; as having a 
+	 * directory *without* meta-data in the repository is worse than having 
+	 * valid data set, we push the meta-data properties for *new* 
+	 * directories, and otherwise if they should be done and got something 
+	 * changed. */
+	/* Regarding the "dir->parent" check: If we try to send properties for 
+	 * the root directory, we get "out of date" ... even if nothing changed.  
+	 * So don't do that now, until we know a way to make that work. 
+	 *
+	 * Problem case: user creates an empty directory in the repository "svn 
+	 * mkdir url:///", then sets this directory as base, and we try to commit - 
+	 * "it's empty, after all".
+	 * Needing an update is not nice - but maybe what we'll have to do. */
+	if ((dir->do_this_entry && 
+				ops__allowed_by_filter(dir) && 
+				dir->parent &&
+				/* Are there properties to push? */
+				(dir->entry_status & (FS_META_CHANGED | FS_PROPERTIES))) ||
+			(dir->entry_status & FS_NEW))
+	{
+		STOPIF_SVNERR( ci___set_props, 
+				(dir_baton, dir, editor->change_dir_prop, pool) ); 
+
+		STOPIF( ci___send_user_props(dir_baton, dir, 
+					editor->change_dir_prop, NULL, pool), NULL);
+	}
 
 
 ex:
@@ -945,7 +963,10 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	edit_baton=NULL;
 	editor=NULL;
 
-	if (!opt_checksum) opt_checksum++;
+	opt__set_int(OPT__CHANGECHECK, 
+			PRIO_MUSTHAVE,
+			opt__get_int(OPT__CHANGECHECK) | CHCHECK_DIRS | CHCHECK_FILE);
+
 
 	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
 
@@ -990,6 +1011,7 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	STOPIF( url__open_session(NULL), NULL);
 
 
+	only_check_status=2;
 	/* This is the first step that needs some wall time - descending
 	 * through the directories, reading inodes */
 	STOPIF( waa__read_or_build_tree(root, argc, normalized, argv, 
@@ -1047,6 +1069,10 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	/* The whole URL is at the same revision - per definition. */
 	STOPIF_SVNERR( editor->open_root,
 			(edit_baton, current_url->current_rev, global_pool, &root_baton) );
+
+	/* Only children are updated, not the root. Do that here. */
+	if (ops__allowed_by_filter(root))
+		STOPIF( hlp__lstat( root->name, &root->st), NULL);
 
 	committed_entries=0;
 	/* This is the second step that takes time. */

@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+$BINdflt delay
+
+# General ignore patterns are tested somewhere else.
+# Here the mode match is tested.
+
+logfile=$LOGDIR/058.log
+ign_file=`$PATH2SPOOL $WC Ign`
+
+if $BINdflt ignore m:0700:0070 > $logfile 2>&1
+then
+	$ERROR "Wrong match pattern (masks) shouldn't work."
+fi
+if $BINdflt ignore m-7:7 > $logfile 2>&1
+then
+	$ERROR "Wrong match pattern (syntax) shouldn't work."
+fi
+if $BINdflt ignore m:8:7 > $logfile 2>&1
+then
+	$ERROR "Wrong match pattern (octal) shouldn't work."
+fi
+if $BINdflt ignore m:a > $logfile 2>&1
+then
+	$ERROR "Wrong match pattern (non-numeric) shouldn't work."
+fi
+
+
+function T
+{
+	exp=$1
+	shift
+	$INFO "testing $@."
+
+	test -e $ign_file && rm $ign_file
+	$BINdflt ignore "$@"
+	$BINdflt st | grep -v dir > $logfile || true
+	if [[ `wc -l < $logfile` -eq $exp ]]
+	then
+		$SUCCESS "Match mode $@ ok."
+	else
+		cat $logfile
+		$ERROR "Expected $exp lines output for $@."
+	fi
+}
+
+
+date > file
+chmod 0750 file
+
+T 0 './**'
+T 1 't./file' './**'
+T 0 'm:0700:0700,./file'
+T 1 'm:0700:0500,./**'
+T 0 m:0050:0050
+T 1 m:0050:0000
+T 0 m:0007:0000
+
+

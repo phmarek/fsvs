@@ -54,14 +54,14 @@ extern struct waa__entry_blocks_t waa__entry_block;
 /** \defgroup waa_files Files used by fsvs
  * \ingroup compat
  *
- * FSVS uses various files to store its configuration and informations 
+ * \c FSVS uses various files to store its configuration and informations 
  * about the system it is running on.
  *
- * Two file trees are used:
- * - \c /var/spool/fsvs (if not overridden by \ref o_waa "$FSVS_WAA").
+ * Two file trees are used:<ul>
+ * <li>\c /var/spool/fsvs (if not overridden by \ref o_waa "$FSVS_WAA").
  *   The WAA stores volatile data that should not be backed up; the files 
  *   have only lower-case letters.
- * - \c /etc/fsvs (or \ref o_conf "$FSVS_CONF")
+ * <li>\c /etc/fsvs (or \ref o_conf "$FSVS_CONF")
  *   This is used to store configuration data, eg.  for the working copies.  
  *   The names of files stored here have the first letter in upper-case.
  *   Having this data backed-up (eg. along with the rest of the filesystem) 
@@ -69,7 +69,12 @@ extern struct waa__entry_blocks_t waa__entry_block;
  *   The single exception are the \ref dir Files; these are, strictly seen, 
  *   per working copy, but are stored in the spool directory, as they are 
  *   reconstructed on restore and would only give conflicts with old 
- *   versions.
+ *   versions. \n
+ *   Please note that it's entirely fine to keep this directory versioned 
+ *   via \c FSVS, to have the ignore patterns and URL list stored; and in 
+ *   fact that would happen automatically if you have \c /etc as working 
+ *   copy.
+ * </ul>
  *
  * Generally a path can be of (nearly) arbitrary length, and have every 
  * character (except \c NUL [\c \\0]) in it.
@@ -252,8 +257,15 @@ int waa__read_or_build_tree(struct estat *root,
 
 /** Given a list of path arguments the \a base path and relative paths
  * are returned. */
-int waa__find_common_base(int argc, char *args[], 
-		char ***normalized_paths);
+int waa__find_common_base2(int argc, char *args[], 
+		char ***normalized_paths,
+		int put_dotslash);
+/** Wrapper for waa__find_common_base2. */
+static inline int waa__find_common_base(int argc, char *args[], 
+		char **normalized[])
+{
+	return waa__find_common_base2(argc, args, normalized, 0);
+}
 /** Similar to \ref waa__find_common_base(), but allows only specification 
  * of a WC root. */
 int waa__find_base(struct estat *root, int *argc, char ***args);
@@ -302,7 +314,8 @@ int waa__partial_update(struct estat *root,
 		struct waa__entry_blocks_t *blocks);
 
 /** This function traverses the tree and calls the handler function
- * for the marked entries. */
+ * for the marked entries; directories before their children, and in order 
+ * sorted by name.  */
 int waa__do_sorted_tree(struct estat *root, action_t handler);
 
 /** A wrapper around dir__enumerator(), ignoring entries below \c 

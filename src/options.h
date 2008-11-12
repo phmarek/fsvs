@@ -44,8 +44,13 @@ enum opt__settings_e {
 	/** Stop on change.
 	 * See \ref o_stop_change*/
 	OPT__STOP_ON_CHANGE,
-	/** The filter mask as given with \ref o_filter -f. */
+	/** The filter mask as given with \ref o_filter "-f". */
 	OPT__FILTER,
+	/** Whichs change checks to perform, \ref o_chcheck. */
+	OPT__CHANGECHECK,
+	/** Whether all removed entries should be printed as removed, or only the 
+	 * base directory. */
+	OPT__ALL_REMOVED,
 
 	/** Path for debug output.
 	 * See \ref glob_opt_deb. */
@@ -103,6 +108,9 @@ enum opt__settings_e {
 	/** The base path of the configuration area.
 	 * See \ref o_conf. */
 	OPT__CONF_PATH,
+	/** The config directory to use.
+	 * See \ref o_configdir. */
+	OPT__CONFIG_DIR,
 
 	/** End of enum marker. */
 	OPT__COUNT
@@ -148,7 +156,7 @@ typedef int (opt___parse_t)(struct opt__list_t *, char *, enum opt__prio_e);
  * */
 struct opt__list_t {
 	/** Name of the option. */
-	char name[12];
+	char name[16];
 
 	/** At which priority it has been written yet. */
 	enum opt__prio_e prio;
@@ -236,6 +244,8 @@ int opt__load_settings(char *path, char *name, enum opt__prio_e prio);
  * false, or \c no). */
 int opt__doesnt_say_off(const char *string);
 
+/** Return the variable name from an option. */
+char *opt__variable_from_option(enum opt__settings_e which);
 
 /** \name Specific data for single options.
  * @{ */
@@ -270,6 +280,17 @@ enum opt__delay_e {
 /** @} */
 
 
+/** \name List of constants for \ref o_chcheck option.
+ * @{ */
+enum opt__chcheck_e {
+	CHCHECK_NONE			= 0,
+	CHCHECK_FILE			= 1 << 0,
+	CHCHECK_DIRS			= 1 << 1,
+	CHCHECK_ALLFILES	= 1 << 2,
+};
+/** @} */
+
+
 /** \name List of constants for \ref o_conflict option.
  * @{ */
 enum opt__conflict_e {
@@ -289,7 +310,6 @@ enum opt__conflict_e {
  * @{ */
 #define OPT__YES (1)
 #define OPT__NO (0)
-#define OPT__AUTO (-1)
 /** @} */
 
 /** @} */

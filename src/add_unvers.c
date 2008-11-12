@@ -141,6 +141,8 @@
  * */
 
 
+/** General function for \ref add and \ref unversion actions.
+ * This one really handles the entries. */
 int au__action(struct estat *sts)
 {
 	int status;

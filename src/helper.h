@@ -120,6 +120,7 @@ struct encoder_t {
 /** Encode \c svn_stream_t filter. */
 int hlp__encode_filter(svn_stream_t *s_stream, const char *command, 
 		int is_writer,
+		char *path,
 		svn_stream_t **output, 
 		struct encoder_t **encoder_out,
 		apr_pool_t *pool);
@@ -162,5 +163,9 @@ int hlp__delay(time_t start, enum opt__delay_e which);
 int hlp__rename_to_unique(char *fn, char *extension, 
 		const char **unique_name, 
 		apr_pool_t *pool);
+
+
+/** Reads the subversion config file(s), found by \ref o_configdir. */
+int hlp__get_svn_config(apr_hash_t **config);
 
 #endif

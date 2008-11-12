@@ -53,7 +53,7 @@ do
 	done
 
 	$BINdflt up > $logfile
-	$COMPARE $WCBASE$UP_WC/ $WCBASE$CMP_WC/
+	$COMPARE $WCBASE$UP_WC/ $WCBASE$CMP_WC/ 0 ignore_dirmtime
 done
 
 $SUCCESS "Multi-url update test passed."

@@ -19,6 +19,7 @@
 #include <pwd.h>
 #include <apr_file_io.h>
 #include <apr_md5.h>
+#include <subversion-1/svn_config.h>
 
 #include "global.h"
 #include "waa.h"
@@ -1174,6 +1175,7 @@ ex:
  * */
 int hlp__encode_filter(svn_stream_t *s_stream, const char *command, 
 		int is_writer,
+		char *path,
 		svn_stream_t **output, 
 		struct encoder_t **encoder_out,
 		apr_pool_t *pool) 
@@ -1252,6 +1254,9 @@ int hlp__encode_filter(svn_stream_t *s_stream, const char *command,
 		/* \todo: possibly substitute some things in command, like filename or 
 		 * similar. */
 
+		if (path[0] == '.' && path[1] == PATH_SEPARATOR) 
+			path+=2;
+		setenv(FSVS_EXP_CURR_ENTRY, path, 1);
 
 		/* We could do a system in the parent process, but then we'd have to 
 		 * juggle the filedescriptors around. Better to use a childprocess, where 
@@ -1780,7 +1785,7 @@ int hlp__delay(time_t start, enum opt__delay_e which)
 		if (!start) start=time(NULL);
 
 		/* We delay with 25ms accuracy. */
-		while (time(NULL) == start)
+		while (time(NULL) <= start)
 			usleep(25000);
 	}
 
@@ -1830,6 +1835,29 @@ int hlp__rename_to_unique(char *fn, char *extension,
 				*unique_name);
 	}
 
+ex:
+	return status;
+}
+
+
+/** -.
+ * Caches the result, so that the configuration is only fetched a single time.
+ */
+int hlp__get_svn_config(apr_hash_t **config)
+{
+	int status;
+	svn_error_t *status_svn;
+	static apr_hash_t *cfg=NULL;
+
+
+	status=0;
+	/* We assume that a config hash as NULL will never be returned.
+	 * (Else we'd try to fetch it more than once.) */
+	if (!cfg)
+		STOPIF_SVNERR( svn_config_get_config,
+				(&cfg, opt__get_string(OPT__CONFIG_DIR), global_pool));
+
+	*config=cfg;
 ex:
 	return status;
 }

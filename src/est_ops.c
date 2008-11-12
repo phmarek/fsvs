@@ -80,22 +80,7 @@ const char link_spec[]="link ",
 
 static struct free_estat *free_list = NULL;
 
-
-/** -.
- * Depending on \c st->mode one of the \c FT_* constants is returned. */
-inline int ops___filetype(struct sstat_t *st)
-{
-	/* in order of most probable to least */
-	if (S_ISREG(st->mode)) return FT_FILE;
-	if (S_ISDIR(st->mode)) return FT_DIR;
-	if (S_ISLNK(st->mode)) return FT_SYMLINK;
-	if (S_ISCHR(st->mode)) return FT_CDEV;
-	if (S_ISBLK(st->mode)) return FT_BDEV;
-
-	/* socket, pipe - should we do them, too ? */
-	return FT_IGNORE;
-}
-
+ 
 
 /** -.
  * 
@@ -147,8 +132,7 @@ int ops__string_to_dev(struct estat *sts, char *data, char **info)
 #endif
 	}
 
-	sts->st.mode= (sts->st.mode & ~S_IFMT) | mode;
-	sts->entry_type = ops___filetype(& sts->st);
+	sts->updated_mode=sts->st.mode= (sts->st.mode & ~S_IFMT) | mode;
 
 ex:
 	return status;
@@ -198,11 +182,8 @@ char *ops___dev_to_string(struct estat *sts, char delimiter)
 
 /* I'm not fully sure about that. */
 	BUG_ON(!(sts->remote_status & FS_NEW) && 
-			sts->entry_type != FT_BDEV &&
-			sts->entry_type != FT_CDEV,
-			"%s: type is 0x%x, mode is 0%o",
-			sts->name, 
-			sts->entry_type, sts->st.mode);
+			!(S_ISBLK(sts->updated_mode) || S_ISCHR(sts->updated_mode)),
+			"%s: mode is 0%o", sts->name, sts->st.mode);
 
 #ifdef DEVICE_NODES_DISABLED
 	DEVICE_NODES_DISABLED();
@@ -276,10 +257,8 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 		file_status |= FS_META_UMODE;
 
 	/* both of same type ? */
-	ft_old = ops___filetype(old);
-	ft_new = ops___filetype(new);
-
-	sts->entry_type = ft_new;
+	ft_old = old->mode & S_IFMT;
+	ft_new = new->mode & S_IFMT;
 
 	if (ft_old != ft_new)
 	{
@@ -288,18 +267,19 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 	}
 
 	/* same type - compare */
+	BUG_ON(sts->to_be_ignored);
 	switch (ft_new)
 	{
-		case FT_CDEV:
-		case FT_BDEV:
+		case S_IFBLK:
+		case S_IFCHR:
 			DEBUGP("old=%llu new=%llu", (t_ull)old->rdev, (t_ull)new->rdev);
 			file_status |= 
 				(old->rdev == new->rdev) 
 				? FS_NO_CHANGE : FS_REPLACED;
 			break;
 
-		case FT_SYMLINK:
-		case FT_FILE:
+		case S_IFLNK:
+		case S_IFREG:
 			if (old->size != new->size)
 				file_status |= FS_CHANGED;
 			else
@@ -310,7 +290,7 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 				file_status |= FS_LIKELY;
 			break;
 
-		case FT_DIR:
+		case S_IFDIR:
 			/* This entry *could* be changed.
 			 * But as the changed flag is set if a child entry is missing
 			 * or if new entries are found, but never cleared, we don't set 
@@ -320,12 +300,14 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 				file_status |= FS_LIKELY;
 			break;
 
-		case FT_IGNORE:
+		default:
+			BUG_ON(1);
+//		case FT_IGNORE:
 			file_status=FS_NO_CHANGE;
 	}
 
 ex:
-	DEBUGP("change: types 0x%x vs 0x%x; 0x%x=%s", 
+	DEBUGP("change: types 0%o vs 0%o; 0x%x=%s", 
 			ft_old, ft_new,
 			file_status, 
 			st__status_string_fromint(file_status));
@@ -384,7 +366,7 @@ int ops__load_1entry(char **mem_pos, struct estat *sts, char **filename,
 	sts->st.dev=dev;
 	sts->st.ino=this_ino;
 	sts->st.size=size;
-	sts->st.mode=mode;
+	sts->updated_mode=sts->st.mode=mode;
 	sts->old_rev = sts->repos_rev;
 
 	/* The %n are not counted on glibc.
@@ -427,7 +409,6 @@ int ops__load_1entry(char **mem_pos, struct estat *sts, char **filename,
 				"Parsing the md5 failed");
 	}
 
-	sts->entry_type = ops___filetype( &(sts->st) );
 
 	/* Skip over exactly one space - else we'd loose information about 
 	 * filenames starting with whitespaces. */
@@ -770,10 +751,10 @@ int ops__find_entry_byname(struct estat *dir, const char *name,
 
 	if (sts_p)
 		DEBUGP("found %s on %p; ignored: 0x%x", name, sts_p,
-				(*sts_p)->entry_type);
+				(*sts_p)->to_be_ignored);
 
 	/* don't return removed entries, if they're not wanted */
-	*sts=sts_p && (ignored_too || (*sts_p)->entry_type != FT_IGNORE) ?
+	*sts=sts_p && (!(*sts_p)->to_be_ignored || ignored_too) ?
 		*sts_p : NULL;
 
 	if (!*sts)
@@ -931,7 +912,7 @@ int ops__free_entry(struct estat **sts_p)
 	status=0;
 	if (sts->old)
 		STOPIF( ops__free_entry(& sts->old), NULL);
-	if (S_ISDIR(sts->st.mode))
+	if (S_ISDIR(sts->updated_mode))
 	{
 		BUG_ON(sts->entry_count && !sts->by_inode);
 
@@ -941,7 +922,7 @@ int ops__free_entry(struct estat **sts_p)
 		IF_FREE(sts->by_inode);
 		IF_FREE(sts->by_name);
 		IF_FREE(sts->strings);
-		sts->st.mode=0;
+		sts->updated_mode=0;
 	}
 
 	/* Clearing the memory here serves no real purpose;
@@ -1111,7 +1092,7 @@ ex:
 
 
 /** -.
- * An entry is marked by having \c entry_type==FT_IGNORE; and such entries 
+ * An entry is marked by having estat::to_be_ignored set; and such entries 
  * are removed here.
  *
  * If \a fast_mode is set, the entries are get removed from the list are 
@@ -1132,7 +1113,7 @@ int ops__free_marked(struct estat *dir, int fast_mode)
 	new_count=0;
 	for(i=0; i<dir->entry_count; i++)
 	{
-		if ((*src)->entry_type != FT_IGNORE)
+		if (!(*src)->to_be_ignored)
 		{
 			*dst=*src;
 			dst++;
@@ -1263,7 +1244,6 @@ int ops__traverse(struct estat *current, char *fullpath,
 			sts->st.mode=S_IFDIR | 0700;
 			sts->st.size=0;
 			sts->entry_count=0;
-			sts->entry_type=FT_DIR;
 			sts->parent=current;
 			/* Add that directory with the next commit. */
 			sts->flags=sts_flags | RF_ISNEW;
@@ -1286,32 +1266,37 @@ ex:
 
 
 /** -.
- * \a fullpath is optional; if not set, the path is generated. 
  *
  * The parent directory should already be done, so that removal of whole 
  * trees is done without doing unneeded \c lstat()s.
  *
- * Depending on \c opt_checksum a file might be checked for changes by a 
- * MD5 comparision.
+ * Depending on \c o_chcheck a file might be checked for changes by a MD5 
+ * comparision.
  *
  * Per default \c only_check_status is not set, and the data from \c 
  * lstat() is written into \a sts. Some functions need the \b old values 
- * and can set this flag; then only \c entry_status is modified. */
-int ops__update_single_entry(struct estat *sts, char *fullpath)
+ * and can set this flag; then only \c entry_status is modified.
+ *
+ * If \a output is not NULL, then it is overwritten, and \a sts->st is not 
+ * changed - independent of \c only_check_status. In case of a removed 
+ * entry \a *output is not changed. */
+int ops__update_single_entry(struct estat *sts, struct sstat_t *output)
 {
 	int status;
 	struct sstat_t st;
 	int i;
+	char *fullpath;
 
-	/* now get the path, and stat() */
-	if (!fullpath)
-		STOPIF( ops__build_path(&fullpath, sts), NULL);
+
+	STOPIF( ops__build_path(&fullpath, sts), NULL);
 
 	/* If we see that the parent has been removed, there's no need
 	 * to check this entry - the path will surely be invalid. */
 	if (sts->parent)
 		if (sts->parent->entry_status & FS_REMOVED)
+		{
 			goto removed;
+		}
 
 	/* Check for current status */
 	status=hlp__lstat(fullpath, &st);
@@ -1327,6 +1312,10 @@ int ops__update_single_entry(struct estat *sts, char *fullpath)
 			STOPIF(status, "cannot lstat(%s)", fullpath);
 
 removed:
+		/* Re-set the values, if needed */
+		if (st.mode)
+			memset(&st, 0, sizeof(st));
+
 		sts->entry_status=FS_REMOVED;
 		/* Only ENOENT gets here, and that's ok. */
 		status=0;
@@ -1337,80 +1326,120 @@ removed:
 		sts->entry_status=ops__stat_to_action(sts, &st);
 
 		/* May we print a '?' ? */
-		if ( (opt_checksum==1 && (sts->entry_status & FS_LIKELY)) ||
-				(opt_checksum>1) )
+		if ( ((opt__get_int(OPT__CHANGECHECK) & CHCHECK_FILE) && 
+					(sts->entry_status & FS_LIKELY)) ||
+				(opt__get_int(OPT__CHANGECHECK) & CHCHECK_ALLFILES) )
 		{
-			switch (sts->entry_type)
+			/* If the type changed (symlink => file etc.) there's no 'likely' - 
+			 * the entry *was* changed.
+			 * So if we get here, we can check either type - st or sts->st. */
+			if (S_ISREG(st.mode) || S_ISLNK(st.mode))
 			{
-				case FT_FILE:
-				case FT_SYMLINK:
-					/* make sure, one way or another */
-					STOPIF( cs__compare_file(sts, fullpath, &i), NULL);
+				/* make sure, one way or another */
+				STOPIF( cs__compare_file(sts, fullpath, &i), NULL);
 
-					sts->entry_status =  i ?
-						(sts->entry_status & ~ FS_LIKELY) | FS_CHANGED :
-						sts->entry_status & ~(FS_LIKELY  | FS_CHANGED);
-					break;
-				case FT_DIR:
-					/* Will be checked later, on last child of this directory. */
-					break;
-				case FT_BDEV:
-				case FT_CDEV:
-					break;
-				default:
-					BUG_ON(1, "Undefined entry type!");
+				if (i>0)
+					sts->entry_status= (sts->entry_status & ~ FS_LIKELY) | FS_CHANGED;
+				else if (i==0)
+					sts->entry_status= sts->entry_status  & ~(FS_LIKELY  | FS_CHANGED);
 			}
+			/* Directories will be checked later, on finishing their children; 
+			 * devices have already been checked, and other types are not 
+			 * allowed. */
 		}
-
-
-		/* Now we've compared we take the new values.
-		 * Better for display, needed for commit (current values) */
-		/* Before an update we only set ->entry_status - to keep the old values
-		 * intact. */
-		if (!only_check_status)
-			sts->st=st;
 	}
 
-	DEBUGP("known %s: action=%X, flags=%X, status=%d",
-			fullpath, sts->entry_status, sts->flags, status);
+	/* Now we've compared we take the new values.
+	 * Better for display, needed for commit (current values) */
+	/* Before an update (and some other operations) we only set 
+	 * sts->entry_status - to keep the old values intact. */
+	if (output)
+		*output=st;
+	else
+		if (!only_check_status)
+			sts->st=st;
+
+	DEBUGP("known %s: action=%X, flags=%X, mode=0%o, status=%d",
+			fullpath, sts->entry_status, sts->flags, sts->updated_mode, status);
+	sts->updated_mode=st.mode;
 
 ex:
 	return status;
 }
 
 
+/** Set the estat::do_* bits, depending on the parent.
+ * May not be called for the root.
+ * */
+inline void ops___set_todo_bits(struct estat *sts)
+{
+	/* For recursive operation: If we should do the parent completely, we do 
+	 * the sub-entries, too. */
+	if (opt_recursive>0)
+		sts->do_userselected |= sts->parent->do_userselected;
+	/* For semi-recursive operation: Do the child, if the parent was 
+	 * wanted. */
+	if (opt_recursive>=0)
+		sts->do_this_entry |= sts->parent->do_userselected | sts->do_userselected;
+}
+
+
 /** -.
- * Must have a parent! */
-int ops__set_to_handle_bits(struct estat *sts)
+ * May not be called for the root. */
+int ops__set_todo_bits(struct estat *sts)
 {
 	int status;
 
 	status=0;
 
-	DEBUGP("before parent: do_tree=%d.%d parent=%d.%d", 
-			sts->do_tree, 
-			sts->do_this_entry, 
-			sts->parent ? sts->parent->do_tree : 0,
-			sts->parent ? sts->parent->do_this_entry : 0);
+	/* We don't know any better yet. */
+	sts->do_filter_allows=1;
+	sts->do_filter_allows_done=1;
 
-	/* For recursive operation: If we should do the parent completely, 
-	 * we do the sub-entries, too. */
-	if (opt_recursive>0)
-		sts->do_tree |= sts->parent->do_tree;
-	/* For semi-recursive operation: Do the child, if the parent was 
-	 * wanted. */
-	if (opt_recursive>=0)
-		sts->do_this_entry |= sts->parent->do_tree | sts->do_tree;
+	ops___set_todo_bits(sts);
 
-	DEBUGP("after parent: do_tree=%d.%d parent=%d.%d", 
-			sts->do_tree, 
-			sts->do_this_entry, 
-			sts->parent ? sts->parent->do_tree : 0,
+	DEBUGP("user,this,child=%d.%d parent=%d.%d", 
+			sts->do_userselected, 
+			sts->do_this_entry,
+			sts->parent ? sts->parent->do_userselected : 0,
 			sts->parent ? sts->parent->do_this_entry : 0);
 
 	return status;
 }
 
+
+/** -.
+ *
+ * Calls \c ops__set_to_handle_bits() and maybe \c 
+ * ops__update_single_entry(), and depending on the filter settings \c 
+ * sts->do_this_entry might be cleared.
+ * */
+int ops__update_filter_set_bits(struct estat *sts)
+{
+	int status;
+	struct sstat_t stat;
+
+	if (sts->parent)
+		STOPIF( ops__set_todo_bits(sts), NULL);
+
+	if (sts->do_this_entry)
+	{
+		STOPIF( ops__update_single_entry(sts, &stat), NULL);
+
+		if (ops__calc_filter_bit(sts))
+		{
+			/* We'd have an invalid value if the entry is removed. */
+			if ((sts->entry_status & FS_REPLACED) != FS_REMOVED)
+				if (!only_check_status)
+					sts->st = stat;
+		}
+	}
+
+	DEBUGP("filter says %d", sts->do_filter_allows);
+
+ex:
+	return status;
+}
 
 /** -.
  *
@@ -1466,9 +1495,8 @@ void ops__copy_single_entry(struct estat *src, struct estat *dest)
 	dest->path_len=0;
 	dest->path_level=dest->parent->path_level+1;
 
-	/* The entry is not marked as FT_IGNORE ... that would change the entry 
-	 * type, and we have to save it anyway. */
-	dest->entry_type=src->entry_type;
+	/* The entry is not marked as to-be-ignored ... that would change the 
+	 * entry type, and we have to save it anyway. */
 	dest->entry_status=FS_NEW;
 	dest->remote_status=FS_NEW;
 
@@ -1476,7 +1504,7 @@ void ops__copy_single_entry(struct estat *src, struct estat *dest)
 	dest->decoder_is_correct=src->decoder_is_correct;
 
 	dest->was_output=0;
-	dest->do_tree=dest->do_a_child=dest->do_this_entry=0;
+	dest->do_userselected = dest->do_child_wanted = dest->do_this_entry = 0;
 	dest->arg=NULL;
 }
 
@@ -1647,5 +1675,20 @@ int ops__read_special_entry(apr_file_t *a_stream,
 
 ex:
 	return status;
+}
+
+
+/** -.
+ * */
+int ops__are_children_interesting(struct estat *dir)
+{
+	struct estat tmp;
+
+	tmp.parent=dir;
+	tmp.do_this_entry = tmp.do_userselected = tmp.do_child_wanted = 0;
+
+	ops___set_todo_bits(&tmp);
+
+	return tmp.do_this_entry;
 }
 

@@ -195,6 +195,31 @@ else
 fi
 
 
+# Look whether there's a human-readable message (1 line) for non-existing 
+# CONF or WAA paths. 
+# Has to include the missing path, so that the generic "no working copy" 
+# error isn't allowed.
+function Check_Path
+{
+	var=FSVS_$1
+	if $BINdflt status /bin > $logfile 2>&1
+	then
+		cat $logfile
+		$ERROR "Invalid $var doesn't stop?"
+	else
+		if [[ `wc -l < $logfile` -eq 1 &&
+			`grep -c "${!var}" < $logfile` -eq 1 ]]
+		then
+			$SUCCESS "$var checked"
+		else
+			cat $logfile
+			$ERROR "Wrong message on invalid $var."
+		fi
+	fi
+}
+FSVS_CONF=$WC/not-here Check_Path CONF
+FSVS_WAA=$WC/not-here Check_Path WAA
+
 # Define an empty configuration directory, and try to do a status (without 
 # a wc file).
 if FSVS_CONF=$WC $BINdflt status -N -N /sbin /bin > $logfile 2>&1
@@ -288,8 +313,7 @@ fi
 #then
 #  $SUCCESS "invalid locales can stop fsvs"
 #else
-#  $ERROR_NB "invalid locales don't give an error?" 
-#	exit 1
+#  $ERROR "invalid locales don't give an error?" 
 #fi
 #
 

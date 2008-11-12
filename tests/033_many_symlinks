@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/033.log
+
+
+COUNT=1000
+DIR=subdir
+
+# We set some ulimit here, so that we know see whether RAM is eaten or not.
+# 640k is enough for everyone! No, not here ...
+limit=32768
+# On 64bit the libraries need much more (virtual) memory; so we don't limit 
+# that here.
+ulimit -S -d $limit -m $limit -s $limit
+ulimit -H -d $limit -m $limit -s $limit
+
+mkdir $DIR
+$BINq ci -m1
+
+$INFO "Creating symlinks"
+perl -e '
+($nr, $dir)=@ARGV;
+for(1 .. $nr) 
+{
+	symlink("./././././../$dir/../$dir/../$dir", 
+			sprintf("%s/%05d", $dir,$_) ) || die $!; 
+} ' $COUNT $DIR
+
+$INFO "Looking for them."
+# Generating is so fast that the directory might stay in the same second.
+found=`$BINdflt st -o change_check=dir | wc -l`
+# The directory gets reported, too.
+if [[ $found -eq `echo $COUNT + 1 | bc` ]]
+then
+	$SUCCESS "fsvs found all $COUNT changed entries."
+else
+	$ERROR "fsvs found $found instead of $COUNT entries!"
+fi
+
+
+$INFO "Commit ..."
+$BINq ci -m many
+
+$INFO "Update ..."
+$WC2_UP_ST_COMPARE
+
+$INFO "sync-repos"
+$BINq sync-repos

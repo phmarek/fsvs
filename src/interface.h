@@ -43,7 +43,9 @@
 #define DEFAULT_WAA_PATH "/var/spool/fsvs"
 /** The default CONF path. */
 #define DEFAULT_CONF_PATH "/etc/fsvs"
-
+/** The default config directory (for authentication data),
+ * relative to $FSVS_CONF. */
+#define DEFAULT_CONFIGDIR_SUB "/auth"
 
 /** \name List of environment variables used for a chroot jail.
  * Note that these are not \c \#ifdef - marked, as we'd like to use 
@@ -58,6 +60,37 @@
 /** The old working directory <b>file descriptor</b> */
 #define CHROOTER_CWD_ENV "FSVS_CHROOT_CWD"
 /** @} */
+
+
+/** \defgroup exp_env Exported environment variables
+ * \ingroup interface
+ * Programs started by FSVS, like \ref o_diff or in the \ref
+ * FSVS_PROP_COMMIT_PIPE "fsvs:commit-pipe", get some environment variables
+ * set, to help them achieve their purpose.
+ *
+ * */
+/** @{ */
+/** The (relative) path of the current entry. */
+#define FSVS_EXP_CURR_ENTRY "FSVS_CURRENT_ENTRY"
+/** The configuration directory for the current working copy. */
+#define FSVS_EXP_WC_CONF "FSVS_WC_CONF"
+/** The current working copy root directory. */
+#define FSVS_EXP_WC_ROOT "FSVS_WC_ROOT"
+/** The revision we're updating or reverting to. */
+#define FSVS_EXP_TARGET_REVISION "FSVS_TARGET_REVISION"
+/** \addtogroup exp_env
+ *
+ * Apart from these \c $FSVS_CONF and \c $FSVS_WAA are always set.
+ *
+ * Others might be useful, but I'm waiting for a specific user telling her needs before implementing them.
+ * - Base URL, and/or URL for current entry \n
+ *   For multi-URL only the topmost? Or all?
+ * - Other filenames for merge and diff?
+ * - \c BASE, \c HEAD and other revisions
+ *
+ * Do you need something? Just ask me.
+ * @} */
+
 
 
 /** \name Manber-parameters

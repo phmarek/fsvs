@@ -51,6 +51,8 @@ mkdir bin
 echo got ya > bin/ls
 echo something > root-file
 echo is_base > is_base
+mkdir both
+echo master_of_desaster > both/master
 $BINq urls $REP_MASTER
 $BINq ci -m "master"
 
@@ -86,6 +88,10 @@ function makeLocal
 	do
 	  $BINq ci -m $a > /dev/null
 	done
+
+	mkdir both
+	echo $which > both/m-$which
+	$BINq ci -m b
 
 # Goto machine-WC
 	_mac="WC_MACHINE$which"
@@ -221,9 +227,8 @@ fi
 
 # Try to specify a single URL; go to the empty revision.
 $BINq up -u local@2
-# TODO: This currently fails, because the /bin is completely removed-
-# although from master there are still files.
-# $COMPARE $WC_MACHINE1/ $WC_MASTER/
+$COMPARE $WC_MACHINE1/ $WC_MASTER/ 0 ignore-dir-mtime
+
 # Now the is_1 file should appear.
 $BINdflt up -u local@3 > $logfile
 # The "." modified is allowed, and there's the "Updated ..." line.
@@ -251,4 +256,58 @@ else
 fi
 
 $SUCCESS "Master/Local-URL usage works."
+
+
+# Now use the multi-URL setup to test "fsvs cat".
+$BINq up
+
+cd $WC_MACHINE1
+for file in is_1 is_base bin/date
+do
+	md5l=`md5sum - < $file`
+	md5r=`$BINdflt cat $file | md5sum -`
+	if [[ "$md5l" != "$md5r" ]]
+	then
+		$ERROR_NB "Checksums on unmodified file $file wrong:"
+		$ERROR_NB "local $md5l"
+		$ERROR "versus repository $md5r"
+	fi
+
+	echo doesnt matter never mind > $file
+	md5r=`$BINdflt cat $file | md5sum -`
+	if [[ "$md5l" != "$md5r" ]]
+	then
+		$ERROR_NB "Checksums on modified file $file wrong:"
+		$ERROR_NB "local was $md5l"
+		$ERROR "versus repository $md5r"
+	fi
+done
+$SUCCESS "fsvs cat works."
+
+
+# Test -rX
+export FSVS_COMMIT_TO=local
+file=is_1
+
+echo 1 > $file
+md5_1=`md5sum < $file`
+$BINq ci -m1 $file > $logfile
+rev1=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
+
+# Change size, to be sure that the change is seen
+echo 22 > $file
+md5_2=`md5sum < $file`
+$BINq ci -m1 $file
+
+if [[ `$BINdflt cat $file -r$rev1 | md5sum -` != $md5_1 ]]
+then
+	$ERROR "'cat -r$rev1 $file' wrong"
+fi
+
+if [[ `$BINdflt cat $file -rHEAD | md5sum -` != $md5_2 ]]
+then
+	$ERROR "'cat -rHEAD $file' wrong"
+else
+	$SUCCESS "cat -rX works, too."
+fi
 

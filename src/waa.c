@@ -158,6 +158,8 @@ inline void waa___init_path(enum opt__settings_e which,
 int waa__init(void)
 {
 	int status;
+	char *cp;
+	int len;
 
 
 	status=0;
@@ -199,13 +201,6 @@ int waa__init(void)
 
 		STOPIF_CODE_ERR( opt__get_int(OPT__WAA_PATH)<3, EINVAL, 
 				"The WAA path should be set to a directory below \"/\".");
-
-		/* validate existence and save dev/inode for later checking */
-		STOPIF( hlp__lstat(opt__get_string(OPT__WAA_PATH), &waa_stat),
-				"stat() of waa-path '%s' failed. "
-				"Does your local storage area exist? ", 
-				opt__get_string(OPT__WAA_PATH));
-		DEBUGP("got the WAA as inode %llu", (t_ull)waa_stat.ino);
 	}
 
 
@@ -220,6 +215,7 @@ int waa__init(void)
 		WAA__MAX_EXT_LENGTH + strlen(ext_tmp) + 1 +4;
 	DEBUGP("using %d bytes for temporary WAA+conf paths", waa_tmp_path_len);
 
+
 	/* Here the paths are set at highest priority, so they can't get changed 
 	 * afterwards. */
 	conf_tmp_path=malloc(waa_tmp_path_len);
@@ -232,7 +228,47 @@ int waa__init(void)
 		STOPIF_ENOMEM(!waa_tmp_path);
 
 		waa___init_path(OPT__WAA_PATH, waa_tmp_path, &waa_tmp_fn);
+
+		/* validate existence and save dev/inode for later checking */
+		STOPIF( hlp__lstat(waa_tmp_path, &waa_stat),
+				"!stat() of waa-path \"%s\" failed. "
+				"Does your local WAA storage area exist? ", 
+				waa_tmp_path);
+		DEBUGP("got the WAA as inode %llu", (t_ull)waa_stat.ino);
+
+		/* Only check whether it's there. */
+		STOPIF_CODE_ERR( access(conf_tmp_path, W_OK)==-1, errno,
+				"!Cannot write to the FSVS_CONF path \"%s\".",
+				conf_tmp_path);
 	}
+
+	/* Now no more changes of the softroot (eg. via the per-WC configuration) 
+	 * are allowed. */
+	opt__set_int( OPT__SOFTROOT, PRIO_MUSTHAVE, 
+			opt__get_int(OPT__SOFTROOT));
+	setenv(opt__variable_from_option(OPT__SOFTROOT), 
+			opt__get_string(OPT__SOFTROOT), 1);
+
+
+	/* Subversion doesn't like "//" in pathnames - even if it's just the 
+	 * local configuration area. So we have to normalize them. */
+	len = opt__get_int(OPT__CONFIG_DIR)==0 ?
+		opt__get_int(OPT__CONF_PATH)+strlen(DEFAULT_CONFIGDIR_SUB)+1 :
+		opt__get_int(OPT__CONFIG_DIR);
+	cp=malloc(len+5);
+	STOPIF_ENOMEM(!cp);
+
+	if (opt__get_int(OPT__CONFIG_DIR)==0)
+		hlp__pathcopy(cp, &len, 
+				opt__get_string(OPT__CONF_PATH), DEFAULT_CONFIGDIR_SUB, NULL);
+	else
+		hlp__pathcopy(cp, &len, 
+				opt__get_string(OPT__CONFIG_DIR), NULL);
+
+	opt__set_string(OPT__CONFIG_DIR, PRIO_MUSTHAVE, cp);
+	opt__set_int(OPT__CONFIG_DIR, PRIO_MUSTHAVE, len);
+
+
 
 ex:
 	return status;
@@ -291,7 +327,7 @@ ex:
 
 
 /** -.
-*
+ *
  * \note The mask used is \c 0777 - so mind your umask! */
 int waa__mkdir(char *dir, int including_last)
 {
@@ -870,7 +906,7 @@ int waa__build_tree(struct estat *dir)
 		{
 			DEBUGP("ignoring entry %s", sts->name);
 
-			sts->entry_type=FT_IGNORE;
+			sts->to_be_ignored=1;
 			have_ignored=1;
 			continue;
 		}
@@ -878,14 +914,13 @@ int waa__build_tree(struct estat *dir)
 		sts->path_level = sts->parent->path_level+1;
 		/* in build_tree, it must be a new entry. */
 		sts->entry_status=FS_NEW;
+		STOPIF( ops__set_todo_bits(sts), NULL);
 		approx_entry_count++;
 		have_found++;
 
 		if (S_ISDIR(sts->st.mode))
 		{
-			sts->entry_type=FT_DIR;
-
-			if (opt_recursive>0)
+			if (ops__are_children_interesting(sts))
 			{
 				STOPIF_CODE_ERR( chdir(sts->name) == -1, errno,
 						"chdir(%s)", sts->name);
@@ -896,10 +931,6 @@ int waa__build_tree(struct estat *dir)
 				STOPIF_CODE_ERR( chdir("..") == -1, errno,
 						"parent has gone");
 			}
-		}
-		else
-		{
-			sts->entry_type=ops___filetype(&(sts->st));
 		}
 
 		STOPIF( ac__dispatch(sts), NULL);
@@ -961,7 +992,7 @@ int waa___find_position(struct estat **new,
 	/* order is wrong - find new place for this element. */
 	bigger_eq=count-1;
 	/* i is a smaller element, k a possibly higher */
-#ifdef DEBUG
+#if 0
 	if (1)
 	{
 		char tmp[count*(18+1)+10];
@@ -1258,7 +1289,7 @@ int waa__output_tree(struct estat *root)
 		{
 			/* It's easy and possible to have always the correct number
 			 * of subdirectories in root->subdir_count. We'd just have
-			 * to walk up to the root in build_tree and add_directory
+			 * to walk up to the root in waa__build_tree and add_directory
 			 * and increment the number there.
 			 *
 			 * But 
@@ -1346,9 +1377,11 @@ ex:
  * been (shallowly!) read - so subdirectories might not yet be up-to-date 
  * yet.
  *
- * The estat::do_this_entry and estat::do_tree flags are set, and depending 
- * on them (and opt_recursive) estat::entry_status is set.
- * */
+ * The estat::do_this_entry and estat::do_userselected flags are set, and 
+ * depending on them (and opt_recursive) estat::entry_status is set.
+ *
+ * On \c chdir() an eventual \c EACCES is ignored, and the "maybe changed" 
+ * status returned. */
 int waa__update_dir(struct estat *old)
 {
 	int dir_hdl, status;
@@ -1369,11 +1402,15 @@ int waa__update_dir(struct estat *old)
 	/* To avoid storing arbitrarily long pathnames, we just open this
 	 * directory and do a fchdir() later. */
 	dir_hdl=open(".", O_RDONLY | O_DIRECTORY);
-	STOPIF_CODE_ERR( dir_hdl==-1, errno, "saving current directory with open(.)");
+	STOPIF_CODE_ERR( dir_hdl==-1, errno, 
+			"saving current directory with open(.)");
 
 	DEBUGP("update_dir: chdir(%s)", path);
-	STOPIF_CODE_ERR( chdir(path) == -1, errno, 
-			"chdir(%s)", path);
+	if (chdir(path) == -1)
+	{
+		if (errno == EACCES) goto ex;
+		STOPIF( errno, "chdir(%s)", path);
+	}
 
 	/* Here we need the entries sorted by name. */
 	STOPIF( waa__dir_enum( &current, 0, 1), NULL);
@@ -1381,7 +1418,7 @@ int waa__update_dir(struct estat *old)
 			current.entry_count, old->entry_count,
 			status);
 	/* No entries means no new entries; but not old entries deleted! */
-	if (current.entry_count == 0) goto ex;
+	if (current.entry_count == 0) goto after_compare;
 
 
 	/* Now the directories get compared.
@@ -1409,7 +1446,6 @@ int waa__update_dir(struct estat *old)
 	{
 		int status;
 		int ignore;
-		struct estat tmp;
 
 		STOPIF( ign__is_ignore(sts, &ignore), NULL);
 		if (ignore>0)
@@ -1424,18 +1460,20 @@ int waa__update_dir(struct estat *old)
 
 			DEBUGP("found a new one!");
 			sts->entry_status=FS_NEW;
+
+			/* Has to be done in that order, so that ac__dispatch() already finds 
+			 * sts->do_filter_allows set. */
+			STOPIF( ops__set_todo_bits(sts), NULL);
 			STOPIF( ac__dispatch(sts), NULL);
+
+			ops__mark_parent_cc(sts, entry_status);
 			approx_entry_count++;
 
-			STOPIF( ops__set_to_handle_bits(sts), NULL);
 
 			/* if it's a directory, add all subentries, too. */
-			/* Use the temporary variable to see whether child-entries are 
-			 * interesting to us. */
-			tmp.parent=sts;
-			tmp.do_this_entry=tmp.do_tree=0;
-			STOPIF( ops__set_to_handle_bits(&tmp), NULL);
-			if (S_ISDIR(sts->st.mode) && tmp.do_this_entry)
+			if (S_ISDIR(sts->st.mode) && 
+					ops__are_children_interesting(sts) &&
+					(opt__get_int(OPT__FILTER) & FS_NEW))
 			{
 				STOPIF_CODE_ERR( chdir(sts->name) == -1, errno,
 						"chdir(%s)", sts->name);
@@ -1479,13 +1517,11 @@ ex:
 	 * like we're doing above in the by_name array. */
 	//	IF_FREE(current.strings);
 
-
-ex:
+after_compare:
 	/* There's no doubt now.
 	 * The old entries have already been checked, and if there are new
 	 * we're sure that this directory has changed. */
 	old->entry_status &= ~FS_LIKELY;
-
 
 	/* If we find a new entry, we know that this directory has changed.
 	 * We cannot use the ops__mark_parent_* functions, as old can have no 
@@ -1493,7 +1529,7 @@ ex:
 	if (nr_new)
 		ops__mark_changed_parentcc(old, entry_status);
 
-
+ex:
 	if (dir_hdl!=-1) 
 	{
 		i=fchdir(dir_hdl);
@@ -1768,27 +1804,110 @@ inline int waa___check_dir_for_update(struct estat *sts)
 	 * before, so ->entry_count is defined as 0 (see ops__load_1entry()).
 	 * For replaced entries which are _now_ directories we'll always
 	 * get here, and waa__update_dir() will give us the children. */
-	if (opt_recursive >=0 &&
-			(sts->entry_status || 
-			 opt_checksum || 
+	if ((sts->entry_status || 
+			 (opt__get_int(OPT__CHANGECHECK) & CHCHECK_DIRS) || 
 			 (sts->flags & RF_ADD) ||
-			 (sts->flags & RF_CHECK) ) )
+			 (sts->flags & RF_CHECK) ) &&
+			ops__are_children_interesting(sts) )
 	{
-		if (only_check_status)
+		if (only_check_status==1)
 			DEBUGP("Only check & set status - no update_dir");
 		else
 		{
 			DEBUGP("dir_to_print | CHECK for %s", sts->name);
 			STOPIF( waa__update_dir(sts), NULL);
+
+			/* Now the status could have changed, and therefore the filter might 
+			 * now apply.  */
+			ops__calc_filter_bit(sts);
 		}
 	}
 
-ex:
 	/* Whether to do something with this directory or not shall not be 
 	 * decided here. Just pass it on. */
-	/* The path may not be valid here anymore. */
-	STOPIF( ac__dispatch(sts), NULL);
+	if (ops__allowed_by_filter(sts))
+		STOPIF( ac__dispatch(sts), NULL);
 
+ex:
+	return status;
+}
+
+
+/** Does an update on the specified directory, and checks for completeness.
+ * We get here if all \b known children have been loaded, and have to look 
+ * whether the subchildren are finished, too.
+ *  */
+int waa___finish_directory(struct estat *sts)
+{
+	int status;
+	struct estat *walker;
+
+
+	status=0;
+
+	walker=sts;
+	while (1)
+	{
+		DEBUGP("checking directory %s: %u unfini, %d of %d (%s)", 
+				walker->name,
+				walker->unfinished,
+				walker->child_index, walker->entry_count,
+				st__status_string(walker));
+
+		if (walker->unfinished > 0) break;
+
+		/* This (parent) might not be finished yet; but don't discard empty 
+		 * directories (should be only on first loop invocation - all other 
+		 * entries *have* at least a single child). */
+		if (walker->entry_count == 0)
+			BUG_ON(walker != sts);
+		else if (walker->child_index < walker->entry_count)
+			break;
+
+		DEBUGP("walker=%s; status=%s",
+				walker->name, st__status_string_fromint(walker->entry_status));
+
+		if (!S_ISDIR(walker->updated_mode) ||
+				(walker->entry_status & FS_REPLACED) == FS_REMOVED)
+		{
+			/* If 
+			 * - it got replaced by another type, or
+			 * - the directory doesn't exist anymore,
+			 * we have already printed it. */
+		}
+		else if (!(opt__get_int(OPT__FILTER) & FS_NEW))
+		{
+			/* If new entries are not wanted, we simply do the callback - if it 
+			 * matches the users' wishes.  */
+			if (ops__allowed_by_filter(walker))
+				STOPIF( ac__dispatch(walker), NULL);
+		}
+		else
+		{
+			/* Check the parent for added entries.  Deleted entries have already 
+			 * been found missing while running through the list. */
+			STOPIF( waa___check_dir_for_update(walker), NULL);
+		}
+
+
+		/* This directory is done, tell the parent. */
+		walker=walker->parent;
+		if (!walker) break;
+
+
+		DEBUGP("%s has a finished child, now %d unfinished", 
+				walker->name, walker->unfinished);
+
+		/* We must not decrement if we don't count them. */
+		if (walker->unfinished)
+			walker->unfinished--;
+	}
+
+	if (walker == sts->parent && walker)
+		DEBUGP("deferring parent %s/%s (%d unfinished)", 
+				walker->name, sts->name, walker->unfinished);
+
+ex:
 	return status;
 }
 
@@ -1796,8 +1915,8 @@ ex:
 /** -.
  *
  * On input we expect a tree of nodes starting with \a root; the entries 
- * that need updating have estat::do_tree set, and their children get set 
- * via ops__set_to_handle_bits().
+ * that need updating have estat::do_userselected set, and their children 
+ * get set via ops__set_todo_bits().
  *
  * On output we have estat::entry_status set; and the current \ref 
  * action->local_callback gets called.
@@ -1827,17 +1946,22 @@ int waa__update_tree(struct estat *root,
 {
 	int status;
 	struct estat *sts;
-	char *fullpath;
+	mode_t old_mode;
 
 
-	if (! (root->do_tree || root->do_a_child) )
+	if (! (root->do_userselected || root->do_child_wanted) )
 	{
 		/* If neither is set, waa__partial_update() wasn't called, so
 		 * we start from the root. */
-		root->do_tree=root->do_this_entry=1;
+		root->do_userselected = 
+			root->do_this_entry =
+			root->do_filter_allows_done =
+			root->do_filter_allows = 1;
 		DEBUGP("Full tree update");
 	}
 
+	/* TODO: allow non-remembering behaviour */
+	action->keep_children=1;
 
 	status=0;
 	while (cur_block)
@@ -1847,65 +1971,62 @@ int waa__update_tree(struct estat *root,
 		DEBUGP("doing update for %s ... %d left in %p",
 				sts->name, cur_block->count, cur_block);
 
-		/* For directories initialize the child counter. */
+		/* For directories initialize the child counter.
+		 * We don't know the current type yet! */
 		if (S_ISDIR(sts->st.mode))
-			sts->child_index=0;
+			sts->child_index = sts->unfinished = 0;
 
-		if (sts->parent)
-		{
-			STOPIF( ops__set_to_handle_bits(sts), NULL);
+		old_mode=sts->st.mode;
+		STOPIF( ops__update_filter_set_bits(sts), NULL);
 
-			/* If the parent's status is removed (or replaced), that tells us
-			 *   - the parent was a directory
-			 *   - the parent is no longer a directory
-			 * So there can be no children now. */
-			if (sts->parent->entry_status & FS_REMOVED)
-			{
-				sts->entry_status=FS_REMOVED;
-				goto next;
-			}
-		}
-
-		if (!(sts->do_this_entry || sts->do_a_child))
+		if (!(sts->do_this_entry || sts->do_child_wanted))
 			goto next;
 
 
-		STOPIF( ops__build_path(&fullpath, sts), NULL);
-		if (sts->do_this_entry)
-			STOPIF( ops__update_single_entry(sts, fullpath), NULL);
-
+		/* Now sts->updated_mode has been set. */
 		if (sts->entry_status) 
 			ops__mark_parent_cc(sts, entry_status);
 
-		/* If this entry is removed, the parent has changed. */
-		if ( (sts->entry_status & FS_REMOVED) && (sts->parent) )
+		if (sts->parent)
 		{
+			if (S_ISDIR(sts->st.mode))
+				sts->parent->unfinished++;
+
+			if (sts->parent->entry_status & FS_REMOVED)
+				goto next;
+		}
+
+		if (sts->entry_status & FS_REMOVED) 
+		{
+			if (sts->parent)
+			{
+				/* If this entry is removed, the parent has changed. */
 				sts->parent->entry_status &= (~FS_LIKELY);
 				sts->parent->entry_status |= FS_CHANGED;
 				/* The FS_CHILD_CHANGED markings are already here. */
+			}
+
+			/* If a directory is removed, we don't allocate the by_inode
+			 * and by_name arrays, and it is set to no child-entries. */
+			if (S_ISDIR(old_mode) && !action->keep_children)
+				sts->entry_count=0;
+
+			if (S_ISDIR(sts->st.mode))
+				sts->parent->unfinished--;
 		}
 
 
-		/* If a directory is removed, we don't allocate the by_inode
-		 * and by_name arrays, and it is set to no child-entries. */
-		if (S_ISDIR(sts->st.mode) && 
-				(sts->entry_status & FS_REMOVED) && 
-				!action->keep_children)
-			sts->entry_count=0;
-
-		/* If this entry was exactly removed (not replaced), 
-		 * skip the next steps. 
-		 * The sub-entries will be found missing because the parent is removed. */
-		if ((sts->entry_status & FS_REPLACED) == FS_REMOVED)
-			goto next;
-
-		if (S_ISDIR(sts->st.mode) && (sts->entry_status & FS_REPLACED))
+		if (S_ISDIR(sts->updated_mode) && 
+				(sts->entry_status & FS_REPLACED) == FS_REPLACED)
 		{
-			/* This entry was replaced, ie. was another type before.
-			 * So the shared members have wrong data - 
-			 * eg. entry_count, by_inode. We have to correct that here.
-			 * That leads to an update_dir, which is exactly what we want. */
+			/* This entry was replaced, ie. was another type before, and is a 
+			 * directory *now*.
+			 * So the shared members have wrong data - eg. entry_count, by_inode. 
+			 * We have to correct that here.
+			 * That leads to an waa__update_dir, which is exactly what we want.  
+			 * */
 			sts->entry_count=0;
+			sts->unfinished=0;
 			sts->by_inode=sts->by_name=NULL;
 			sts->strings=NULL;
 			/* TODO: fill this members from the ignore list */
@@ -1913,32 +2034,29 @@ int waa__update_tree(struct estat *root,
 		}
 
 
-		/* This is more or less the same as below, only for this entry and 
-		 * not its parent. */
-		/* If this is a directory which had no children ... */
-		if (S_ISDIR(sts->st.mode) && sts->entry_count==0)
+next:
+		/* This is more or less the same as below, only for this entry and not 
+		 * its parent. */
+		if (S_ISDIR(sts->updated_mode) && sts->entry_count==0)
 		{
-			DEBUGP("doing empty directory %s", sts->name);
+			DEBUGP("doing empty directory %s %d", sts->name, sts->do_this_entry);
 			/* Check this entry for added entries. There cannot be deleted 
 			 * entries, as this directory had no entries before. */
-			STOPIF( waa___check_dir_for_update(sts), NULL);
-			/* Mind: \a fullpath may not be valid anymore. */
+			STOPIF( waa___finish_directory(sts), NULL);
 		}
 
 
-next:
 		/* If this is a normal entry, we print it now.
 		 * Directories are shown after all child nodes have been checked. */
-		if (sts->do_this_entry && 
-				( !S_ISDIR(sts->st.mode) || 
-					(sts->entry_status & FS_REMOVED)) )
+		if (!S_ISDIR(sts->updated_mode) && sts->do_this_entry) 
 			STOPIF( ac__dispatch(sts), NULL);
 
 
-		/* The parent must be done *after* the last child node ... at least that's  
-		 * what's documented above :-) */
-		if (sts->parent && 
-				!(sts->parent->entry_status & FS_REMOVED) )
+		/* The parent must be done *after* the last child node ... at least 
+		 * that's what's documented above :-) */
+		/* If there's a parent, and it's still here *or* we have to remember 
+		 * the children anyway ... */
+		if (sts->parent && action->keep_children )
 		{
 			sts->parent->child_index++;
 
@@ -1950,13 +2068,15 @@ next:
 				/* Check the parent for added entries. 
 				 * Deleted entries have already been found missing while 
 				 * running through the list. */
-				STOPIF( waa___check_dir_for_update(sts->parent), NULL);
+
+				STOPIF( waa___finish_directory(sts->parent), NULL);
 			}
 			else
-				DEBUGP("deferring parent %s/%s%s: %d of %d", 
-				sts->parent->name, sts->name,
-				sts->parent->do_this_entry ? "" : " (no do_this)",
-				sts->parent->child_index, sts->parent->entry_count);
+				DEBUGP("deferring parent %s/%s%s: %d of %d, %d unfini", 
+						sts->parent->name, sts->name,
+						sts->parent->do_this_entry ? "" : " (no do_this_entry)",
+						sts->parent->child_index, sts->parent->entry_count, 
+						sts->parent->unfinished);
 		}
 
 
@@ -2084,8 +2204,14 @@ ex:
  *   - If we find no base, we believe that we're at the root of the wc.
  *
  * The parameter must not be shown as "added" ("n...") - because it isn't.
+ *
+ * For the case that the WC root is \c "/", and we shall put a \c "./" in 
+ * front of the normalized paths, we need an additional byte per argument, 
+ * so that eg. \c "/etc" can be changed to \c "./etc" - see the PDS 
+ * comments.
  * */
-int waa__find_common_base(int argc, char *args[], char **normalized[])
+int waa__find_common_base2(int argc, char *args[], char **normalized[],
+		int put_dotslash)
 {
 	int status, i, j, longest_index;
 	int len;
@@ -2141,9 +2267,12 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 	 * relative paths at the end. 
 	 * We assume (yes, I know, "Silence of the lambs" :-) that all paths are of
 	 * the full length.
+	 * 
+	 * Actually we'll put a NULL pointer in, too.
 	 *
-	 * Actually we'll put a NULL pointer in, too. */
-	len = argc * sizeof(char*) + sizeof(NULL) + len + len * argc;
+	 * PDS!
+	 * */
+	len = argc * sizeof(char*) + sizeof(NULL) + len + len * argc + argc; 
 	DEBUGP("need %d bytes for %d args", len, argc);
 	norm=malloc(len);
 	/* IF(!norm)STOPIF_ENOMEM would be visually more appealing :-² */
@@ -2156,6 +2285,8 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 	 * cases like "/a/wc" compared against "/a//wc". */
 	for(i=0; i<argc; i++)
 	{
+		/* PDS! */
+		space++;
 		paths[i]=space;
 		hlp__pathcopy(space, NULL, args[i], NULL);
 
@@ -2291,6 +2422,8 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 	DEBUGP("found working copy base at %s", wc_path);
 	STOPIF_CODE_ERR( chdir(wc_path) == -1, errno, "chdir(%s)", wc_path);
 
+	setenv(FSVS_EXP_WC_ROOT, wc_path, 1);
+
 
 	/* Step 5: Generate pointers to normalized paths.
 	 * len is still valid, so we just have to use paths[i]+len. */
@@ -2306,6 +2439,14 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 				norm[i]=paths[i]+1;
 			else
 				norm[i]=paths[i]+len+1;
+
+		/* PDS: norm[i] points after a PATH_SEPARATOR, and we have always space 
+		 * for the "." in front.  */
+		if (put_dotslash)
+		{
+			norm[i]-=2;
+			*norm[i] = '.';
+		}
 		DEBUGP("we set norm[%d]=%s from %s", i,  norm[i], paths[i]);
 	}
 	norm[argc]=NULL;
@@ -2318,6 +2459,7 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 	 * accept a filehandle.) */
 	STOPIF( waa__get_waa_directory( wc_path, &confname, &cp, NULL, GWD_CONF),
 			NULL);
+	setenv( FSVS_EXP_WC_CONF, confname, 1);
 	STOPIF( opt__load_settings(confname, "config", PRIO_ETC_WC ), NULL);
 
 
@@ -2359,8 +2501,8 @@ ex:
 /** -.
  *
  * We get a tree starting with \a root, and all entries from \a normalized 
- * get estat::do_tree and estat::do_this_entry set. These flag gets used by 
- * waa__update_tree().
+ * get estat::do_userselected and estat::do_this_entry set. These flag gets 
+ * used by waa__update_tree().
  * */
 int waa__partial_update(struct estat *root, 
 		int argc, char *normalized[], char *orig[],
@@ -2414,23 +2556,19 @@ int waa__partial_update(struct estat *root,
 		if (opt__get_int(OPT__PATH) == PATH_PARMRELATIVE && !sts->arg)
 			sts->arg= faked_arg0 ? "" : orig[i];
 
-		/* This new entry is surely updated.
-		 * But what about its parents?
-		 * They're not in the blocks list (that we get as parameter), so
-		 * they'd get wrong information. */
-
-		/* This is marked as full, parents as "look below". */
-		sts->do_tree=sts->do_this_entry=1;
-		while (sts)
+		/* This entry is marked as full, parents as "look below". */
+		sts->do_userselected = sts->do_this_entry = 1;
+		while ( (sts = sts->parent) )
 		{
-			sts->do_a_child = 1;
-			if (sts->flags & RF_ADD)
-			{
-				/* If this entry was created by the O_CREAT flag, get some data. */
-				//				STOPIF( ops__update_single_entry(sts, NULL), NULL);
-			}
+			/* This new entry is surely updated.
+			 * But what about its (new) parents?
+			 * They're not in the blocks list (that we get as parameter), so
+			 * they'd get wrong information on commit. */
 
-			sts=sts->parent;
+			if (sts->flags & RF_ISNEW)
+				STOPIF( ops__update_single_entry(sts, NULL), NULL);
+
+			sts->do_child_wanted = 1;
 		}
 	}
 
@@ -2502,32 +2640,57 @@ ex:
 }
 
 
+/** Abbreviation function for tree recursion. */
+inline int waa___recurse_tree(struct estat **list, action_t handler, 
+		int (*me)(struct estat *, action_t ))
+{
+	struct estat *sts;
+	int status;
+
+	status=0;
+	while ( (sts=*list) )
+	{
+		if (sts->do_this_entry && ops__allowed_by_filter(sts))
+			STOPIF( handler(sts), NULL);
+
+		/* If the entry was removed, sts->updated_mode is 0, so we have to take 
+		 * a look at the old sts->st.mode to determine whether it was a 
+		 * directory. */
+		/* The OPT__ALL_REMOVED check is duplicated from ac__dispatch, to avoid 
+		 * recursing needlessly. */
+		if ((sts->do_child_wanted || sts->do_userselected) && 
+				sts->entry_count &&
+				(sts->updated_mode ? 
+				 S_ISDIR(sts->updated_mode) :
+				 ((sts->entry_status & FS_REMOVED) && 					
+					S_ISDIR(sts->st.mode) &&
+					opt__get_int(OPT__ALL_REMOVED)==OPT__YES)) )
+			STOPIF( me(sts, handler), NULL);
+		list++;
+	}
+
+ex:
+	return status;
+}
+
+
 /** -.
  * */
 int waa__do_sorted_tree(struct estat *root, action_t handler)
 {
 	int status;
-	struct estat **list, *sts;
-
 
 	status=0;
+
+	/* Do the root as first entry. */
+	if (!root->parent && root->do_this_entry)
+		STOPIF( handler(root), NULL);
 
 	if ( !root->by_name)
 		STOPIF( dir__sortbyname(root), NULL);
 
-	/* Alternatively we could do a 
-	 * for(i=0; i<root->entry_count; root++)
-	 * */
-	list=root->by_name;
-	while ( (sts=*list) )
-	{
-		if (sts->do_this_entry)
-			STOPIF( handler(sts), NULL);
-
-		if (sts->do_tree && sts->entry_type==FT_DIR)
-			STOPIF( waa__do_sorted_tree(sts, handler), NULL);
-		list++;
-	}
+	STOPIF( waa___recurse_tree(root->by_name, handler, 
+				waa__do_sorted_tree), NULL);
 
 ex:
 	IF_FREE(root->by_name);
@@ -2706,13 +2869,15 @@ int waa__get_tmp_name(const char *base_dir,
 	if (base_dir[len-1] == PATH_SEPARATOR)
 	{
 		strcpy( filename + len, to_prepend);
-	  len+=strlen(to_prepend);
+		len+=strlen(to_prepend);
 	}
 
 	strcpy( filename + len, to_append);
-	/* The default values include APR_DELONCLOSE, which we don't want. */
+	/* The default values include APR_DELONCLOSE, which we only want if the
+	 * caller is not interested in the name. */
 	STOPIF( apr_file_mktemp(handle, filename, 
-				APR_CREATE | APR_READ | APR_WRITE | APR_EXCL,
+				APR_CREATE | APR_READ | APR_WRITE | APR_EXCL |
+				(output ? 0 : APR_DELONCLOSE),
 				pool),
 			"Cannot create a temporary file for \"%s\"", filename);
 

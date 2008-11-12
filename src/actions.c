@@ -21,7 +21,7 @@
  * Common functions for action (name) handling. */
 
 
-/** This wrapper-callback for the current action callback calculates the \a 
+/** This wrapper-callback for the current action callback calculates the  
  * path and fills in the \c entry_type for the current \a sts, if 
  * necessary.  */
 int ac__dispatch(struct estat *sts)
@@ -31,21 +31,29 @@ int ac__dispatch(struct estat *sts)
 	status=0;
 	if (!action->local_callback) goto ex;
 
-	/* remove all variables */
-	switch (sts->entry_type)
-	{
-		case FT_UNKNOWN:
-		case FT_ANY:
-		case FT_NONDIR:
-			sts->entry_type=ops___filetype(&(sts->st));
-	}
+	/* We cannot really test the type here; on update we might only know that 
+	 * it's a special file, but not which type exactly. */
+#if 0
+	BUG_ON(!(
+				S_ISDIR(sts->updated_mode) || S_ISREG(sts->updated_mode) || 
+				S_ISCHR(sts->updated_mode) || S_ISBLK(sts->updated_mode) || 
+				S_ISLNK(sts->updated_mode) ),
+			"%s has mode 0%o", sts->name, sts->updated_mode);
+#endif
 
-	/* If we're filtering, */
-	/* We want all entries (eg. -v) */
-	if (opt__get_int(OPT__FILTER) == FILTER__ALL ||
-			/* or it's an interesting entry. */
-			(sts->entry_status & opt__get_int(OPT__FILTER)))
-		STOPIF( action->local_callback(sts), NULL);
+	if (ops__allowed_by_filter(sts) ||
+			(sts->entry_status & FS_CHILD_CHANGED))
+	{
+		/* If
+		 * - we want to see all entries,
+		 * - there's no parent that could be removed ("." is always there), or
+		 * - the parent still exists,
+		 * we print the entry. */
+		if (opt__get_int(OPT__ALL_REMOVED) ||
+				!sts->parent ||
+				(sts->parent->entry_status & FS_REPLACED)!=FS_REMOVED)
+			STOPIF( action->local_callback(sts), NULL);
+	}
 	else 
 	{
 		DEBUGP("%s is not the entry you're looking for", sts->name);

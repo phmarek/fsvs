@@ -26,6 +26,8 @@
 
 /** Ignore command main function. */
 work_t ign__work;
+/** Rel-ignore command main function. */
+work_t ign__rign;
 
 /** Adds a list of new ignore patterns to the internal list. */
 int ign__new_pattern(unsigned count, 

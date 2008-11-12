@@ -104,7 +104,7 @@ int res__action(struct estat *sts)
 	{
 		/* We're not going recursively, so there's no need to process 
 		 * sub-entries. */
-		sts->entry_type=FT_IGNORE;
+		sts->to_be_ignored=1;
 	}
 	else
 	{
