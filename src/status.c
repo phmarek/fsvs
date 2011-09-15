@@ -381,6 +381,7 @@ ex:
 }
 
 
+#define BAR_CHART_WIDTH 20
 /** -.
  * A secondary status function for commit and update (and other functions
  * which run silently through the filesystem), which shows local progress 
@@ -400,8 +401,7 @@ int st__progress(struct estat *sts)
 	int status;
 	time_t now;
 	int print;
-	const int bar_chart_width=20;
-	static const char bar_chart[bar_chart_width+1]="###################>";
+	static const char bar_chart[BAR_CHART_WIDTH+1]="###################>";
 	float pct;
 
 
@@ -446,7 +446,7 @@ int st__progress(struct estat *sts)
 			if (counter <= approx_entry_count && now<too_many_new)
 			{
 				pct=(float)counter/approx_entry_count;
-				print = (int)((float)bar_chart_width*pct +0.5);
+				print = (int)((float)BAR_CHART_WIDTH*pct +0.5);
 				/* In perl it works to say "%0*s"; gcc warns here 
 				 * "'0' flag used with %s" and it doesn't work.
 				 * So we have to show part of a (constant) string.
@@ -456,8 +456,8 @@ int st__progress(struct estat *sts)
 						"\r%8d of %8d done (%5.1f%%); [%s%*s]",
 						counter, approx_entry_count,
 						pct*100.0,
-						bar_chart+bar_chart_width-print,
-						bar_chart_width-print, "");
+						bar_chart+BAR_CHART_WIDTH-print,
+						BAR_CHART_WIDTH-print, "");
 
 				if (pct > 0.96 && !too_many_new) 
 					too_many_new=now+5;

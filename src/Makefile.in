@@ -18,7 +18,7 @@ VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEA
 CFLAGS	:= @CFLAGS@
 CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"' 
 LDFLAGS	:= @LDFLAGS@
-FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm
+FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lapr-1 -laprutil-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm
 
 ifdef RPATH
 LDFLAGS	+= -Wl,-rpath,$(RPATH)

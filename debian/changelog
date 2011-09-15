@@ -1,3 +1,14 @@
+fsvs (1.1.17-1.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Backport patch from upstream to fix compilation errors with gcc > 4.4.
+    (Closes: #564990)
+  * Add BD on libdb4.8-dev; required for build
+  * Patch Makefile to link to needed libraries, fixing FTBFS with
+    --no-add-needed (Closes: #554367)
+
+ -- Iain Lane <laney@debian.org>  Thu, 15 Sep 2011 22:48:41 +0100
+
 fsvs (1.1.17-1) unstable; urgency=low
 
   * New upstream release

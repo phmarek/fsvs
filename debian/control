@@ -2,7 +2,7 @@ Source: fsvs
 Section: admin
 Priority: optional
 Maintainer: Sheldon Hearn <sheldonh@starjuice.net>
-Build-Depends: debhelper (>= 5), autotools-dev, libsvn-dev, libgdbm-dev, ctags, libaprutil1-dev, libpcre3-dev
+Build-Depends: debhelper (>= 5), autotools-dev, libsvn-dev, libgdbm-dev, ctags, libdb4.8-dev, libapr1-dev, libaprutil1-dev, libpcre3-dev
 Standards-Version: 3.8.0
 Homepage: http://fsvs.tigris.org/
 

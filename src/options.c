@@ -632,7 +632,7 @@ int opt__doesnt_say_off(const char *string)
  * loop via \c getenv() over all options? */
 char *opt__variable_from_option(enum opt__settings_e which)
 {
-	static char buffer[ strlen(ENV_PREFIX) + 
+	static char buffer[ sizeof(ENV_PREFIX) + 
 		sizeof(opt__list[0].name) + 1] = ENV_PREFIX;
 	char * const target=buffer+strlen(ENV_PREFIX);
 	int i;
