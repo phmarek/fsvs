@@ -1,3 +1,12 @@
+fsvs (1.1.17-1.2) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Fix link ordering so that building with --as-needed works. Objects must
+    come before libraries that use them
+  * Build with --as-needed
+
+ -- Iain Lane <laney@debian.org>  Fri, 16 Sep 2011 09:35:22 +0100
+
 fsvs (1.1.17-1.1) unstable; urgency=low
 
   * Non-maintainer upload.

@@ -140,7 +140,7 @@ docs: $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 # change, too.
 $(DEST): $(C_FILES:%.c=%.o)
 	@echo "     Link $@"
-	@$(CC) $(FSVS_LDFLAGS) $(LDLIBS) -o $@ $^
+	@$(CC) $^ $(FSVS_LDFLAGS) $(LDLIBS) -o $@
 ifeq (@ENABLE_RELEASE@, 1)
 	-strip $@
 endif
