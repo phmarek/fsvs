@@ -81,9 +81,6 @@ typedef enum {
 	 * lead to a stop? */
 	WRN__CHOWN_OTHER,
 
-	/** Not used yet, will be needed for multi-url updates. */
-	WRN__OVERLAYED_ENTRIES,
-
 	/** A property should be set with an reserved name. */
 	WRN__PROP_NAME_RESERVED,
 
@@ -94,14 +91,6 @@ typedef enum {
 	 * But as that is returned for diffing binary files, too,
 	 * the exit status is normally ignored. */
 	WRN__DIFF_EXIT_STATUS,
-
-
-	/** In case a local entry vanished just between \c getdents() and \c 
-	 * lstat(), we warn.
-	 * Should normally never happen ... there's only a \b very small time 
-	 * window for that.
-	 * (But there are filesystems that destroy themselves ...) */
-	WRN__LOCAL_VANISHED,
 
 	/** Absolute ignore pattern doesn't match wc base. */
 	WRN__IGNPAT_WCBASE,

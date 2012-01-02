@@ -68,16 +68,14 @@ inline int cch__entry_set(struct cache_entry_t **cache,
 		alloc_len = (alloc_len + 96-1) & ~64;
 
 		if (copy_old_data)
-			ce=realloc(ce, alloc_len);
+			STOPIF( hlp__realloc( &ce, alloc_len), NULL);
 		else
 		{
 			/* Note: realloc() copies the old data to the new location, but most 
 			 * of the time we'd overwrite it completely just afterwards. */
 			free(*cache);
-			ce=malloc(alloc_len);
+			STOPIF( hlp__alloc( &ce, alloc_len), NULL);
 		}
-
-		STOPIF_ENOMEM(!ce);
 
 		ce->len = alloc_len-sizeof(struct cache_entry_t)-1;
 		*cache=ce;

@@ -13,6 +13,8 @@ $INCLUDE_FUNCS
 # The WAA and CONF should be the 6666* ones (for /), so 
 # that revert/diff etc. for / work immediately after the commit.
 
+logfile=$LOGDIR/051.softroot
+
 SRDIR=$WC/softroot
 DIR=/bin
 FILE=$DIR/ls
@@ -32,7 +34,7 @@ echo $REPURL | $BINq urls load
 # We take only this single entry from the root directory.
 echo './**' | $BINq ignore load
 # make sure there's no old data
-rm `$PATH2SPOOL . dir` || true
+rm `$PATH2SPOOL . dir` 2> /dev/null || true
 $BINq add $FILE
 
 # Now something is in / that could be committed.
@@ -46,11 +48,9 @@ cp -a $FILE $SRDIR/$DIR/
 # To do this, we fake the FSVS_WAA and FSVS_CONF directories to 
 # appear (to a strcmp) to be within the softroot, so they don't
 # get appended again.
-(
-	export FSVS_WAA=$SRDIR/../../../../../../$FSVS_WAA
-	export FSVS_CONF=$SRDIR/../../../../../../$FSVS_CONF
-	$BINq commit -m "x" -o softroot=$SRDIR $SRDIR
-)
+FSVS_WAA=$SRDIR/../../../../../../$FSVS_WAA \
+  FSVS_CONF=$SRDIR/../../../../../../$FSVS_CONF \
+	$BINdflt commit -m "x" -o softroot=$SRDIR $SRDIR > $logfile
 
 # Now owner and group will be different ... "cp -a" can't copy
 # them for normal users. So we look for text changes only.

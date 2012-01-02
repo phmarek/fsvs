@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,42 +35,44 @@
  * \section status
  *
  * \code
- * fsvs status [-C [-C]] [-v] [PATHs...]
+ * fsvs status [-C [-C]] [-v] [-f filter] [PATHs...]
  * \endcode
  *
- * This command shows the entries that have changed since the last commit.
+ * This command shows the entries that have been changed locally since the 
+ * last commit.
  *
- * The output is formatted as follows:
- * - A status columns of four (or, with \c -v , five) characters.
+ * The most important output formats are:
+ * - A status columns of four (or, with \c -v , six) characters.
  *   There are either flags or a "." printed, so that it's easily parsed by 
  *   scripts -- the number of columns is only changed by \ref 
  *   glob_opt_verb.
  * - The size of the entry, in bytes, or \c "dir" for a directory, or \c 
  *   "dev" for a device.
- * - The path and name of the entry, formatted by the option \ref 
- *   o_opt_path.
+ * - The path and name of the entry, formatted by the \ref o_opt_path 
+ *   "path" option.
+ *
+ * Normally only changed entries are printed; with \c -v all are printed, 
+ * but see the \ref o_filter "filter" option for more details.
  * 
  * The status column can show the following flags:
- * - Normally only changed entries are printed; with -v all are printed.
- *   The command line option \c -v additionally causes the \c 'm' -flag to 
- *   be split into two, see below.
  * - \c 'D' and \c 'N' are used for \e deleted and \e new entries.
  * - \c 'd' and \c 'n' are used for entries which are to be unversioned or 
  *   added on the next commit; the characters were chosen as <i>little 
  *   delete</i> (only in the repository, not removed locally) and <i>little 
  *   new</i> (although \ref ignore "ignored"). See \ref add and \ref 
  *   unversion. \n
- *   If such an entry does not exist, it is marked with an \c '!' -- 
- *   because it has been manually marked, and for both types removing the 
- *   entry makes no sense.
+ *   If such an entry does not exist, it is marked with an \c "!" in the 
+ *   last column -- because it has been manually marked, and so the removal 
+ *   is unexpected.
  * - A changed type (character device to symlink, file to directory etc.)
  *   is given as \c 'R' (replaced), ie. as removed and newly added.
  * - \anchor status_possibly
  *   If the entry has been modified, the change is shown as \c 'C'.  \n
  *   If the modification or status change timestamps (mtime, ctime) are 
  *   changed, but the size is still the same, the entry is marked as 
- *   possibly changed (a question mark \c '?' is printed) - but see \ref 
- *   o_chcheck "change detection" for details.
+ *   possibly changed (a question mark \c '?' in the last column) - but see 
+ *   \ref o_chcheck "change detection" for details.
+ * - A \c 'x' signifies a conflict.
  * - \anchor status_meta_changed
  *   The meta-data flag \c 'm' shows meta-data changes like properties, 
  *   modification timestamp and/or the rights (owner, group, mode); 
@@ -80,8 +82,7 @@
  *   If \c 'P' is shown for the non-verbose case, it means \b only property 
  *   changes, ie. the entries filesystem meta-data is unchanged.
  * - A \c '+' is printed for files with a copy-from history; to see the URL 
- *   of the copyfrom source, use \c -v twice.
- * - A \c 'x' signifies a conflict.
+ *   of the copyfrom source, see the \ref o_verbose "verbose" option.
  *
  * 
  * Here's a table with the characters and their positions:
@@ -95,7 +96,9 @@
  *     n            n
  * \endverbatim
  *
- * Furthermore please take a look at \ref o_status_color.
+ * Furthermore please take a look at the \ref o_status_color "stat_color" 
+ * option, and for more information about displayed data the \ref o_verbose 
+ * "verbose" option.
  * */
 
 
@@ -110,7 +113,7 @@ char * st___visible_file_size(struct estat *sts)
 {
   static char buffer[20];
 
-  switch ( (sts->updated_mode ? sts->updated_mode : sts->st.mode) & S_IFMT)
+  switch ( (sts->st.mode ? sts->st.mode : sts->st.mode) & S_IFMT)
   {
 		case S_IFBLK:
     case S_IFCHR:
@@ -138,7 +141,7 @@ inline char * st___meta_string(int status_bits, int flags)
 
 	prop=(status_bits & FS_PROPERTIES) | (flags & RF_PUSHPROPS);
 
-  if (opt_verbose>0)
+  if (opt__is_verbose() > 0)
   {
     buffer[0] = status_bits & FS_META_MTIME ?  't' : '.';
     buffer[1] = status_bits & 
@@ -170,17 +173,21 @@ char *st___color(int status_bits)
 }
 
 
+/** Prints the entry in readable form.
+ * This function uses the \c OPT__VERBOSE settings.  */
 int st__print_status(char *path, int status_bits, int flags, char* size,
     struct estat *sts)
 {
   int status;
-	char *copyfrom;
+	char *copyfrom, *url;
 	int copy_inherited;
+	FILE* output=stdout;
 
 
+	DEBUGP("VERBOSITY=%d", opt__get_int(OPT__VERBOSE));
   status=0;
-  /* Should we be quiet or _very_ quiet? */
-  if (opt_verbose <0) goto ex;
+	/* Should we be quiet or _very_ quiet? */
+  if (opt__verbosity() <= VERBOSITY_QUIET) goto ex;
 
 
 	/* If the entry is new or deleted, got added or will be unversioned, we 
@@ -193,16 +200,16 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
 
   /* For flags like RF_ADD or RF_UNVERSION, print.  Don't print for 
    * RF_CHECK. */
-  if (opt_verbose>0 || 
+  if (opt__is_verbose() > 0 || 
       (status_bits & FS__CHANGE_MASK) ||
       (flags & ~RF_CHECK))
-  {
+	{
 		copyfrom=NULL;
 		copy_inherited=0;
 
 		/* Go to copied parent when RF_COPY_SUB is set, and re-construct the 
 		 * entire copyfrom-URL?  */
-		if (opt_verbose > 1)
+		if (opt__get_int(OPT__VERBOSE) & VERBOSITY_COPYFROM)
 		{
 			copy_inherited= (flags & RF_COPY_SUB);
 
@@ -214,44 +221,75 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
 			}
 		}
 
-    /* We do this here, so that the debug output is not disturbed by the 
-     * printed status characters. */
-    STOPIF( hlp__format_path(sts, path, &path), NULL);
+
+		if (opt__get_int(OPT__VERBOSE) & VERBOSITY_TOP_URL)
+			STOPIF( url__full_url(sts, &url), NULL);
+		else
+			url=NULL;
 
 
-		STOPIF_CODE_ERR(
-				printf("%s%c%s%c%c  %8s  %s%s%s%s%s\n",
-					opt__get_int(OPT__STATUS_COLOR) ? st___color(status_bits) : "",
+		/* We do this here, so that the debug output is not disturbed by the 
+		 * printed status characters. */
+		STOPIF( hlp__format_path(sts, path, &path), NULL);
 
-					flags & RF_ADD ? 'n' : 
-					flags & RF_UNVERSION ? 'd' : 
-					(status_bits & FS_REPLACED) == FS_REPLACED ? 'R' : 
-					status_bits & FS_NEW ? 'N' : 
-					status_bits & FS_REMOVED ? 'D' : '.',
 
-					st___meta_string(status_bits, flags),
+		/* We're no longer doing a single printf(); but setbuf() et. al. write 
+		 * that the default for terminals is line buffered, and block buffered 
+		 * in the redirected case, and that's exactly what we want. */
 
-					flags & RF_CONFLICT ? 'x' : 
-					status_bits & FS_CHANGED ? 'C' : '.',
+		if (opt__get_int(OPT__STATUS_COLOR))
+			STOPIF_CODE_EPIPE( fputs(st___color(status_bits), output), NULL);
 
-					flags & RF___IS_COPY ? '+' : 
-					status_bits & FS_LIKELY ? '?' : 
-					/* An entry marked for unversioning or adding, 
-					 * which does not exist, gets a '!' */
-					( ( status_bits & FS_REMOVED ) &&
-						( flags & (RF_UNVERSION | RF_ADD) ) ) ? '!' : '.',
+		if (opt__get_int(OPT__VERBOSE) & VERBOSITY_SHOWCHG)
+			STOPIF_CODE_EPIPE( fprintf(output, "%c%s%c%c  ",
+						flags & RF_ADD ? 'n' : 
+						flags & RF_UNVERSION ? 'd' : 
+						(status_bits & FS_REPLACED) == FS_REPLACED ? 'R' : 
+						status_bits & FS_NEW ? 'N' : 
+						status_bits & FS_REMOVED ? 'D' : '.',
 
-					size, path,
-					opt__get_int(OPT__STATUS_COLOR) ? ANSI__NORMAL : "",
+						st___meta_string(status_bits, flags),
 
-					/* Here the comparison of opt_verbose is already included in the 
-					 * check on copyfrom above. */
-					copyfrom ? " (copied from " : "",
-					copyfrom ? copyfrom : 
-						copy_inherited ? " (inherited)" : "",
-					copyfrom ? ")" : "") == -1,
-				errno, "Error printing output");
-  }
+						flags & RF_CONFLICT ? 'x' : 
+						status_bits & FS_CHANGED ? 'C' : '.',
+
+						flags & RF___IS_COPY ? '+' : 
+						status_bits & FS_LIKELY ? '?' : 
+						/* An entry marked for unversioning or adding, 
+						 * which does not exist, gets a '!' */
+						( ( status_bits & FS_REMOVED ) &&
+							( flags & (RF_UNVERSION | RF_ADD) ) ) ? '!' : '.'
+						), NULL);
+
+
+		if (opt__get_int(OPT__VERBOSE) & VERBOSITY_SHOWSIZE)
+			STOPIF_CODE_EPIPE( fprintf(output, "%8s  ", size), NULL);
+
+		if (opt__get_int(OPT__VERBOSE) & VERBOSITY_GROUP)
+			STOPIF_CODE_EPIPE( fprintf(output, "%-*s", 
+						ign__max_group_name_len+2,
+						sts->match_pattern ? sts->match_pattern->group_name :
+						"(none)"), NULL);
+
+		if (opt__get_int(OPT__VERBOSE) & VERBOSITY_SHOWNAME)
+			STOPIF_CODE_EPIPE( fputs(path, output), NULL);
+
+		if (opt__get_int(OPT__STATUS_COLOR))
+			STOPIF_CODE_EPIPE( fputs(ANSI__NORMAL, output), NULL);
+
+		/* Here the comparison of OPT__VERBOSE is already included in the check 
+		 * on copyfrom above. */
+		if (copyfrom || copy_inherited)
+			STOPIF_CODE_EPIPE( fprintf(output,
+						copy_inherited ? "  (inherited)" : "  (copied from %s)",
+						copyfrom), NULL);
+
+		if (url)
+			STOPIF_CODE_EPIPE( fprintf(output, "  %s", url), NULL);
+
+
+		STOPIF_CODE_EPIPE( fputs("\n", output), NULL);
+	}
 
 
 ex:
@@ -266,6 +304,7 @@ int st__status(struct estat *sts)
 	int status;
 	int e_stat, flags;
 	char *path;
+	int would_be_ignored;
 
 
 	status=0;
@@ -278,14 +317,17 @@ int st__status(struct estat *sts)
 
 	e_stat=sts->entry_status;
 	flags=sts->flags;
-	/* In case the file has been given directly as an argument to \ref status, 
-	 * we wouldn't see that it's new - because ops__traverse() would created 
-	 * its path. */
+	/* In case the file has been given directly as an argument to \ref 
+	 * status, we wouldn't see that it's new - because ops__traverse() would 
+	 * have created its path. */
 	if (flags & RF_ISNEW)
 	{
 		e_stat = ( e_stat & ~FS_REPLACED) | FS_NEW;
 		flags &= ~RF_ADD;
 		DEBUGP("Re-create the NEW status.");
+
+		if (opt__get_int(OPT__VERBOSE) & VERBOSITY_GROUP)
+			STOPIF( ign__is_ignore(sts, &would_be_ignored), NULL);
 	}
 
 	STOPIF( st__print_status(path, 
@@ -304,8 +346,13 @@ int st__action(struct estat *sts)
 {
 	int status;
 
+	status = 0;
+
+	if (hlp__only_dir_mtime_changed(sts))
+		return status;
+
 	if (opt__get_int(OPT__STOP_ON_CHANGE) &&
-			sts->entry_status)
+			sts->entry_status && (!(sts->entry_status & FS_CHILD_CHANGED)))
 		/* Status is a read-only operation, so that works. */
 		exit(1);
 
@@ -375,6 +422,9 @@ int st__work(struct estat *root, int argc, char *argv[])
 		action->local_callback=st__status;
 		STOPIF( waa__do_sorted_tree(root, ac__dispatch), NULL);
 	}
+
+	if (opt__get_int(OPT__GROUP_STATS))
+		STOPIF( ign__print_group_stats(stdout), NULL);
 
 ex:
 	return status;
@@ -641,11 +691,13 @@ char *st__type_string(mode_t mode)
 {
 	switch (mode & S_IFMT)
 	{
-		case S_IFDIR: return "directory";
-		case S_IFBLK: return "block-dev";
-		case S_IFCHR: return "char-dev";
-		case S_IFREG: return "file";
-		case S_IFLNK: return "symlink";
+		case S_IFDIR:     return "directory";
+		case S_IFBLK:     return "block-dev";
+		case S_IFCHR:     return "char-dev";
+		case S_IFREG:     return "file";
+		case S_IFLNK:     return "symlink";
+		case S_IFSOCK:    return "any-special";
+		case S_IFGARBAGE: return "garbage";
 	}
 
 	return "invalid";
@@ -666,82 +718,83 @@ int st__print_entry_info(struct estat *sts)
 
 
 	status=errno=0;
-	STOPIF( ops__build_path(&path, (struct estat*)sts), NULL);
-	STOPIF( url__full_url((struct estat*)sts, path, &url), NULL);
+	STOPIF( ops__build_path(&path, sts), NULL);
+	STOPIF( url__full_url(sts, &url), NULL);
 
 	copyfrom=NULL;
-	if (opt_verbose && (sts->flags & RF___IS_COPY))
+	if ((opt__get_int(OPT__VERBOSE) & VERBOSITY_COPYFROM) && 
+			(sts->flags & RF___IS_COPY))
 	{
 		STOPIF( cm__get_source(sts, path, &copyfrom, &copy_rev, 0), NULL);
 	}
 
-	STOPIF_CODE_EPIPE( printf("\tType:\t\t%s\n", 
+	STOPIF_CODE_EPIPE( printf("   Type:   \t%s\n", 
 				st__type_string(sts->st.mode)), NULL);
 	if (S_ISDIR(sts->st.mode))
-		STOPIF_CODE_EPIPE( printf( "\tChildCount:\t%u\n", 
+		STOPIF_CODE_EPIPE( printf( "   ChildCount:\t%u\n", 
 					sts->entry_count), NULL);
-	STOPIF_CODE_EPIPE( printf("\tURL:\t\t%s\n", url), NULL);
-	STOPIF_CODE_EPIPE( printf("\tStatus:\t\t0x%X (%s)\n", 
+	STOPIF_CODE_EPIPE( printf("   URL:   \t%s\n", url), NULL);
+	STOPIF_CODE_EPIPE( printf("   Status:\t0x%X (%s)\n", 
 				sts->entry_status, st__status_string(sts)), NULL);
-	STOPIF_CODE_EPIPE( printf("\tFlags:\t\t0x%X (%s)\n", 
+	STOPIF_CODE_EPIPE( printf("   Flags:\t0x%X (%s)\n", 
 				sts->flags & ~RF_PRINT,
 				st__flags_string_fromint(sts->flags)), NULL);
 
-	if (opt_verbose && copyfrom)
+	if (copyfrom)
 	{
-		STOPIF_CODE_EPIPE( printf("\tCopyfrom:\trev. %llu of %s\n", 
+		STOPIF_CODE_EPIPE( printf("   Copyfrom:\trev. %llu of %s\n", 
 					(t_ull)copy_rev, copyfrom), NULL);
 	}
 
-	STOPIF_CODE_EPIPE( printf("\tDev:\t\t%llu\n", 
+	STOPIF_CODE_EPIPE( printf("   Dev:  \t%llu\n", 
 				(t_ull)sts->st.dev), NULL);
-	STOPIF_CODE_EPIPE( printf("\tInode:\t\t%llu\n", 
+	STOPIF_CODE_EPIPE( printf("   Inode:  \t%llu\n", 
 				(t_ull)sts->st.ino), NULL);
-	STOPIF_CODE_EPIPE( printf("\tMode:\t\t0%4o\n", 
+	STOPIF_CODE_EPIPE( printf("   Mode:  \t0%4o\n", 
 				sts->st.mode), NULL);
-	STOPIF_CODE_EPIPE( printf("\tUID/GID:\t%u (%s)/%u (%s)\n", 
+	STOPIF_CODE_EPIPE( printf("   UID/GID:\t%u (%s)/%u (%s)\n", 
 				sts->st.uid, hlp__get_uname(sts->st.uid, "undefined"), 
 				sts->st.gid, hlp__get_grname(sts->st.gid, "undefined") ), NULL);
 	/* Remove the \n at the end */
-	STOPIF_CODE_EPIPE( printf("\tMTime:\t\t%.24s\n", 
+	STOPIF_CODE_EPIPE( printf("   MTime:  \t%.24s\n", 
 				ctime( &(sts->st.mtim.tv_sec) )), NULL);
-	STOPIF_CODE_EPIPE( printf("\tCTime:\t\t%.24s\n", 
+	STOPIF_CODE_EPIPE( printf("   CTime:  \t%.24s\n", 
 				ctime( &(sts->st.ctim.tv_sec) )), NULL);
 
 	STOPIF( waa__get_waa_directory(path, &waa_path, NULL, NULL,
 				GWD_WAA), NULL);
-	STOPIF_CODE_EPIPE( printf("\tWAA-Path:\t%s\n", 
+	STOPIF_CODE_EPIPE( printf("   WAA-Path:\t%s\n", 
 				waa_path), NULL);
 
 	if (!sts->parent)
 	{
 		STOPIF( waa__get_waa_directory(path, &waa_path, NULL, NULL,
 					GWD_CONF), NULL);
-		STOPIF_CODE_EPIPE( printf("\tConf-Path:\t%s\n", 
+		STOPIF_CODE_EPIPE( printf("   Conf-Path:\t%s\n", 
 					waa_path), NULL);
 	}
 
 	/* The root entry has no URL associated, and so no revision number.
 	 * Print the current revision of the highest priority URL. */
-	STOPIF_CODE_EPIPE( printf("\tRevision:\t%li\n", 
+	STOPIF_CODE_EPIPE( printf("   Revision:\t%li\n", 
 				sts->parent ? sts->repos_rev : urllist[0]->current_rev), NULL);
 
 	if (S_ISREG(sts->st.mode))
-		STOPIF_CODE_EPIPE( printf("\tRepos-MD5:\t%s\n", 
-					cs__md52hex(sts->md5)), NULL);
+		STOPIF_CODE_EPIPE( printf("   Repos-MD5:\t%s\n", 
+					cs__md5tohex_buffered(sts->md5)), NULL);
 
 	if (S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode))
 	{
 #ifdef DEVICE_NODES_DISABLED
 		DEVICE_NODES_DISABLED();
 #else
-		STOPIF_CODE_EPIPE( printf("\tDevice number:\t%llu:%llu\n", 
+		STOPIF_CODE_EPIPE( printf("   Device nr.:\t%llu:%llu\n", 
 					(t_ull)MAJOR(sts->st.rdev),
 					(t_ull)MINOR(sts->st.rdev)), NULL);
-	}
 #endif
+	}
 	else
-		STOPIF_CODE_EPIPE( printf("\tSize:\t\t%llu\n", 
+		STOPIF_CODE_EPIPE( printf("   Size:  \t%llu\n", 
 					(t_ull)sts->st.size), NULL);
 
 	/* Any last words? */

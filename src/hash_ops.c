@@ -10,6 +10,7 @@
 
 #include "global.h"
 #include "waa.h"
+#include "helper.h"
 #include "hash_ops.h"
 
 
@@ -230,7 +231,8 @@ int hsh___new_bare(char *wcfile, char *name, int gdbm_mode,
 			STOPIF_CODE_ERR( unlink(cp) == -1, errno,
 					"Removing database file '%s'", cp);
 
-		if (fname_out) *fname_out=strdup(cp);
+		if (fname_out) 
+			STOPIF( hlp__strdup( fname_out, cp), NULL);
 	}
 
 ex:
@@ -260,8 +262,7 @@ int hsh__new(char *wcfile, char *name, int gdbm_mode,
 	hash_t hash;
 
 
-	hash = calloc(1, sizeof(*hash));
-	STOPIF_ENOMEM(!hash);
+	STOPIF( hlp__calloc( &hash, 1, sizeof(*hash)), NULL);
 
 	/* Return errors silently. */
 	status=hsh___new_bare(wcfile, name, 

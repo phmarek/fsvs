@@ -21,6 +21,11 @@ else
 	$SUCCESS "Component-tests running"
 fi
 
+(
+  cd /
+	$BINq urls file:///
+)
+
 base=$TEST_PROG_DIR/comp-test
 for scr in `cd $base && ls ???_*.ct`
 do

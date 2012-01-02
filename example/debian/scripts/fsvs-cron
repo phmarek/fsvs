@@ -1,0 +1,27 @@
+#!/bin/sh
+
+set -e
+
+FSVS_BIN=$(which fsvs)
+FSVS_OPTS="-ostop_change=true -odir_exclude_mtime=true -ofilter=mtime,text,owner,mode,group,new,deleted"
+
+if ! $FSVS_BIN st / $FSVS_OPTS;then
+
+echo "fsvs has detected changes in monitored directories."
+echo ""
+echo "changed files:"
+echo "---------------------------------------------------"
+echo ""
+$FSVS_BIN st /
+echo ""
+echo "user last logged in:"
+echo "---------------------------------------------------"
+echo ""
+last -n 3
+echo ""
+echo "diff of the files changed:"
+echo "----------------------------------------------------"
+echo ""
+$FSVS_BIN diff /
+
+fi

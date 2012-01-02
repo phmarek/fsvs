@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -144,7 +144,7 @@ inline int hlp___do_convert(iconv_t cd,
 
 		/* Field precision and length cannot be given as long; let's hope they 
 		 * are never that long :-) */
-		DEBUGP("before iconv from=%*.*s", 
+		DEBUGP("before iconv from=%-*.*s", 
 				(int)srclen_rem, (int)srclen_rem, from_buf);
 		/* iconv should have a const in it! */
 		iconv_ret = iconv(cd,
@@ -204,14 +204,13 @@ int hlp___dummy_convert(const char *input, char**output, int len)
 
 
 	status=0;
-	if (len == -1)
-	{
-		/* Not really fine; we'd have to declare the output parameter as (const 
-		 * char), and fix all callers ... */
-		*output=(char*)input;
-	}
+	if (!input) 
+		*output=NULL;
 	else
 	{
+		if (len == -1)
+			len=strlen(input)+1;
+
 		STOPIF( cch__new_cache(&cache, 8), NULL);
 		STOPIF( cch__add(cache, 0, input, len+1, output), NULL);
 		(*output)[len]=0;
@@ -281,7 +280,7 @@ ex:
 /* For safety return a copy. */
 int hlp__local2utf8(const char *local_string, char** utf8_string, int len)
 {
-	static cache_entry_t *c=NULL;
+	static struct cache_entry_t *c=NULL;
 
 	return cch__entry_set( &c, 0, local_string, len, 0, utf8_string);
 }
@@ -347,14 +346,26 @@ int hlp__lstat(const char *fn, struct sstat_t *st)
 	status=lstat(fn, &st64);
 	if (status == 0) 
 	{
-		if (st)
-			hlp__copy_stats(&st64, st);
 		DEBUGP("%s: uid=%llu gid=%llu mode=0%llo dev=0x%llx "
 				"ino=%llu rdev=0x%llx size=%llu",
 				fn,
 				(t_ull)st64.st_uid, (t_ull)st64.st_gid, (t_ull)st64.st_mode, 
 				(t_ull)st64.st_dev, (t_ull)st64.st_ino, 
 				(t_ull)st64.st_rdev, (t_ull)st64.st_size);
+
+		/* FIFOs or sockets are never interesting; they get filtered out by 
+		 * pretending that they don't exist. */
+		/* We should return -ENOENT here, so that higher levels can give 
+		 * different error messages ... it might be confusing if "fsvs info 
+		 * socket" denies some existing entry. */
+		if (S_ISFIFO(st64.st_mode) || S_ISSOCK(st64.st_mode) || S_ISDOOR(st64.st_mode))
+		{
+			st64.st_mode = (st64.st_mode & ~S_IFMT) | S_IFGARBAGE;
+			status=-ENOENT;
+		}
+
+		if (st)
+			hlp__copy_stats(&st64, st);
 	}
 	else
 	{
@@ -433,7 +444,7 @@ char *hlp__pathcopy(char *dst, int *len, ...)
 	const char *src_1, *src_2, *src_3;
 	int status, eop;
 	va_list va;
-	const char null=0;
+	static const char null=0;
 
 
 	status=0;
@@ -477,7 +488,7 @@ char *hlp__pathcopy(char *dst, int *len, ...)
 
 	/* Do first 4 characters */
 	Increment();
-  if (*src_3 != PATH_SEPARATOR)
+	if (*src_3 != PATH_SEPARATOR)
 	{
 		strcpy(dest, start_path);
 		dest+=start_path_len;
@@ -509,11 +520,19 @@ char *hlp__pathcopy(char *dst, int *len, ...)
 
 			had_path=1;
 			/* The next few checks are duplicated in ops__traverse */
-			if (*src   == '.' && 
-					(*src_1 == PATH_SEPARATOR || *src_1 == 0) )
+			if (*src == '.' && *src_1 == PATH_SEPARATOR)
 			{
-				/* Simply ignore the ".". The next PATH_SEPARATOR gets ignored be
+				/* Simply ignore the ".". The next PATH_SEPARATOR gets ignored by
 				 * the next round. */
+				Increment();
+			}
+			else if (*src == '.' && *src_1 == 0)
+			{
+				/* We've got a "." as last parameter. Remove the last 
+				 * PATH_SEPARATOR, and ignore the "." to stop the loop. */
+				/* But only if it's not something like "/.", ie. keep the first 
+				 * PATH_SEPARATOR.  */
+				if (dest-dst > 1) *(--dest)=0;
 				Increment();
 			}
 			else
@@ -717,33 +736,41 @@ ex:
 /** -.
  * Returns 0 for success, \c EOF for no more data.
  *
- * Empty lines (only whitespace) are ignored.
+ * Empty lines (only whitespace) are ignored (but counted).
  *
  * If \a no_ws is set, the returned pointer has whitespace at beginning
  * and end removed; \c \\r and \c \\n at the end are always removed.
  *
  * Only a single statically allocated buffer is used, so the line has to be 
- * copied if needed over several invocations. */
-int hlp__string_from_filep(FILE *input, char **string, int no_ws)
+ * copied if needed over several invocations.
+ *
+ * \a eos is set to the last non-whitespace character in the line. */
+int hlp__string_from_filep(FILE *input, 
+		char **string, char **eos, int flags)
 {
 	int status;
 	static char *buffer=NULL;
+	static unsigned linenum;
 	char *start;
 	int i;
 
 
 	status=0;
 
+	if (flags & SFF_RESET_LINENUM)
+		linenum=0;
+	if (flags & SFF_GET_LINENUM)
+		return linenum;
+	if (!input) goto ex;
+
 	/* We impose a hard limit for simplicities' sake. */
 	if (!buffer)
-	{
-		buffer=malloc(STRING_LENGTH);
-		STOPIF_ENOMEM(!buffer);
-	}
+		STOPIF( hlp__alloc( &buffer, STRING_LENGTH), NULL);
 
-	do
+	while (1)
 	{
 		start=NULL;
+		linenum++;
 		if (!fgets(buffer, STRING_LENGTH, input))
 		{
 			/* fgets() returns NULL at EOF or on error; feof() 
@@ -759,24 +786,34 @@ int hlp__string_from_filep(FILE *input, char **string, int no_ws)
 		}
 
 		start=buffer;
-		if (no_ws)
-			while (isspace(*start)) start++;
+		if (flags & SFF_WHITESPACE)
+			start=hlp__skip_ws(start);
+
+		if ((flags & SFF_COMMENT) && *start == '#') 
+			continue;
+
 
 		i=strlen(start)-1;
 
-		/* Remove the \n at the end. For DOS-CRLF pairs we must use 
-		 * this test order. */
+		/* Remove the \n at the end. For DOS-CRLF pairs we must use this test 
+		 * order. */
 		if (i > 0 && start[i] == '\n')
 			i--;
 		if (i > 0 && start[i] == '\r')
 			i--;
 
-		if (no_ws)
-			while (i>=0 && isspace(start[i])) i--;
-
-		/* i is now in [-1 ... ] */
+		/* Always remove the \r|\n at the end; other whitespace is optionally 
+		 * removed.  */
 		start[i+1]=0;
-	} while (!*start);
+
+		while (i>=0 && isspace(start[i])) i--;
+		if (flags & SFF_WHITESPACE)
+			/* i is now in [-1 ... ] */
+			start[i+1]=0;
+		if (eos) *eos=start+i+1;
+
+		if (*start) break;
+	}
 
 	if (start)
 		DEBUGP("read string %s", start);
@@ -847,26 +884,29 @@ ex:
  * As we can always get/put data from/to the associated stream, the only 
  * rate limiter is the child process - how fast it can take/give data.
  *
- * So we're using that
- * */
+ * So we have to poll. */
 int hlp___encoder_waiter(struct encoder_t *encoder)
 {
 	int status;
 	/* The names look reversed, because the pipe_* name is how the child sees 
 	 * it.  */
-	struct pollfd poll_data[2] = 
-	{
-		[0] = { .events=POLLIN, .fd=encoder->pipe_out, },
-		[1] = { .events=POLLOUT, .fd=encoder->pipe_in, },
-	};
+	struct pollfd poll_data;
 
+	if (encoder->is_writer)
+	{
+		poll_data.events=POLLOUT;
+		poll_data.fd=encoder->pipe_in;
+	}
+	else
+	{
+		poll_data.events=POLLIN;
+		poll_data.fd=encoder->pipe_out;
+	}
 
 	status=0;
 	/* We cannot wait indefinitely, because we don't get any close event yet.  
 	 * */
-	STOPIF_CODE_ERR( poll(poll_data, 
-				sizeof(poll_data)/sizeof(poll_data[0]), 
-				100) == -1, errno,
+	STOPIF_CODE_ERR( poll(&poll_data, 1, 100) == -1, errno,
 			"Error polling for data");
 
 ex:
@@ -1053,15 +1093,16 @@ svn_error_t *hlp___encode_read(void *baton,
 				encoder->bytes_left-=status;
 				status=0;
 				DEBUGP("%llu bytes left", (t_ull)encoder->bytes_left);
-
-				if (encoder->bytes_left == 0 && !encoder->orig)
-				{
-					DEBUGP("closing connection");
-					STOPIF_CODE_ERR( close(encoder->pipe_in) == -1, errno,
-							"Cannot close connection to child");
-					encoder->pipe_in=-1;
-				}
 			}
+		}
+
+		if (encoder->bytes_left == 0 && !encoder->orig && 
+				encoder->pipe_in != -1)
+		{
+			DEBUGP("closing connection");
+			STOPIF_CODE_ERR( close(encoder->pipe_in) == -1, errno,
+					"Cannot close connection to child");
+			encoder->pipe_in=-1;
 		}
 
 		/* --- Meanwhile the child process processes the data --- */
@@ -1072,8 +1113,8 @@ svn_error_t *hlp___encode_read(void *baton,
 		if (status==-1 && errno==EAGAIN && ign_count>0)
 			ign_count--;
 		else
-			DEBUGP("receiving bytes from child %d: %d; %d", 
-					encoder->child, status, errno);
+			DEBUGP("receiving %d bytes from child %d: errno=%d", 
+					status, encoder->child, errno);
 		if (status==0)
 		{
 			encoder->eof=1;
@@ -1145,7 +1186,7 @@ svn_error_t *hlp___encode_close(void *baton)
 	apr_md5_final(md5, &encoder->md5_ctx);
 	if (encoder->output_md5)
 		memcpy(encoder->output_md5, md5, sizeof(*encoder->output_md5));
-	DEBUGP("encode end gives MD5 of %s", cs__md52hex(md5));
+	DEBUGP("encode end gives MD5 of %s", cs__md5tohex_buffered(md5));
 
 	STOPIF_CODE_ERR(retval != 0, ECHILD, 
 			"Child process returned 0x%X", retval);
@@ -1154,6 +1195,84 @@ ex:
 	IF_FREE(encoder);
 
 	RETURN_SVNERR(status);
+}
+
+
+/** Helper function.
+ * Could be marked \c noreturn. */
+void hlp___encode_filter_child(int pipe_in[2], int pipe_out[2],
+	 const char *path, const char *command)
+{
+	int status, i;
+
+	/* The symmetry of the sockets makes it a bit easier - it doesn't matter 
+	 * which handle we take. */
+	STOPIF_CODE_ERR( dup2(pipe_in[1], STDIN_FILENO) == -1 ||
+			dup2(pipe_out[1], STDOUT_FILENO) == -1,
+			errno, "Cannot dup2() the childhandles");
+
+	/* Now we may not give any more debug information to STDOUT - it would 
+	 * get read as data from the encoder! */
+
+	/* Close known filehandles. */
+	STOPIF_CODE_ERR( ( close(pipe_in[0]) |
+				close(pipe_out[0]) | 
+				close(pipe_in[1]) | 
+				close(pipe_out[1]) ) == -1, 
+			errno, "Cannot close the pipes");
+
+
+	/* Try to close other filehandles, like a connection to the repository or 
+	 * similar. They should not be kept for the exec()ed process, as 
+	 * (hopefully) nobody did a fcntl(FD_CLOEXEC) on them, but better to be 
+	 * sure. */
+	/* There are other constants than FD_SETSIZE, but they should do the 
+	 * same. */
+	/* We start from 3 - STDIN, STDOUT and STDERR should be preserved. */
+	for(i=3; i<FD_SETSIZE; i++)
+		/* No error checking. */
+		close(i);
+
+
+	/* \todo: do we have to do an UTF8-to-local transformation?
+	 * We normally have that as a property in the repository, so it's UTF8.
+	 * But we use it locally with another encoding (perhaps?), so it should get 
+	 * translated?
+	 * If someone uses non-ASCII-characters in this command, he gets what he 
+	 * deserves - a chance to write a patch. */
+
+	/* \todo: possibly substitute some things in command, like filename or 
+	 * similar. */
+
+	if (path[0] == '.' && path[1] == PATH_SEPARATOR) 
+		path+=2;
+	setenv(FSVS_EXP_CURR_ENTRY, path, 1);
+
+	/* We could do a system in the parent process, but then we'd have to 
+	 * juggle the filedescriptors around. Better to use a childprocess, where 
+	 * it soon doesn't matter. */
+	/* Calling '/bin/sh -c "..."' makes a normal shell with a childprocess;
+	 * we get the same with system(). Sadly it doesn't exec() over the shell 
+	 * process itself. */
+	/* We cannot use status, because that's overwritten by the macros 
+	 * below. */
+	i=system(command);
+
+	STOPIF_CODE_ERR(i == -1, errno, 
+			"Count not execute the command '%s'", command);
+	STOPIF_CODE_ERR(WIFSIGNALED(i), ECANCELED,
+			"The command '%s' got killed by signal %d",
+			command, WTERMSIG(i));
+	STOPIF_CODE_ERR(WEXITSTATUS(i), ECANCELED,
+			"The command '%s' returned an errorcode %u",
+			command, WEXITSTATUS(i));
+	STOPIF_CODE_ERR(!WIFEXITED(i), ECANCELED,
+			"The command '%s' didn't exit normally", command);
+
+	/* Don't do parent cleanups, just quit. */
+	_exit(0);
+ex:
+	_exit(1);
 }
 
 
@@ -1185,17 +1304,15 @@ int hlp__encode_filter(svn_stream_t *s_stream, const char *command,
 	struct encoder_t *encoder;
 	int pipe_in[2];
 	int pipe_out[2];
-	int i;
 
 
 	DEBUGP("encode filter: %s", command);
 	status=0;
 
-	encoder=malloc(sizeof(*encoder));
-	STOPIF_ENOMEM(!encoder);
+	STOPIF( hlp__alloc( &encoder, sizeof(*encoder)), NULL);
 
 	new_str=svn_stream_create(encoder, pool);
-	STOPIF_ENOMEM( !new_str );
+	STOPIF_ENOMEM( !new_str);
 
 	svn_stream_set_read(new_str, hlp___encode_read);
 	svn_stream_set_write(new_str, hlp___encode_write);
@@ -1214,68 +1331,11 @@ int hlp__encode_filter(svn_stream_t *s_stream, const char *command,
 	fflush(NULL);
 
 	encoder->child=fork();
-
 	if (encoder->child == 0)
-	{
-		/* Child */
-
-		/* The symmetry of the sockets makes it a bit easier - it doesn't matter 
-		 * which handle we take. */
-		STOPIF_CODE_ERR( dup2(pipe_in[1], STDIN_FILENO) == -1 ||
-				dup2(pipe_out[1], STDOUT_FILENO) == -1,
-				errno, "Cannot dup2() the childhandles");
-		/* Close known filehandles. */
-		STOPIF_CODE_ERR( ( close(pipe_in[0]) |
-					close(pipe_out[0]) | 
-					close(pipe_in[1]) | 
-					close(pipe_out[1]) ) == -1, 
-				errno, "Cannot close the pipes");
+		hlp___encode_filter_child(pipe_in, pipe_out, path, command);
 
 
-		/* Try to close other filehandles, like a connection to the repository or 
-		 * similar. They should not be kept for the exec()ed process, as 
-		 * (hopefully) nobody did a fcntl(FD_CLOEXEC) on them, but better to be 
-		 * sure. */
-		/* There are other constants than FD_SETSIZE, but they should do the 
-		 * same. */
-		/* We start from 3 - STDIN, STDOUT and STDERR should be preserved. */
-		for(i=3; i<FD_SETSIZE; i++)
-			/* No error checking. */
-			close(i);
-
-
-		/* \todo: do we have to do an UTF8-to-local transformation?
-		 * We normally have that as a property in the repository, so it's UTF8.
-		 * But we use it locally with another encoding (perhaps?), so it should get 
-		 * translated?
-		 * If someone uses non-ASCII-characters in this command, he gets what he 
-		 * deserves - a chance to write a patch. */
-
-		/* \todo: possibly substitute some things in command, like filename or 
-		 * similar. */
-
-		if (path[0] == '.' && path[1] == PATH_SEPARATOR) 
-			path+=2;
-		setenv(FSVS_EXP_CURR_ENTRY, path, 1);
-
-		/* We could do a system in the parent process, but then we'd have to 
-		 * juggle the filedescriptors around. Better to use a childprocess, where 
-		 * it soon doesn't matter. */
-		/* Calling '/bin/sh -c "..."' makes a normal shell with a childprocess;
-		 * we get the same with system(). Sadly it doesn't exec() over the shell 
-		 * process itself. */
-		status=system(command);
-
-		STOPIF_CODE_ERR(status == -1, errno, 
-				"Count not execute the command '%s'", command);
-		STOPIF(status,
-				"The command '%s' returned an error", command);
-
-		exit(0);
-	}
-
-
-	/* parent */
+	/* Parent continues. */
 	STOPIF_CODE_ERR(encoder->child == -1, errno, "Cannot fork()");
 
 	STOPIF_CODE_ERR( ( close(pipe_in[1]) | close(pipe_out[1]) ) == -1, 
@@ -1323,7 +1383,7 @@ int hlp__chrooter(void)
 	cwd=getenv(CHROOTER_CWD_ENV);
 	DEBUGP("fd of old cwd: %s", cwd);
 
-	/* If both are not set, there's no need for the chroot. Just return. */
+	/* If none are set, there's no need for the chroot. Just return. */
 	status = (libs ? 1 : 0) | (root ? 2 : 0) | (cwd ? 4 : 0);
 	if (status == 0) 
 	{
@@ -1481,8 +1541,12 @@ int hlp__match_path_envs(struct estat *root)
 
 			/* It matches. */
 			len=(cp-*env)-1;
-			sts->arg=malloc(1+len+1+3);
-			STOPIF_ENOMEM(!sts->arg);
+
+			/* We could use hlp__strnalloc() here; but then we'd have to copy 
+			 * from *env-1, which *should* be save, as that is normally allocated 
+			 * on the top of the (mostly downgrowing) stack.
+			 * Be conservative. */
+			STOPIF( hlp__alloc( &sts->arg, 1+len+1+3), NULL);
 
 			/* \todo DOS-compatible as %env% ? */
 			sts->arg[0]=ENVIRONMENT_START;
@@ -1751,8 +1815,7 @@ int hlp__stream_md5(svn_stream_t *stream, unsigned char md5[APR_MD5_DIGESTSIZE])
 
 
 	status=0;
-	buffer=malloc(buffer_size);
-	STOPIF_ENOMEM(!buffer);
+	STOPIF( hlp__alloc( &buffer, buffer_size), NULL);
 
 	if (md5)
 		apr_md5_init(&md5_ctx);
@@ -1809,6 +1872,10 @@ int hlp__rename_to_unique(char *fn, char *extension,
 	apr_file_t *tmp_f;
 
 
+	/* Thank you, subversion 1.6.4. "Path not canonical" - pfft. */
+	if (fn[0] == '.' && fn[1] == PATH_SEPARATOR)
+		fn+=2;
+
 	STOPIF_SVNERR( svn_io_open_unique_file2,
 			(&tmp_f, unique_name, fn, extension, 
 			 svn_io_file_del_on_close, pool));
@@ -1848,16 +1915,202 @@ int hlp__get_svn_config(apr_hash_t **config)
 	int status;
 	svn_error_t *status_svn;
 	static apr_hash_t *cfg=NULL;
+	char *cp;
+	int len;
 
 
 	status=0;
 	/* We assume that a config hash as NULL will never be returned.
 	 * (Else we'd try to fetch it more than once.) */
 	if (!cfg)
+	{
+		/* Subversion doesn't like "//" in pathnames - even if it's just the 
+		 * local configuration area. So we have to normalize them. */
+		len = opt__get_int(OPT__CONFIG_DIR)==0 ?
+			opt__get_int(OPT__CONF_PATH)+strlen(DEFAULT_CONFIGDIR_SUB)+1 :
+			opt__get_int(OPT__CONFIG_DIR);
+		STOPIF( hlp__alloc( &cp, len), NULL);
+
+		if (opt__get_int(OPT__CONFIG_DIR)==0)
+			hlp__pathcopy(cp, &len, 
+					opt__get_string(OPT__CONF_PATH), DEFAULT_CONFIGDIR_SUB, NULL);
+		else
+			hlp__pathcopy(cp, &len, 
+					opt__get_string(OPT__CONFIG_DIR), NULL);
+
+		opt__set_string(OPT__CONFIG_DIR, PRIO_MUSTHAVE, cp);
+		opt__set_int(OPT__CONFIG_DIR, PRIO_MUSTHAVE, len);
+
+
 		STOPIF_SVNERR( svn_config_get_config,
 				(&cfg, opt__get_string(OPT__CONFIG_DIR), global_pool));
+		DEBUGP("reading config from %s", opt__get_string(OPT__CONFIG_DIR));
+	}
 
 	*config=cfg;
 ex:
 	return status;
 }
+
+
+/** -.
+ * If \a source is not \c NULL \a len bytes are copied.
+ * The buffer is \b always \c \\0 terminated. */
+int hlp__strnalloc(int len, char **dest, const char const *source)
+{
+	int status;
+
+	STOPIF( hlp__alloc( dest, len+1), NULL);
+
+	if (source)
+		memcpy(*dest, source, len);
+	(*dest)[len]=0;
+
+ex:
+	return status;
+}
+
+/** -. */
+int hlp__strmnalloc(int len, char **dest, 
+		const char const *source, ...)
+{
+	int status;
+	va_list vl;
+	char *dst;
+
+
+	/* We don't copy now, because we want to know the end of the string 
+	 * anyway. */
+	STOPIF( hlp__alloc( dest, len), NULL);
+
+	va_start(vl, source);
+	dst=*dest;
+
+	while (source)
+	{
+		while (1)
+		{
+			BUG_ON(len<=0);
+			if (! (*dst=*source) ) break;
+			source++, dst++, len--;
+		}
+
+		source=va_arg(vl, char*);
+	}
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * That is not defined in terms of \c hlp__alloc(), because glibc might do 
+ * some magic to get automagically 0-initialized memory (like mapping \c 
+ * /dev/zero). */
+int hlp__calloc(void *output, size_t nmemb, size_t count)
+{
+	int status;
+	void **tgt=output;
+
+	status=0;
+	*tgt=calloc(nmemb, count);
+	STOPIF_CODE_ERR(!*tgt, ENOMEM,
+			"calloc(%llu, %llu) failed", (t_ull)nmemb, (t_ull)count);
+
+ex:
+	return status;
+}
+
+
+/** -. */
+int hlp__realloc(void *output, size_t size)
+{
+	int status;
+	void **tgt;
+
+	status=0;
+	tgt=output;
+	*tgt=realloc(*tgt, size);
+	/* Allocation of 0 bytes might (legitimately) return NULL. */
+	STOPIF_CODE_ERR(!*tgt && size, ENOMEM,
+			"(re)alloc(%llu) failed", (t_ull)size);
+
+ex:
+	return status;
+}
+
+
+/** -. */
+char* hlp__get_word(char *input, char **word_start)
+{
+	input=hlp__skip_ws(input);
+	if (word_start)
+		*word_start=input;
+
+	while (*input && !isspace(*input)) input++;
+	return input;
+}
+
+
+
+#ifndef HAVE_STRSEP
+/** -.
+ * Copyright (C) 2004, 2007 Free Software Foundation, Inc.
+ * Written by Yoann Vandoorselaere <yoann@prelude-ids.org>.
+ * Taken from http://www.koders.com/c/fid4F16A5D73313ADA4FFFEEBA99BE639FEC82DD20D.aspx?s=md5 */
+char * strsep (char **stringp, const char *delim)
+{
+	char *start = *stringp;
+	char *ptr;
+
+	if (start == NULL)
+		return NULL;
+
+	/* Optimize the case of no delimiters.  */
+	if (delim[0] == '\0')
+	{
+		*stringp = NULL;
+		return start;
+	}
+
+	/* Optimize the case of one delimiter.  */
+	if (delim[1] == '\0')
+		ptr = strchr (start, delim[0]);
+	else
+		/* The general case.  */
+		ptr = strpbrk (start, delim);
+	if (ptr == NULL)
+	{
+		*stringp = NULL;
+		return start;
+	}
+
+	*ptr = '\0';
+	*stringp = ptr + 1;
+
+	return start;
+}
+
+#endif
+
+
+int hlp__compare_string_pointers(const void *a, const void *b)
+{
+	const char * const *c=a;
+	const char * const *d=b;
+	return strcoll(*c,*d);
+}
+
+
+int hlp__only_dir_mtime_changed(struct estat *sts) 
+{
+	int st;
+
+	st = sts->entry_status;
+
+	return opt__get_int(OPT__DIR_EXCLUDE_MTIME) && 
+		S_ISDIR(sts->st.mode) && (!(st & FS_CHILD_CHANGED)) &&
+		(st & FS__CHANGE_MASK) == FS_META_MTIME;
+}
+
+

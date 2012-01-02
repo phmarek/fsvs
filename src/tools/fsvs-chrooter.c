@@ -16,7 +16,7 @@
 /** \defgroup howto_chroot HOWTO: About running fsvs on older systems
  * \ingroup howto
  *
- * This document explains how the chroot-wrapper for \c fsvs works, and how 
+ * This document explains how the chroot-wrapper for FSVS works, and how 
  * it has to be configured.
  *
  *
@@ -43,13 +43,13 @@
  *
  * \section chrooter_how How it does work
  * 
- * A small helper program allows to copy \c fsvs (with needed libraries) 
+ * A small helper program allows to copy FSVS (with needed libraries) 
  * from a current system (like <i>debian unstable</i>) to any 
  * (architecturally matching) other distribution, without worrying about 
  * library incompatibilities.
  *
  * This works by calling this wrapper program; it goes into a \c chroot 
- * jail and calls \c fsvs with additional data; \c fsvs then tries to load 
+ * jail and calls FSVS with additional data; FSVS then tries to load 
  * all needed libraries (see \ref hlp__chrooter), and goes out of the jail 
  * to resume operations from the default enviroment.
  *
@@ -70,7 +70,7 @@
  *
  * \section chrooter_current What to do on the current (updated) machine
  *
- * You take \c fsvs and copy that <b>with all needed libraries</b> into 
+ * You take FSVS and copy that <b>with all needed libraries</b> into 
  * some new directory structure on your old system; eg. \c 
  * /usr/local/fsvs-chroot.
 
@@ -117,11 +117,11 @@
  *
  * \section chrooter_usage How is this used, then?
  *
- * \c fsvs-chrooter can be called just like fsvs - it relays all parameters 
+ * FSVS-chrooter can be called just like fsvs - it relays all parameters 
  * into the jailed binary.
  *
  * Although it might be better to set the environment variables for \c 
- * fsvs-chrooter in a shell script named \c fsvs - then the other programs 
+ * fsvs-chrooter in a shell script named FSVS - then the other programs 
  * won't have to put up with the long library list. \n The \ref chrooter_sh 
  * "prepare script" below generates such a file.
  *
@@ -139,7 +139,7 @@
  *
  * \section chrooter_rest Some thoughts and technical details
  *
- * \note Why does \c fsvs-chrooter set two directory variables? \n
+ * \note Why does FSVS-chrooter set two directory variables? \n
  * We need the old \c / to set the correct root directory back; and the 
  * current working directory has to be restored, too.\n
  * If we did a <tt>chroot(current working directory)</tt>, we'd see a 

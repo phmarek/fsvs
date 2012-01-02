@@ -72,7 +72,7 @@ TEST_LIST := $(shell cd $(TEST_PROG_DIR) && ls ???_* | sort | grep -A 2000 "$(TL
 endif
 
 ifeq ($(PROTOCOL), svn+ssh)
-override PROTOCOL=svn+ssh://localhost/
+override PROTOCOL=svn+ssh://localhost
 endif
 
 ifeq ($(RANDOM_ORDER), 1)
@@ -80,7 +80,7 @@ TEST_LIST	:= $(shell perl -e 'srand();  while (@ARGV) { print splice(@ARGV, rand
 endif
 
 # For use by the locale-dependent tests.
-STG_UTF8:=xxç划xWörstCäseTäßt
+STG_UTF8:=xxµxWörstCäseTäßt
 # This gives eg. for de_AT "Jän", but in the locale encoding (eg. 8859-1)
 STG_LOC:=$(shell date +%b -d2001-01-27)
 # We don't use the 1st - depending on the timezone settings this might give  
@@ -109,7 +109,7 @@ WC1	:= $(WC)
 
 DFLT_REPO	:= $(TESTBASE)/default-repos.dump
 
-export REP REPURL REPSUBDIR REPURLBASE WC WC2 DFLT_REPO WC_COUNT WCBASE
+export REP REPURL REPSUBDIR REPURLBASE WC WC1 WC2 DFLT_REPO WC_COUNT WCBASE
 export BIN BINdflt BINq TEST_PROG_DIR LOGDIR BIN_FULLPATH
 
 PREPARE_REPOS	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_repos 
@@ -142,15 +142,25 @@ $(FSVS_WAA):
 $(FSVS_CONF):
 	test -d $(FSVS_CONF) || mkdir -p $(FSVS_CONF)
 
+
+SANITIZE := perl -pe 's/([^\x20-\x7e\r\n]+)/sprintf("\\(%s)", unpack("H*", $$1))/eg;'
 diag:
-	@echo testbase: $(TESTBASE)
-	@echo tests   : $(TEST_LIST)
-	@echo binary  : $(BIN)
-	@echo checker : $(CHECKER)
-	@echo verbose : $(VERBOSE)
-	@echo def.repo: $(DFLT_REPO)
-	@echo waa     : $(FSVS_WAA)
-	@echo conf    : $(FSVS_CONF)
+	@echo "testbase: $(TESTBASE)"
+	@echo "tests   : $(TEST_LIST)"
+	@echo "binary  : $(BIN)"
+	@echo "checker : $(CHECKER)"
+	@echo "verbose : $(VERBOSE)"
+	@echo "def.repo: $(DFLT_REPO)"
+	@echo "waa     : $(FSVS_WAA)"
+	@echo "conf    : $(FSVS_CONF)"
+	@echo "stg_utf8: $(STG_UTF8)" | $(SANITIZE)
+	@echo "stg_loc : $(STG_LOC)" | $(SANITIZE)
+
+locale_strings:
+	@echo $(STG_UTF8)
+	@echo $(STG_LOC)
+
+.PHONY: locale_strings diag
 
 $(DFLT_REPO): $(TEST_PROG_DIR)/001_init_dir
 	@echo Preparing default repository.
@@ -170,12 +180,14 @@ prepare_clean:
 	$(MAKE) -s prepare_empty 
 	svn mkdir -m "mkdir trunk" $(REPURL)
 	$(MAKE) -s CMD="ci -m x" prepare_wcs WC_COUNT=$(WC_COUNT)
+	$(BIN_FULLPATH) delay $(WC1)
 
 prepare_repos:
 	@echo Loading repository ...
 	$(MAKE) -s prepare_empty
 	svnadmin load -q $(REP) < $(DFLT_REPO)
 	$(MAKE) -s CMD="up" prepare_wcs WC_COUNT=$(WC_COUNT)
+	$(BIN_FULLPATH) delay $(WC1)
 
 prepare_wcs:
 	for i in `seq 1 $(WC_COUNT)` ; do $(MAKE) prepare_wc "CMD=$(CMD)" _WC=$(WCBASE)$$i ; done
@@ -189,14 +201,14 @@ prepare_wc:
 	mkdir $(_WC)
 	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC)  "")/* 2> /dev/null || true
 	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC) "^")/* 2> /dev/null || true 
-	cd $(_WC) && echo $(REPURL) | $(BINq) urls load
+	cd $(_WC) && echo N:url,$(REPURL) | $(BINq) urls load
 ifdef CMD
 	cd $(_WC) && $(BINq) $(CMD)
 endif
 endif
 
 run_tests:
-	@echo Running tests...
+	@echo Running tests $(TEST_LIST) ... 
 	@echo '' > $(FSVS_CONF)/config
 	@$(TEST_PROG_DIR)/run-tests
 

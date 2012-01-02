@@ -1,0 +1,92 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+
+logfile=$LOGDIR/066.verbosity
+
+newfn=some-file.$$
+echo LOL > $newfn
+
+# Must be more than 6 characters, so that we see whether the column width 
+# estimation works.
+groupname=roflLongNameHereUsed
+
+grp_dir=`$PATH2SPOOL $WC ^`/groups
+mkdir $grp_dir
+echo take > $grp_dir/$groupname
+$BINq group "group:$groupname,./**"
+
+function C
+{
+	opt="$1"
+	pat="$2"
+
+	$BINdflt st $opt > $logfile
+	# The shell doesn't want a variable as pattern.
+	if bash -c '[[ `cat '"$logfile"'` == '"$pat"' ]]'
+	then
+		$SUCCESS "got $opt=$pat"
+	else
+		cat $logfile
+		$ERROR "expected '$pat' for '$opt'"
+	fi
+}
+
+C "-q" '""'
+C "tree" '""'
+C "tree -v -N -N" '"...... "*"dir  tree"'
+
+C "$newfn" "'N...         4  $newfn'"
+C "$newfn -o verbose=none,changes" "'N...  '"
+C "$newfn -o verbose=none,changes,time" "'N.....  '"
+C "$newfn -o verbose=none,path" "'$newfn'"
+C "$newfn -o verbose=none,name" "'$newfn'"
+C "$newfn -o verbose=none,size" "'       4  '"
+C "$newfn -o verbose=none,default" "'N...         4  $newfn'"
+C "$newfn -o verbose=none,group" "'$groupname  '"
+# Entries selected on the command line (here with '*') are always given?
+#C "* -N -f default -o verbose=none,group" "'$groupname  '"
+C "$newfn -o verbose=none,copyfrom" "''"
+
+C "$newfn -o verbose=none,time" "''"
+C "$newfn -o verbose=quiet" "''"
+C "$newfn -q" "''"
+C "$newfn -o verbose=none,stacktrace" "''"
+
+
+from=empty-file
+$BINq cp $from $newfn
+C "$newfn -o verbose=none,copyfrom" "'  (copied from $REPURL/$from)'"
+
+$BINq ci -m1 > $logfile
+rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
+C "$newfn -o verbose=none,urls" "'  $REPURL/$newfn'"
+C "$newfn -o verbose=none,copyfrom" "''"
+
+for a in '-q -q' '-o verbose=veryquiet'
+do
+	date > $RANDOM
+	$BINdflt ci -m1 $a > $logfile
+	if [[ `wc -l < $logfile` -eq 0 ]]
+	then
+		$SUCCESS "No output for $a."
+	else
+		$ERROR "Expected quietness for $a."
+	fi
+done
+
+
+lines=`$BINdflt st -v | wc -l`
+all=`$BINdflt st -o verbose=all | tee $logfile | wc -l`
+echo "Got $all, wanted $lines"
+if [[ $lines -eq $all ]]
+then
+	$SUCCESS "'-o verbose=all' behaves"
+else
+	$ERROR "Not enough output for '-o verbose=all'"
+fi

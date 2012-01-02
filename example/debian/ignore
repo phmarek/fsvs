@@ -1,0 +1,11 @@
+ignore,m:004:000
+ignore,/**.gz
+ignore,/**.bz2
+ignore,/**.zip
+ignore,/**.rar
+ignore,/etc/fsvs
+ignore,/etc/resolv.conf
+ignore,/etc/mtab
+ignore,/etc/adjtime
+take,/etc/
+ignore,/**

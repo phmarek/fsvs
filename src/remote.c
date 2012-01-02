@@ -24,5 +24,8 @@
  * 
  * Per default it compares to \c HEAD, but you can choose another 
  * revision with the \c -r parameter.
+ *
+ * Please see the \ref update "update" documentation for details regarding 
+ * multi-URL usage.
  * */
 

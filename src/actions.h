@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -119,6 +119,15 @@ struct actionlist_t
 	/** Makes ops__update_single_entry() keep the children of removed 
 	 * directories. */
 	int keep_children:1;
+	/** Says that we want the \c estat::st overwritten while looking for 
+	 * local changes.  */
+	int overwrite_sts_st:1;
+	/** Whether waa__update_dir() may happen.
+	 * (It must not for updates, as we'd store local changes as "from 
+	 * repository"). */
+	int do_update_dir:1;
+	/** Says that this is a read-only operation (like "status"). */
+	int is_readonly:1;
 };
 
 

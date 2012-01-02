@@ -1,0 +1,37 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+logfile=$LOGDIR/064.url_readonly
+
+echo $$ > $$
+
+for ro in readonly readonly:1 ro ro:1
+do
+	echo $ro,$REPURL | $BINdflt urls load
+	# Allow an error code.
+	$BINq ci -mBUG || true
+	if $BINdflt log -rHEAD | grep BUG
+	then
+		$ERROR "readonly flag '$ro' did commit"
+	fi
+done
+
+# As the URL is the same, it should work with a simple change, too.
+$BINdflt urls ro:0,$REPURL
+if [[ `$BINdflt urls dump | wc -l` -ne 1 ]]
+then
+	$ERROR "url change doesn't work"
+fi
+
+if $BINq ci -m1
+then
+	$SUCCESS "readonly flag with value=0 taken"
+else
+	$ERROR "Expected commit with readonly=0"
+fi
+

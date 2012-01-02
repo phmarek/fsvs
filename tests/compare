@@ -1,13 +1,19 @@
 #!/usr/bin/perl
 
+use Getopt::Std;
+
+getopts("dmx:h");
+
 $s=shift;
 $d=shift;
-($s && $d) || die "Which directories to compare???\n";
+die <<'EOF'
+Need two directories to compare, and maybe
+   -d             ignore dir-mtime
+   -m             expect mismatch in directory listing
+   -x <pattern>   ignore changes that match this pattern
+EOF
+if $opt_h || !($s && $d);
 
-# !! crashes syntax highlightning in vim
-$expect_fail= ! !(shift());
-
-$ignore_dmtime= shift();
 
 # find /tmp/fsvs-test-1000/wc-1/ -printf "% y%04m %7s %5G %5U %T+ %P\0\t%l\0\n"
 # strace -o /tmp/asdga -f -tt 
@@ -16,7 +22,7 @@ $cmd=qq'LANG=C rsync -ain --delete "$s" "$d" -c';
 for (`$cmd`)
 {
 # Ignore empty lines.
-	next if m(^\s*$);
+  next if m(^\s*$);
 
 # ignore root directory
   next if m(\.d......... \./\s*$);
@@ -24,10 +30,12 @@ for (`$cmd`)
 # ignore mtime of links
   next if m(\.L\.\.t\.\.\.\.\.\. .* -> );
 # and directories
-  next if $ignore_dmtime && m(\.d\.\.t\.\.\.\.\.\. .*);
+  next if $opt_d && m(\.d\.\.t\.\.\.\.\.\. .*);
+
+  next if $opt_x && m($opt_x)o;
 
 # everything else is a change.
-	push @changes, $_;
+  push @changes, $_;
 #.L..t...... typechange/device-symlink -> device-1
 #>fc........ typechange/dir-file
 #.L..t...... typechange/file-symlink -> file-1
@@ -36,12 +44,12 @@ for (`$cmd`)
 
 $SIG{"__DIE__"} = sub { print STDERR '$ ',$cmd,"\n",@changes,@_; exit 1; };
 
-if ($expect_fail && @changes)
+if ($opt_m && @changes)
 {
-	print "----- expected differences\n";
+  print "----- expected differences\n";
 # pass output for further processing
-	print @changes;
-	exit 0;
+  print @changes;
+  exit 0;
 }
 
 die "----- Differences were found\n" if @changes;

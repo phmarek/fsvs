@@ -12,17 +12,7 @@ function _MSG
   unused=$4
 	shift 4
 
-	rec=${#BASH_LINENO[*]}
-	# It took me a long time to find out that expr returns an errorlevel,
-	# if it's result is 0; eg. 2 - 2 returns errorlevel 1.
-	# That's why we have -le and not -lt.
-	if [[ $rec -le 2 ]]
-	then
-	  idx=0
-	else
-		idx=`expr $rec - 2`
-	fi
-	line=${BASH_LINENO[$idx]}
+	line="${BASH_LINENO[0]}"
 
 	# If the terminal doesn't support color switching, we should not
 	# stop - so ignore return value.
@@ -33,6 +23,14 @@ function _MSG
 		# Tests that were ok need not be a jump mark
 		echo "$CURRENT_TEST at $line: $@"
 	else
+		rec=${#BASH_LINENO[*]}
+		# It took me a long time to find out that expr returns an errorlevel,
+		# if it's result is 0; eg. 2 - 2 returns errorlevel 1.
+		for idx in `seq 3 $rec`
+		do
+			idx=`expr $rec - 2`
+			echo "\"$CURRENT_TEST\":${BASH_LINENO[$idx]}: calling ${FUNCNAME[$idx]}"
+		done
 		echo "\"$CURRENT_TEST\":$line: $_msg: $@"
 	fi
 
@@ -51,6 +49,12 @@ export WARN="_MSG 0 WARNING 3 \$LINENO"
 export ERROR="_MSG 1 NOK 1 \$LINENO"
 # error, non-breaking
 export ERROR_NB="_MSG 0 NOK 1 \$LINENO"
+
+
+# When we're checking results in some locale, we nonetheless need the 
+# output in plain english, so that the strings (eg. from diff) can be 
+# compared.
+export LC_MESSAGES=C
 
 
 export COMPARE="$TEST_PROG_DIR/compare"

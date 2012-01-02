@@ -146,14 +146,107 @@ $BINq add d2/added
 
 
 $BINdflt uncopy d2
-$BINdflt ignore './**'
+
+
+function C
+{
+	$BINdflt st "$1" -N -N > $logfile
+	if [[ `cat $logfile` != $2* ]]
+	then
+		cat $logfile
+		$ERROR "Wrong status for $1, exp. $2"
+	fi
+}
 $BINdflt st d2 > $logfile
-if [[ `sort < $logfile` == ".m.. "*" dir  d2"*"n... "*" 6  d2/added"*"nP.. "*" 6  d2/prop" ]]
+C d2 'n...'
+C d2/added 'n...'
+C d2/prop 'nP..'
+
+$SUCCESS "uncopy sets ADDED".
+
+
+
+# Now we build a big file (so that manber hashes are done), commit it, and 
+# define a copy.
+# - for the simple copy with the same mtime *no* MD5 should be calculated
+# - for a change (different mtime) the MD5 has to be done.
+# - On commit the manber hashes should be done (but locally only, the file 
+#   must not be sent to the repository)
+
+# We need the debug output to see whether that works as wanted.
+if [[ "$opt_DEBUG" != "1" ]]
 then
-	$SUCCESS "'uncopy dir' with added works"
-else
-	$BINdflt st
-	$ERROR "Unexpected status output after 'uncopy dir' for added entries."
+	$WARN "Can't test manber hashing without debug log."
+	# Or can we, simply looking whether the md5s file exist?
+	exit
 fi
 
+file1=tt-$RANDOM
+file2=$file1.cp
+function CountManber
+{
+	exp="$1"
+	shift
+	if $BINdflt st -v "$@" | fgrep "^$exp"
+	then
+		$BINdflt st -v "$@"
+		$ERROR "Expected output '$exp'"
+	fi
+
+	$BINdflt st -D cs___end_of_block -d "$@" | grep "manber found a border" | wc -l
+}
+
+
+$INFO "Preparing big file ..."
+# We need a file with some minimum number of manber blocks.
+# I had "seq 10000000 10111111" but that gave only 3.
+exp_manber=15
+perl -e '$zero="\0" x 65536; for(0 .. 15) { print $_, $zero; }' > $file1
+$BINdflt delay
+touch .
+
+$BINq ci -m1
+
+
+$INFO "Doing copy."
+cp -a $file1 $file2
+$BINq cp $file1 $file2
+if [[ `CountManber "....." $file2` == 0 ]]
+then
+	$SUCCESS "No hashing on unchanged copy."
+else
+	$ERROR "Manber-hashing on unchanged copy?"
+fi
+
+# change data at beginning, give another mtime
+dd conv=notrunc of=$file2 if=$logfile bs=1 count=16 seek=123
+touch -d yesterday $file2
+if [[ `CountManber ".t.C." $file2` -gt $exp_manber ]]
+then
+	$SUCCESS "Hashing on changed copy."
+else
+	$ERROR "Changed copy not hashed?"
+fi
+
+# Revert to original, so commit doesn't have to send data.
+cat $file1 > $file2
+touch -d yesterday $file2
+
+# Now commit, and look whether the manber hashes are done *locally*.
+$BINdflt ci -m1 -d > $logfile
+if grep 'ci__nondir.* doing local MD5.' $logfile
+then
+	$SUCCESS "OK, local MD5 done."
+else
+	$ERROR "no local MD5?"
+fi
+
+# Now test whether we really find changes soon.
+dd conv=notrunc of=$file2 if=$logfile bs=1 count=16 seek=1
+if [[ `CountManber ".t.C." $file2` -gt 1 ]]
+then
+	$ERROR "Committed copy hashed full, no manber hashes available."
+else
+	$SUCCESS "Manber hashes exist for unchanged copy."
+fi
 

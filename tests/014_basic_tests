@@ -85,5 +85,14 @@ else
 	$ERROR "expected 'committed revision'"
 fi
 
-
 $WC2_UP_ST_COMPARE
+
+
+# Test an entry with special (ASCII) characters.
+$INFO "Testing with a strange filename."
+#fn=`echo -e " :,;#*+?!'\t$\g%\\g()\n=\r[]\f{}"`
+fn=" :,;#*+?!'\t$\g%\\g()\n=\r[]\f{}"
+echo "$fn" > "$fn"
+$BINq ci -m1
+$WC2_UP_ST_COMPARE
+

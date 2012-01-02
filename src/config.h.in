@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2008 Philipp Marek.
+ * Copyright (C) 2006-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -14,7 +14,7 @@
 
 /** \defgroup compat Compatibility and interfaces
  *
- * For a reference on how to use \c fsvs on older system, please see also 
+ * For a reference on how to use FSVS on older system, please see also 
  * \ref howto_chroot.
  * */
 
@@ -26,7 +26,7 @@
  * \ingroup compati
  *
  * Here are the results of \c configure stored.
- * They get defined by the system and are used to tell \c fsvs whether
+ * They get defined by the system and are used to tell FSVS whether
  * optional parts can be activated or not. */
 /** @{ */
 
@@ -43,6 +43,17 @@
 
 /** If set to 1, disable debug messages. */
 #undef ENABLE_RELEASE
+
+
+/** How many characters of the MD5(wc_path) are used to distinguish the WAA 
+ * paths. */
+#undef WAA_WC_MD5_CHARS
+#if WAA_WC_MD5_CHARS >=0 && WAA_WC_MD5_CHARS <=32
+	/* nothing, ok. */
+#else
+	#error "WAA_WC_MD5_CHARS invalid."
+#endif
+
 
 /** OpenBSD has no locales support. */
 #undef HAVE_LOCALES
@@ -124,6 +135,34 @@ typedef int (*comparison_fn_t) (__const void *, __const void *);
 #define FASTCALL __attribute__((fastcall))
 #else
 #define FASTCALL
+#endif
+
+/** Changing owner/group for symlinks possible? */
+#undef HAVE_LCHOWN
+/** Changing timestamp for symlinks? */
+#undef HAVE_LUTIMES
+
+
+/** For Solaris 10, thanks Peter. */
+#ifndef NAME_MAX
+#define NAME_MAX (FILENAME_MAX)
+#endif
+#undef HAVE_STRSEP
+#ifndef HAVE_STRSEP
+char * strsep (char **stringp, const char *delim);
+#endif
+
+#undef HAVE_FMEMOPEN
+#ifdef HAVE_FMEMOPEN
+#define ENABLE_DEBUGBUFFER 1
+#else
+#undef ENABLE_DEBUGBUFFER
+#endif
+
+
+/** Check for doors; needed for Solaris 10, thanks XXX */
+#ifndef S_ISDOOR
+#define S_ISDOOR(x) (0)
 #endif
 
 

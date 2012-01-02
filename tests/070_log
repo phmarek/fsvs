@@ -1,0 +1,236 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+# If the filename and the message overlap, the "log -v" test
+# "grep"s the wrong data.
+file=x-commit-msg-file-$RANDOM-$RANDOM-$RANDOM-x
+# Date in a german locale gives "Jän", in the locale codeset - to verify 
+# the correct en/deconding!
+# We don't use the 1st - depending on the timezone settings this might give  
+# us December.
+msg="$STG_UTF8.$STG_LOC"
+
+logfile=$LOGDIR/070.log
+
+# Exercise the commit msg editor code. Try an empty file, too.
+echo $RANDOM > $file
+EDITOR="touch" $BINdflt ci 
+echo $msg > $file
+EDITOR="cp $file" $BINdflt ci -o author=NoSuchMan
+
+svn log $REPURL -rHEAD > $logfile
+if grep $msg < $logfile > /dev/null
+then
+	$SUCCESS "Message was taken"
+else
+	$ERROR "Message not fetched from editor!"
+fi
+
+if [[ "$PROTOCOL" != "file://" ]]
+then
+  $WARN "Author only taken for file://; doesn't work for svn+ssh."
+else
+	if grep NoSuchMan < $logfile > /dev/null
+	then
+		$SUCCESS "Author was taken"
+	else
+		$ERROR "Author not used on commit"
+	fi
+fi
+
+
+$BINdflt log -rHEAD > $logfile 2>&1
+if grep $msg < $logfile > /dev/null
+then
+	$SUCCESS "'fsvs log -rX' works."
+else
+	$ERROR "'fsvs log -rX' doesn't work."
+fi
+
+
+# For the just created file there should be only a single revision.
+$BINdflt log $file > $logfile 2>&1
+if grep $msg < $logfile > /dev/null
+then
+	$SUCCESS "'fsvs log file' works."
+else
+	$ERROR "'fsvs log file' doesn't work."
+fi
+
+# Test log output options
+$BINdflt log -o log_output=normal $file > $logfile
+if grep "^$msg" < $logfile > /dev/null
+then
+	$SUCCESS "Normal log output works"
+else
+	$ERROR "Normal log output wrong"
+fi
+
+$BINdflt log -o log_output=indent,color $file > $logfile
+# I cannot make grep and egrep understand \x1b.
+# Double reverse logic - if 0 lines found, return non-zero.
+if grep "^  $msg" < $logfile > /dev/null &&
+	perl -e 'exit (0 == grep(/\x1b\[0;0m/, <STDIN>))' < $logfile
+then
+	$SUCCESS "Indented, colorized log output works"
+else
+	$ERROR "Indented, colorized log output wrong"
+fi
+
+
+# Test -F for commit message, with a very long line.
+# That can fail for non-UTF8-characters, if one would get cut in the 
+# middle. (That's why there are so many strange things in the above line!)
+for a in `seq 1 200` ; do echo -n $msg$msg ; done > $file
+$BINdflt ci -F $file
+
+if svn log $REPURL -rHEAD | grep $msg$msg > $logfile 2>&1
+then
+	$SUCCESS "message was taken"
+else
+	$ERROR "message not read from file!"
+fi
+
+# Test log -v
+$BINdflt log -rHEAD:HEAD -v > $logfile 2>&1
+if grep $file < $logfile > /dev/null
+then
+	$SUCCESS "'fsvs log -v -rX:Y' works."
+else
+	$ERROR "'fsvs log -v -rX:Y' doesn't work."
+fi
+
+# Test empty file
+> $file
+$BINdflt ci -F $file
+
+# Test limit parameter
+$BINdflt log -rHEAD:1 -o limit=1 $file > $logfile
+if [[ `wc -l < $logfile` -eq 5 ]]
+then
+  $SUCCESS "log limit obeyed"
+else
+	cat $logfile
+	wc -l < $logfile
+  $ERROR "log limit doesn't work"
+fi
+
+
+# Test EPIPE handling.
+# I could reproduce it with "strace -o /dev/null $BINdflt log | true", (or 
+# "| head -1"), but only in 1 of 10 cases without the strace.
+strace_bin=`which strace || true`
+strace_cmd=${strace_bin:+$strace_bin -o /dev/null}
+for command in log st
+do
+	ret=$(
+		set -o pipefail
+		$strace_cmd $BINdflt $command 2>$logfile | true
+		echo $?
+		set +o pipefail )
+	if [[ $ret -eq 0 ]]
+	then
+		# No errors on STDOUT allowed.
+		if [[ `wc -l < $logfile` -eq 0 ]]
+		then
+			$SUCCESS "EPIPE on $command handled correctly"
+		else
+			$ERROR "wrong number of output lines on EPIPE $command test"
+		fi
+	else
+		$ERROR "Error code on EPIPE $command"
+	fi
+done
+
+
+$INFO "Test for filename sorting"
+touch `seq -fx-%g 100 200`
+$BINq ci -m1
+$BINdflt log -r HEAD -v | grep "^  x-" > $logfile
+if sort < $logfile | diff -u - $logfile
+then
+	$SUCCESS "Filenames are sorted."
+else
+	$ERROR "Filenames not sorted"
+fi
+
+
+$INFO "Test for filename filtering"
+mkdir -p SOME/dir/below
+touch SOMEdonttakeme 
+touch SOME/Ill_be_there  SOME/dir-is-this-not
+touch SOME/dir/below/Take_a_Wok_on_the_wild_side
+$BINq ci -mZeta
+$BINdflt log -r HEAD -o limit=1 -v SOME > $logfile
+if ! grep Zeta $logfile 
+then
+	$ERROR "Wrong message in log?"
+fi
+if grep SOMEdonttakeme $logfile 
+then
+	$ERROR "Wrong entry in log"
+fi
+if ! grep -E 'Ill_be_there$' $logfile
+then
+	$ERROR "Entry missing"
+fi
+if ! grep -E ' SOME/Ill_be_there$' $logfile
+then
+	$ERROR "Wrong path syntax"
+fi
+
+$INFO "'fsvs log -v' on a file"
+# Test log for a file
+$BINdflt log -r HEAD -o limit=1 -v SOME/dir-is-this-not > $logfile
+if ! grep Zeta $logfile 
+then
+	$ERROR "Wrong message in log?"
+fi
+if ! grep '^  SOME/dir-is-this-not$' $logfile
+then
+	$ERROR "Expected file not seen"
+fi
+# A file, and one line log message.
+if [[ `grep '^  ' $logfile | wc -l` != 2 ]]
+then
+	$ERROR "Too many entries returned."
+fi
+
+$BINdflt log -r HEAD -o limit=1 -v $WC1/SOME/../SOME/dir-is-this-not > $logfile
+if ! grep "^  $WC1/SOME/../SOME/dir-is-this-not\$" $logfile
+then
+	$ERROR "Full file path not given."
+fi
+
+$SUCCESS "'log -v' output takes parameters correctly."
+
+
+
+$INFO "Tests for -u"
+if $BINdflt log -u url -u url
+then
+	$ERROR "Duplicate -u shouldn't be taken."
+fi
+if $BINdflt log -u not_here
+then
+	$ERROR "Nonexisting URL taken"
+fi
+if ! $BINdflt log -u url -r HEAD > $logfile
+then
+	$ERROR "Normal -u errors?"
+fi
+mkdir a
+$BINq ci -m2nd
+$BINq urls name:foo,$REPURL/a
+$BINq update
+$BINdflt log -u foo -r HEAD > $logfile
+if ! grep 2nd $logfile
+then
+	$ERROR "-u foo wrong message?"
+fi
+
+$SUCCESS "Tests for -u successfull."

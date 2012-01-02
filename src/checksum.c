@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,7 +23,7 @@
 /** \file
  * CRC, manber functions. */
 
-#define MAPSIZE (256*1024*1024)
+#define MAPSIZE (32*1024*1024)
 
 
 
@@ -31,7 +31,7 @@
  * We calculate it once, and reuse it. */
 struct t_manber_parms
 {
-  AC_CV_C_UINT32_T values[256];
+	AC_CV_C_UINT32_T values[256];
 };
 
 /** Everything needed to calculate manber-hashes out of a stream.
@@ -88,11 +88,11 @@ struct t_manber_parms manber_parms;
 static struct t_manber_data cs___manber;
 
 
-const char 
 /** The write format string for \ref md5s. */
-cs___mb_wr_format[]= "%s %08x %10llu %10llu\n",
+const char cs___mb_wr_format[]= "%s %08x %10llu %10llu\n";
 /** The read format string for \ref md5s. */
-	cs___mb_rd_format[]= "%*s%n %x %llu %llu\n";
+const char cs___mb_rd_format[]= "%*s%n %x %llu %llu\n";
+
 /** The maximum line length in \ref md5s :
  * - MD5 as hex (constant-length), 
  * - state as hex (constant-length),
@@ -118,14 +118,42 @@ int cs___end_of_block(const unsigned char *data, int maxlen,
  * Returns -1 on error. */
 inline static int cs__hex2val(char ch)
 {
-	if (ch >= '0' && ch <= '9')
-		return ch-'0';
-	if (ch >= 'A' && ch <= 'F')
-		return ch-'A'+10;
-	if (ch >= 'a' && ch <= 'f')
-		return ch-'a'+10;
+	/* I thought a bit whether I should store the values+1, ie. keep most of 
+	 * the array as 0 - but that doesn't save any memory, it only takes more 
+	 * time.
+	 * Sadly the various is*() functions (like isxdigit()) don't seem to 
+	 * include that information yet, and I couldn't find some table in the 
+	 * glibc sources.
+	 * (I couldn't find anything in that #define mess, TBH.) */
+	static const signed char values[256]={
+		/* 0x00 */
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		/* 0x20 = space ... */
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		/* 0x30 = "012345" */
+		+0,  1,  2,  3,  4,  5,  6,  7,   8,  9, -1, -1, -1, -1, -1, -1,
+		/* 0x40 = "@ABCD" ... */ 
+		-1, 10, 11, 12, 13, 14, 15, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		/* 0x60 = "`abcd" ... */
+		-1, 10, 11, 12, 13, 14, 15, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
 
-	return -1;
+		/* 0x80 */
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1,  -1, -1, -1, -1, -1, -1, -1, -1,
+	};
+
+	/* To avoid having problems with "negative" characters */
+	return values[ ch & 0xff ];
 }
 
 
@@ -142,7 +170,7 @@ inline int cs__two_ch2bin(char *stg)
 
 /** -.
  * Exactly the right number of characters must be present. */
-int cs__char2md5(const char *input, md5_digest_t md5)
+int cs__char2md5(const char *input, char **eos, md5_digest_t md5)
 {
 	int i, status, x, y;
 
@@ -152,40 +180,32 @@ int cs__char2md5(const char *input, md5_digest_t md5)
 	{
 		/* first check first character. If it's a \0, reading
 		 * the next character would possibly result in a SEGV. */
-		x=cs__hex2val(*input);
-		STOPIF_CODE_ERR(x == -1, EINVAL,
-				"Illegal hex char in high nibble: %c", *input);
-		input++;
+		x=cs__hex2val(input[0]);
+		y=cs__hex2val(input[1]);
 
-		y=cs__hex2val(*input);
-		STOPIF_CODE_ERR(y == -1, EINVAL,
-				"Illegal hex char in low nibble: %c", *input);
-		input++;
+		/* I briefly thought about moving this test out of the loop, but that 
+		 * would possibly result in a SEGV if some (too short, but delimited) 
+		 * buffer gets parsed. */
+		STOPIF_CODE_ERR( (y|x) == -1, EINVAL,
+				"Illegal hex characters in %c%c", input[0], input[1]);
+
+		input+=2;
 		md5[i]=(x<<4) | y;
 	}
+
+	/* This should return a (const char*), to be compatible with the input.
+	 * But we cannot simply change all variables in ops__load_1entry() -
+	 * strtoul() has the same signature (const char*, char**). */
+	if (eos) *eos=(char*)input;
 
 ex:
 	return status;
 }
 
 
-/** -.
- * This function alternates between a few static buffers,
- * to allow for a printf("%s %s\n", cs__md52hex(), cs__md52hex()); 
- *
- * It doesn't use the string caches, because the exact length of the 
- * buffers is known ... so the alloc/realloc/strcpy overhead is 
- * unnecessary. */
-char *cs__md52hex(const md5_digest_t md5)
+/** -. */
+char* cs__md5tohex(const md5_digest_t md5, char *dest)
 {
-	static int last=0;
-	static char stg[4][APR_MD5_DIGESTSIZE*2+1] = { { 0 } };
-	char *cur;
-
-	last++;
-	if (last >= sizeof(stg)/sizeof(stg[0])) last=0;
-	cur=stg[last];
-
 	/* According to callgrind is this one of the most cpu-intensive
 	 * places in *this* program (not counting libraries).
 	 * Of course, it vanishes against apr_file_read and others ...
@@ -195,7 +215,7 @@ char *cs__md52hex(const md5_digest_t md5)
 	 * a simple "fsvs up".
 	 *
 	 * If there was only something like #while .... */
-	sprintf(cur, 
+	sprintf(dest, 
 			"%02x" "%02x" "%02x" "%02x" 
 			"%02x" "%02x" "%02x" "%02x" 
 			"%02x" "%02x" "%02x" "%02x" 
@@ -208,7 +228,7 @@ char *cs__md52hex(const md5_digest_t md5)
 			);
 #if 0
 	int i;
-	
+
 	// Simple, slow variant
 	for (i=0; i<APR_MD5_DIGESTSIZE; i++)
 	{
@@ -216,7 +236,28 @@ char *cs__md52hex(const md5_digest_t md5)
 	}
 #endif
 
-	return cur;
+	return dest;
+}
+
+
+/** -.
+ * This function alternates between a few static buffers,
+ * to allow for a printf("%s %s\n", cs__md5tohex_buffered(), cs__md5tohex_buffered()); 
+ *
+ * It doesn't use the string caches, because the exact length of the 
+ * buffers is known ... so the alloc/realloc/strcpy overhead is 
+ * unnecessary. */
+char *cs__md5tohex_buffered(const md5_digest_t md5)
+{
+	static int last=0;
+	static char stg[4][APR_MD5_DIGESTSIZE*2+1] = { { 0 } };
+	char *cur;
+
+	last++;
+	if (last >= sizeof(stg)/sizeof(stg[0])) last=0;
+	cur=stg[last];
+
+	return cs__md5tohex(md5, cur);
 }
 
 
@@ -275,18 +316,20 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 
 	/* Default is "don't know". */
 	if (result) *result = -1;
+	/* It doesn't matter whether we test this or old_rev_mode_packed - if 
+	 * they're different, this entry was replaced, and we never get here.  */
 	if (S_ISDIR(sts->st.mode)) return 0;
 
 	fh=-1;
 	/* hash already done? */
-  if (sts->change_flag != CF_UNKNOWN)
+	if (sts->change_flag != CF_UNKNOWN)
 	{
 		DEBUGP("change flag for %s: %d", fullpath, sts->change_flag);
 		goto ret_result;
 	}
 
-  status=0;
-	
+	status=0;
+
 	if (!fullpath)
 		STOPIF( ops__build_path(&fullpath, sts), NULL);
 
@@ -358,7 +401,9 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 			filedata=mmap(NULL, length_mapped, 
 					PROT_READ, MAP_SHARED, 
 					fh, current_pos);
-			if (filedata == MAP_FAILED) break;
+			STOPIF_CODE_ERR( filedata == MAP_FAILED, errno,
+					"comparing the file %s failed (mmap)",
+					fullpath);
 
 			map_pos=0;
 			while (map_pos<length_mapped)
@@ -372,14 +417,14 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 
 				if (do_manber)
 				{
-						DEBUGP("  old hash=%08X  current hash=%08X", 
-								mbh_data.hash[hash_pos], mb_dat.last_state);
-						DEBUGP("  old end=%llu  current end=%llu", 
-								(t_ull)mbh_data.end[hash_pos], 
-								(t_ull)mb_dat.fpos);
-						DEBUGP("  old md5=%s  current md5=%s", 
-								cs__md52hex(mbh_data.md5[hash_pos]),
-								cs__md52hex(mb_dat.block_md5));
+					DEBUGP("  old hash=%08X  current hash=%08X", 
+							mbh_data.hash[hash_pos], mb_dat.last_state);
+					DEBUGP("  old end=%llu  current end=%llu", 
+							(t_ull)mbh_data.end[hash_pos], 
+							(t_ull)mb_dat.fpos);
+					DEBUGP("  old md5=%s  current md5=%s", 
+							cs__md5tohex_buffered(mbh_data.md5[hash_pos]),
+							cs__md5tohex_buffered(mb_dat.block_md5));
 
 					if (mb_dat.last_state != mbh_data.hash[hash_pos] ||
 							mb_dat.fpos != mbh_data.end[hash_pos] ||
@@ -388,7 +433,7 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 								APR_MD5_DIGESTSIZE) != 0)
 					{
 						DEBUGP("found a different block before %llu:", 
-						(t_ull)(current_pos+i));
+								(t_ull)(current_pos+i));
 changed:
 						sts->md5[0] ^= 0x1;
 						i=-2;
@@ -411,11 +456,12 @@ changed:
 
 				map_pos+=i;
 			}
-			if (i==-2) break;
 
-			STOPIF_CODE_ERR( munmap(filedata, length_mapped) == -1,
+			STOPIF_CODE_ERR( munmap((void*)filedata, length_mapped) == -1,
 					errno, "unmapping of file failed");
 			current_pos+=length_mapped;
+
+			if (i==-2) break;
 		}
 
 		STOPIF( cs___finish_manber( &mb_dat), NULL);
@@ -441,7 +487,7 @@ ret_result:
 		*result = sts->change_flag == CF_CHANGED;
 	DEBUGP("comparing %s=%d: md5 %s", 
 			fullpath, sts->change_flag == CF_CHANGED,
-			cs__md52hex(sts->md5));
+			cs__md5tohex_buffered(sts->md5));
 	status=0;
 
 ex:
@@ -456,9 +502,9 @@ ex:
  * uninitializations can happen. */
 int cs__set_file_committed(struct estat *sts) 
 {
-	int ret;
+	int status;
 
-	ret=0;
+	status=0;
 	if (S_ISDIR(sts->st.mode)) goto ex;
 
 	/* Now we can drop the check flag. */
@@ -467,7 +513,7 @@ int cs__set_file_committed(struct estat *sts)
 	sts->repos_rev=SET_REVNUM;
 
 ex:
-	return ret;
+	return status;
 }
 
 
@@ -615,7 +661,7 @@ int cs___end_of_block(const unsigned char *data, int maxlen,
 				apr_md5_update(& mb_f->block_md5_ctx, data, i);
 				apr_md5_final( mb_f->block_md5, & mb_f->block_md5_ctx);
 				DEBUGP("manber found a border: %u %08X %08X %s", 
-						i, mb_f->last_state, mb_f->state, cs__md52hex(mb_f->block_md5));
+						i, mb_f->last_state, mb_f->state, cs__md5tohex_buffered(mb_f->block_md5));
 				break;
 			}
 		}
@@ -671,12 +717,12 @@ int cs___update_manber(struct t_manber_data *mb_f,
 	DEBUGP("got a block with %llu bytes", (t_ull)len);
 	while (1)
 	{
-		#if 0
+#if 0
 		/* If first call, and buffer smaller than 32kB, avoid this calling ... */
 		if (mb_f->fpos == 0 && len<32*1024)
 			eob=-1;
 		else
-		#endif
+#endif
 			STOPIF( cs___end_of_block(data, len, &eob, mb_f), NULL );
 
 		if (eob == -1) 
@@ -694,7 +740,7 @@ int cs___update_manber(struct t_manber_data *mb_f,
 
 		/* write new line to data file */
 		i=sprintf(buffer, cs___mb_wr_format, 
-				cs__md52hex(mb_f->block_md5),
+				cs__md5tohex_buffered(mb_f->block_md5),
 				mb_f->last_state,
 				(t_ull)mb_f->last_fpos, 
 				(t_ull)(mb_f->fpos - mb_f->last_fpos));
@@ -815,8 +861,8 @@ ex:
  *   would replace \c mb_f->full_md5 .
  *   */
 int cs__new_manber_filter(struct estat *sts,
-		 svn_stream_t *stream_input, 
-		 svn_stream_t **filter_stream,
+		svn_stream_t *stream_input, 
+		svn_stream_t **filter_stream,
 		apr_pool_t *pool)
 {
 	int status;
@@ -978,12 +1024,9 @@ int cs__read_manber_hashes(struct estat *sts, struct cs__manber_hashes *data)
 			estimated, length);
 
 	/* Allocate memory ... */
-	data->hash=calloc(estimated, sizeof(*data->hash));
-	STOPIF_ENOMEM(!data->hash);
-	data->md5 =calloc(estimated, sizeof(*data->md5 ));
-	STOPIF_ENOMEM(!data->md5);
-	data->end =calloc(estimated, sizeof(*data->end ));
-	STOPIF_ENOMEM(!data->end);
+	STOPIF( hlp__calloc( &data->hash, estimated, sizeof(*data->hash)), NULL);
+	STOPIF( hlp__calloc( & data->md5, estimated, sizeof( *data->md5)), NULL);
+	STOPIF( hlp__calloc( & data->end, estimated, sizeof( *data->end)), NULL);
 
 
 	count=0;
@@ -1017,7 +1060,7 @@ int cs__read_manber_hashes(struct estat *sts, struct cs__manber_hashes *data)
 		data->hash[count]=value;
 		data->end[count]=start+length;
 		buffer[spp]=0;
-		STOPIF( cs__char2md5(buffer, data->md5[count]), NULL);
+		STOPIF( cs__char2md5(buffer, NULL, data->md5[count]), NULL);
 		count++;
 		BUG_ON(count > estimated, "lines should have syntax errors - bug in estimation.");
 	}
@@ -1029,12 +1072,9 @@ int cs__read_manber_hashes(struct estat *sts, struct cs__manber_hashes *data)
 	{
 		DEBUGP("reallocating...");
 		/* reallocate memory = free */
-		data->hash=realloc(data->hash, count*sizeof(*data->hash));
-		STOPIF_ENOMEM(!data->hash);
-		data->md5 =realloc(data->md5, count*sizeof(*data->md5 ));
-		STOPIF_ENOMEM(!data->md5);
-		data->end =realloc(data->end, count*sizeof(*data->end ));
-		STOPIF_ENOMEM(!data->end);
+		STOPIF( hlp__realloc( &data->hash, count*sizeof(*data->hash)), NULL);
+		STOPIF( hlp__realloc( & data->md5, count*sizeof(* data->md5)), NULL);
+		STOPIF( hlp__realloc( & data->end, count*sizeof(* data->end)), NULL);
 	}
 
 	/* The index is not always needed. Don't generate now. */

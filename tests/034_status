@@ -82,6 +82,10 @@ do
 	mkdir -p a/b/c/d a/b/c/e a/b/d a/h/u a/h/j
 	( cd a/h ; touch -d yesterday some files in dir )
 	$BINq ci -m 2
+	if [[ `$BINdflt st -o verbose=none,status a -N -N` == 'N...  ' ]]
+	then
+		$ERROR "Hierarchy a not committed"
+	fi
 	rmdir a/b/c/d a/b/c/e a/b/c a/h/u
 
 	$BINdflt st -C -o filter=deleted > $logfile
@@ -119,6 +123,35 @@ $SUCCESS "Ok, filter works."
 # set as known state.
 $BINq ci -m 2 -o delay=yes
 
+$INFO "Testing dir_exclude_mtime"
+
+mkdir -p test1
+$BINdflt ci -m 3
+# wait some time after checkin
+sleep 2
+# change mtime of parent folder
+touch test1/test2
+# remove fake temp. file
+rm    test1/test2
+# test option
+$BINdflt st -odir_exclude_mtime=true > $logfile
+
+if [[ `wc -l < $logfile` -gt 0 ]]
+then
+  echo "logfile contains entries"
+  cat $logfile
+  $ERROR "dir_exclude_mtime option does not work"
+fi
+
+if ! $BINdflt st -ostop_change=true -odir_exclude_mtime=true
+then 
+  $ERROR "stop_change returns true in conjunction with dir_exclude_mtime"
+fi
+
+$SUCCESS "dir_exclude checks ok."
+
+$PREPARE_DEFAULT > /dev/null
+cd $WC
 
 $INFO "Testing color output."
 
@@ -135,10 +168,58 @@ function HasEscape
 
 echo aaa > hazgr
 HasEscape "New"
-$BINq ci -m1 -o delay=yes
+$BINq ci -m1
 echo aaar > hazgr
 HasEscape "Changed"
-$BINq ci -m1 -o delay=yes
+$BINq ci -m1
 rm hazgr
 HasEscape "Deleted"
 
+
+
+# Butterfly test.
+# This checks the assertion BUG_ON(entry already output) for various inode 
+# number sortings.
+$INFO "Checking for inode dependencies."
+cd ..
+$PREPARE_CLEAN > /dev/null
+cd $WC1
+
+perl -e 'for $i (0 .. 15) { 
+	$b = (($i & 5) << 1) | (($i & 0xa) >> 1);
+	$a = (($b & 3) << 2) | (($b & 0xc) >> 2);
+	for $c ( $a, $a ^ 0x1f)
+	{
+		$f= $c <= 9 ? $c : chr($c + 64+32+1-10);
+		mkdir($f) || die "mkdir $f: $!"; 
+		open(F, "> $f/file-$f") || die "touch file-$a: $!";
+	}
+}'
+
+# Now move the directories into one another.
+perl -e ' while (1)
+{
+	($g, $l)=reverse sort grep(/^\w$/, <?>);
+	last if !defined($l);
+
+	rename($g, $l . "/" . $g) || die "rename($g, $l): $!";
+} '
+
+
+$BINdflt st > $logfile
+$BINq ci -m1
+
+for a in z w r q k f d c 9 6
+do
+	find . -name file-$a -exec rm {} \;
+	$BINdflt st > $logfile
+done
+$INFO "Files ok."
+
+for a in q k f d c 9 6
+do
+	find . -depth -name $a -exec rm -r {} \;
+	$BINdflt st > $logfile
+done
+
+$SUCCESS "Status seems to work regardless of the inode numbering."

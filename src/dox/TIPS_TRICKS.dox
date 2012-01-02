@@ -28,7 +28,7 @@
 
 	\section tip_perf Performance points
 
-  Some effort has been taken to get \c fsvs as fast as possible.
+  Some effort has been taken to get FSVS as fast as possible.
  
   With 1.1.17 the default for checking for changes on files was altered, 
   to do a MD5-check of files with a changed modification time but the same 

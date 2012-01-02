@@ -26,15 +26,16 @@ fi
 mkdir typechange
  pushd typechange > /dev/null
 
- for i in file device symlink dir
+ for i in file device symlink dir missing fifo
  do
-	 echo file > file-$i
+	 echo file $RANDOM > file-$i
 	 $ONLY_ROOT cp -a /dev/zero device-$i
 	 ln -s file-$i symlink-$i
 	 mkdir dir-$i
-	 echo sub > dir-$i/sub-entry
+	 echo sub $RANDOM > dir-$i/sub-entry
 	 mkdir dir-$i/sub
-	 touch dir-$i/sub/sub-entry
+	 echo $RANDOM > dir-$i/sub/sub-entry
+	 mkfifo fifo-$i
  done
 popd > /dev/null
 
@@ -49,21 +50,22 @@ $BINq up
 
 $BINdflt st > $logfile
 
-$COMPARE_1_2
+$COMPARE -x change/fifo- $WC/ $WC2/
 popd > /dev/null
 
 rm -r typechange/*
 pushd typechange > /dev/null
 
- for i in file device symlink dir
+ for i in file device symlink dir missing fifo
  do
-	 echo file > $i-file
+	 echo file $RANDOM > $i-file
 	 $ONLY_ROOT cp -a /dev/zero $i-device
 	 ln -s $i-file $i-symlink
 	 mkdir $i-dir
-	 echo sub > $i-dir/sub-entry
+	 echo sub $RANDOM > $i-dir/sub-entry
 	 mkdir $i-dir/sub
-	 touch $i-dir/sub/sub-entry
+	 echo $RANDOM > $i-dir/sub/sub-entry
+	 mkfifo $i-fifo
  done
 popd > /dev/null
 
@@ -78,14 +80,57 @@ $INFO "typechange done, running update"
 $BINdflt up $WC2 > $logfile
 $INFO "update done"
 
-$WC2_UP_ST_COMPARE
+$COMPARE -x "change/.*-fifo" $WC/ $WC2/
 $SUCCESS "all types changed to other types."
 
 export FSVS_WARNING="mixed-rev-wc=ignore"
 
-# Now we change WC1 by using revert, and WC2 via update.
-$BINq up -r$rev $WC2
-$BINq revert -r$rev -R -R .
+$BINdflt diff -v -v -r$rev -R > $logfile
 
-$COMPARE_1_2
+# Now we change WC1 by using revert, and WC2 via update.
+$INFO "Using r$rev as compare point"
+$BINq up -r$rev $WC2 > $logfile
+$BINq revert -r$rev -R -R . > $logfile
 $SUCCESS "Revert works across type-changes too."
+
+# WC1 still has FIFOs left
+$COMPARE -x "change/.*-fifo" $WC/ $WC2/
+$SUCCESS "Revert across type-changes ok"
+
+
+for wc in "$WC1" "$WC1 -rHEAD" "$WC2 -rHEAD"
+do
+	$INFO "Diff on $wc"
+
+	LANG=C $BINdflt -v -v diff -rHEAD -R > $logfile
+	# The specific number depends on whether devices are done etc.
+	# But at least we know that FSVS doesn't crash.
+	if [[ `wc -l < $logfile` -lt 25 ]]
+	then
+		$ERROR "Diff over type-changes wrong?"
+	fi
+
+	# A single thing is checked, though.
+	if perl -e 'undef $/; $srch=<STDIN>; $_=<>; exit !/$srch/;' $logfile <<'EOF'
+--- typechange/symlink-symlink\s+Rev. \d+ .*
+\+\+\+ typechange/symlink-symlink\s+Local version .*
+@@ -1 \+1 @@
+-link symlink-file(
+. No newline at end of file)?
+\+link file-symlink(
+. No newline at end of file)?
+EOF
+	then
+		$SUCCESS "Diff with type-changes ok"
+	else
+		cat $logfile
+		$ERROR "Didn't find expected chunk in diff"
+	fi
+done
+
+
+cd $WC2
+$BINdflt diff -rHEAD > $logfile
+$BINq up
+$BINdflt diff -r$rev > $logfile
+

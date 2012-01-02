@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -9,6 +9,7 @@
 #ifndef __HELPER_H__
 #define __HELPER_H__
 
+#include <ctype.h>
 
 #include "global.h"
 #include "options.h"
@@ -62,9 +63,19 @@ char *hlp__pathcopy (char *dst, int *len, ...) __attribute__((sentinel)) ;
 /** Parses a string to a revision number. */
 int hlp__parse_rev(char *stg, char **eos, svn_revnum_t *rev);
 
-/** Reads a string from the given \c FILE* , removes \\r and/or \\n at the
- * end, and optionally removes \b all whitespace. */
-int hlp__string_from_filep(FILE *input, char **string, int no_ws);
+/** Reads a string from the given \c input into the (self-managed) buffer 
+ * \a string, removes \\r and/or \\n at the end, and depending on \a flags 
+ * strips whitespace or comments. */
+int hlp__string_from_filep(FILE *input, char **string, char **eos, int flags);
+/** If this bit is set, whitespace at the start and the end is removed. */
+#define SFF_WHITESPACE (1)
+/** With this flag comment lines (with \c '#' as first non-whitespace 
+ * character) are ignored. */
+#define SFF_COMMENT (2)
+/** Can/should be used after opening the file. */
+#define SFF_RESET_LINENUM (0x4000)
+/** Get the line number of the last (current) \c FILE*, as return value. */
+#define SFF_GET_LINENUM (0x8000)
 
 /** Returns the name of the given user. */
 const char *hlp__get_uname(uid_t uid, char *not_found);
@@ -165,7 +176,62 @@ int hlp__rename_to_unique(char *fn, char *extension,
 		apr_pool_t *pool);
 
 
+/* Some of the following functions use a (void*), but I'd rather use a 
+ * (void**) ... Sadly that isn't convertible from eg. some (struct **) - 
+ * and so I'd have to use casts everywhere, which wouldn't help the 
+ * type-safety anyway. */
+/** Allocates a buffer in \a *dest, and copies \a source. */
+int hlp__strnalloc(int len, char **dest, const char const *source);
+/** Like \c hlp__strnalloc, but concatenates strings until a \c NULL is 
+ * found. */
+int hlp__strmnalloc(int len, char **dest, 
+		const char const *source, ...) __attribute__((sentinel));
+/** Own implementation of \c strdup(), possibly returning \c ENOMEM. */
+inline static int hlp__strdup(char **dest, const char const *src)
+{ return hlp__strnalloc(strlen(src), dest, src); }	
+/** Error returning \c calloc(); uses \c (void**) \a output. */
+int hlp__calloc(void *output, size_t nmemb, size_t count);
+/** Reallocate the \c (void**) \a output. */
+int hlp__realloc(void *output, size_t size);
+/** Allocates a buffer of \a len bytes in \c (void**) \a *dest; can return 
+ * \c ENOMEM.  */
+inline static int hlp__alloc(void *dest, size_t len)
+{
+	*(void**)dest=NULL;
+	return hlp__realloc(dest, len);
+}
+
+
+/** Stores the first non-whitespace character position from \a input in \a 
+ * word_start, and returns the next whitespace position in \a word_end. */
+char* hlp__get_word(char *input, char **word_start);
+/** Skips all whitespace, returns first non-whitespace character. */
+inline static char *hlp__skip_ws(char *input) 
+{ 
+	while (isspace(*input)) input++;
+	return input;
+}
+
+
 /** Reads the subversion config file(s), found by \ref o_configdir. */
 int hlp__get_svn_config(apr_hash_t **config);
+
+
+/** Algorithm for finding the rightmost 0 bit.
+ *    orig i: ... x 0 1 1 1
+ *       i+1: ... x 1 0 0 0
+ * XOR gives: ... x 1 1 1 1
+ *   AND i+1: ... 0 1 0 0 0
+ *
+ * Maybe there's an easier way ... don't have "Numerical Recipes"
+ * here with me. */
+static inline int hlp__rightmost_0_bit(int i)
+{
+	return (i ^ (i+1)) & (i+1);
+}
+
+int hlp__compare_string_pointers(const void *a, const void *b);
+
+int hlp__only_dir_mtime_changed(struct estat *sts);
 
 #endif

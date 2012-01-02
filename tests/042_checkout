@@ -4,6 +4,7 @@ set -e
 $PREPARE_DEFAULT > /dev/null
 $INCLUDE_FUNCS
 
+logfile=$LOGDIR/042.log
 
 # export to new directory
 CODIR=$WC2/checkout
@@ -12,20 +13,20 @@ then
   rm -r $CODIR
 fi
 
-dir_norm=`$PATH2SPOOL $CODIR dir`
-dir_sr=`$PATH2SPOOL $CODIR dir $WC2`
+dir_norm=`$PATH2SPOOL $CODIR dir "" $CODIR`
+dir_sr=`$PATH2SPOOL $CODIR dir $WC2 $CODIR`
 echo Got filenames:
 echo "   normal   "$dir_norm
 echo "   softroot "$dir_sr
 rm $dir_norm $dir_sr 2> /dev/null || true
 
 mkdir $CODIR
-$BINq checkout $REPURL $CODIR
+$BINdflt checkout $REPURL $CODIR > $logfile
 $COMPAREWITH $CODIR
 
 rm -rf $CODIR
 mkdir $CODIR
-$BINq checkout -r 3 $REPURL $CODIR
+$BINq checkout -r 3 $REPURL $CODIR > $logfile
 $BINq up -r 3 $WC
 $COMPAREWITH $CODIR
 
@@ -41,7 +42,7 @@ rm -rf $CODIR
 mkdir -p $CODIR $WC2/$FSVS_CONF $WC2/$FSVS_WAA
 rm $WC2/$dir_norm $WC2/$dir_sr $dir_norm $dir_sr 2>/dev/null || true
 # Test normalization too - make extra slashes
-$BINq checkout -o softroot=//$WC2/././ $REPURL //$CODIR// # > $LOGDIR/042.checkout_softroot
+$BINq checkout -o softroot=//$WC2/././ $REPURL //$CODIR// > $logfile
 $BINq up $WC
 $COMPAREWITH $CODIR
 

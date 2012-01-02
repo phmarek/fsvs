@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -14,16 +14,18 @@
 
 
 #include "global.h"
+#include "interface.h"
 #include "waa.h"
 #include "est_ops.h"
 #include "helper.h"
 #include "warnings.h"
 #include "direnum.h"
 #include "ignore.h"
+#include "url.h"
 
 
 /** \file
- * \ref ignore command and functions.
+ * \ref groups and \ref ignore command and functions.
  * */
 
 /* \note Due to restriction in C-comment syntax the above 
@@ -35,17 +37,27 @@
 
 /**
  * \addtogroup cmds
- * \section ignore
+ * \section groups
+ * \anchor ignore
  *
  * \code
- * fsvs ignore dump|load
+ * fsvs groups dump|load
+ * fsvs groups [prepend|append|at=n] group-definition [group-def ...]
  * fsvs ignore [prepend|append|at=n] pattern [pattern ...]
+ * fsvs groups test [-v|-q] [pattern ...]
  * \endcode
  *
- * This command adds patterns to the end of the ignore list, 
- * or, with \e prepend , puts them at the beginning of the list.
+ * This command adds patterns to the end of the pattern list, or, with \c 
+ * prepend, puts them at the beginning of the list.
  * With \c at=x the patterns are inserted at the position \c x , 
  * counting from 0.
+ *
+ * The difference between \c groups and \c ignore is that \c groups \b 
+ * requires a group name, whereas the latter just assumes the default group 
+ * \c ignore.
+ * 
+ * For the specification please see the related 
+ * \ref groups_format "documentation" .
  * 
  * <tt>fsvs dump</tt> prints the patterns to \c STDOUT . If there are
  * special characters like \c CR or \c LF embedded in the pattern 
@@ -55,8 +67,8 @@
  * The patterns may include \c * and \c ? as wildcards in one directory 
  * level, or \c ** for arbitrary strings.
  *
- * These patterns are only matched against new files; entries that are 
- * already versioned are not invalidated.
+ * These patterns are only matched against new (not yet known) files; 
+ * entries that are already versioned are not invalidated. \n
  * If the given path matches a new directory, entries below aren't found, 
  * either; but if this directory or entries below are already versioned, 
  * the pattern doesn't work, as the match is restricted to the directory.
@@ -73,31 +85,55 @@
  *     fsvs ignore ./tmp/§**
  * \endcode
  * as that takes the directory itself (which might be needed after restore
- * as a mount point), but ignore \b all entries below.
+ * as a mount point anyway), but ignore \b all entries below. \n
+ * Currently this has the drawback that mtime changes will be reported and 
+ * committed; this is not the case if the whole directory is ignored.
  * 
  *
- * Other special variants are available, see the documentation \ref ignpat .
- * 
  * Examples:
  * \code
- *     fsvs ignore ./proc
- *     fsvs ignore ./dev/pts
+ *     fsvs group group:unreadable,mode:4:0
+ *     fsvs group 'group:secrets,/etc/§*shadow'
+ *
+ *     fsvs ignore /proc
+ *     fsvs ignore /dev/pts
  *     fsvs ignore './var/log/§*-*'
  *     fsvs ignore './§**~'
  *     fsvs ignore './§**§/§*.bak'
- *     fsvs ignore prepend 't./§**.txt'
- *     fsvs ignore append 't./§**.svg'
+ *     fsvs ignore prepend 'take,./§**.txt'
+ *     fsvs ignore append 'take,./§**.svg'
  *     fsvs ignore at=1 './§**.tmp'
- *     fsvs ignore dump
- *     fsvs ignore dump -v
+ *
+ *     fsvs group dump
+ *     fsvs group dump -v
+ *
  *     echo "./§**.doc" | fsvs ignore load
+ *     # Replaces the whole list
  * \endcode
  *
  * \note Please take care that your wildcard patterns are not expanded
  * by the shell!
+ *
+ *
+ * \subsection groups_test Testing patterns
+ *
+ * To see more easily what different patterns do you can use the \c test 
+ * subcommand. The following combinations are available:<UL>
+ * <li><tt>fsvs groups test \e pattern</tt>\n
+ * Tests \b only the given pattern against all new entries in your working 
+ * copy, and prints the matching paths. The pattern is not stored in the 
+ * pattern list.
+ * <li><tt>fsvs groups test</tt>\n
+ * Uses the already defined patterns on the new entries, and prints the 
+ * group name, a tab, and the path.\n
+ * With \c -v you can see the matching pattern in the middle column, too.
+ * </ul>
+ *
+ * By using \c -q you can avoid getting the whole list; this makes sense if 
+ * you use the \ref o_group_stats "group_stats" option at the same time.
  */
 
- /**
+/**
  * \addtogroup cmds
  * \section rign
  *
@@ -106,14 +142,14 @@
  * fsvs ri [prepend|append|at=n] path-spec [path-spec ...]
  * \endcode
  * 
- * If you use more than a single working copy for the same data, it will be 
- * stored in different paths - and that makes absolute ignore patterns 
- * infeasible. But relative ignore patterns are anchored at the beginning 
- * of the WC root - which is a bit tiring if you're deep in your WC 
- * hierarchy and want to ignore some files.
+ * If you keep the same repository data at more than one working copy on 
+ * the same machine, it will be stored in different paths - and that makes 
+ * absolute ignore patterns infeasible. But relative ignore patterns are 
+ * anchored at the beginning of the WC root - which is a bit tiring to type 
+ * if you're deep in your WC hierarchy and want to ignore some files.
  * 
  * To make that easier you can use the \c rel-ignore (abbreviated as \c ri) 
- * command; this converts all given path-specifications (that may include 
+ * command; this converts all given path-specifications (which may include 
  * wildcards as per the shell pattern specification above) to WC-relative 
  * values before storing them.
  * 
@@ -129,7 +165,7 @@
  * \note This works only for \ref ign_shell "shell patterns".
  *
  * For more details about ignoring files please see the \ref ignore command 
- * and \ref ignpat.
+ * and \ref groups_format.
  */
 
 /**
@@ -168,7 +204,8 @@
  * \endcode
  *
  * Ignore patterns apply only to \b new entries, ie. entries already
- * in the \c .waa-dir file get done as usual.
+ * known stay known.
+ *
  * That's why we need an "add" command:
  * \code
  *     $ fsvs ignore '/proc/§*'
@@ -178,13 +215,7 @@
  * 
  * A negative ignore-list is named \e take list.
  * 
- * The default behaviour is best described with the take-list
- * \code
- *     add   = **
- * \endcode
- * 
- * The storage of these values will (sometime) be done in \c svn:ignore
- * and \c svn:recursive-ignore ; in the waa-area the format is
+ * The storage format is
  * \code
  *     header: number of entries
  *     %u\n
@@ -207,27 +238,122 @@
  * 
  **/
 
+// * This part answers the "why" and "how" for ignoring entries.
 
-/** \defgroup ignpat Using ignore patterns
+/** \defgroup groups_spec Using grouping patterns
  * \ingroup userdoc
  *
- * This part answers the "why" and "how" for ignoring entries.
+ *
+ * Patterns are used to define groups for new entries; a group can be used 
+ * to ignore the given entries, or to automatically set properties when the 
+ * entry is taken on the entry list.
+ * 
+ * So the auto-props are assigned when the entry gets put on the internal 
+ * list; that happens for the \ref add, \ref prop-set or \ref prop-del, and 
+ * of course \ref commit commands. \n
+ * To override the auto-props of some new entry just use the property 
+ * commands.
+ *
+ *
+ * \section ign_overview Overview
+ *
+ * When \c FSVS walks through your working copy it tries to find \b new 
+ * (ie.  not yet versioned) entries. Every \b new entry gets tested against 
+ * the defined grouping patterns (in the given order!); if a pattern 
+ * matches, the corresponding group is assigned to the entry, and no 
+ * further matching is done.
+ *
+ * See also \ref howto_entry_statii "entry statii".
+ *
+ * \subsection ign_g_ignore Predefined group 1: "ignore"
+ *
+ * If an entry gets a group named \c "ignore" assigned, it will not be 
+ * considered for versioning.
+ *
+ * This is the only \b really special group name.
+ *
+ * \subsection ign_g_take Predefined group 2: "take"
+ *
+ * This group mostly specifies that no further matching is to be done, so 
+ * that later \ref ign_g_ignore "ignore" patterns are not tested.
+ *
+ * Basically the \c "take" group is an ordinary group like all others; it 
+ * is just predefined, and available with a 
+ * \ref ign_mod_t "short-hand notation".
+ *
  *
  * \section ignpat_why Why should I ignore files?
  *
  * Ignore patterns are used to ignore certain directory
- * entries, where versioning makes no sense to the user. If you're
+ * entries, where versioning makes no sense. If you're
  * versioning the complete installation of a machine, you wouldn't care to
  * store the contents of \c /proc (see <tt>man 5 proc</tt>), or possibly
  * because of security reasons you don't want \c /etc/shadow , \c
- * /etc/sshd/ssh_host_*key , and/or other password-containing files.
+ * /etc/sshd/ssh_host_*key , and/or other password- or key-containing 
+ * files.
  * 
  * Ignore patterns allow you to define which directory entries (files,
- * subdirectories, devices, symlinks etc.) should be taken respectively
+ * subdirectories, devices, symlinks etc.) should be taken, respectively
  * ignored.
- * 
- * There are some kinds of ignore patterns; they are listed below.
- * 
+ *
+ *
+ * \section ignpat_why_groups Why should I assign groups?
+ *
+ * The grouping patterns can be compared with the \c auto-props feature of 
+ * subversion; it allows automatically defining properties for new entries, 
+ * or ignoring them, depending on various criteria.
+ *
+ * For example you might want to use encryption for the files in your 
+ * users' \c .ssh directory, to secure them against unauthorized access in 
+ * the repository, and completely ignore the private key files:
+ *
+ * Grouping patterns:
+ * \code
+ * 	group:ignore,/home/§*§/.ssh/id*
+ * 	group:encrypt,/home/§*§/.ssh/§**
+ * \endcode
+ * And the \c $FSVS_CONF/groups/encrypt file would have a definition for 
+ * the <tt>fsvs:commit-pipe</tt> (see the \ref s_p_n "special properties"). 
+ *
+ *
+ * \section ignpat_groupdef Syntax of group files
+ *
+ * A group definition file looks like this:<ul>
+ * <li>Whitespace on the beginning and the end of the line is ignored.
+ * <li>Empty lines, and lines with the first non-whitespace character being 
+ * \c '#' (comments) are ignored.
+ * <li>It can have \b either the keywords \c ignore or \c take; if neither 
+ * is specified, the group \c ignore has \c ignore as default (surprise, 
+ * surprise!), and all others use \c take.
+ * <li>An arbitrary (small) number of lines with the syntax\n
+ * <tt>auto-prop <i>property-name</i> <i>property-value</i></tt> can be 
+ * given; \e property-name may not include whitespace, as there's no 
+ * parsing of any quote characters yet.
+ * </UL>
+ *
+ * An example:
+ * \code
+ *   # This is a comment
+ *     # This is another
+ *
+ *   auto-props    fsvs:commit-pipe    gpg -er admin@my.net
+ *
+ *   # End of definition
+ * \endcode
+ *
+ *
+ * \section groups_format Specification of groups and patterns
+ *
+ * While an ignore pattern just needs the pattern itself (in one of the 
+ * formats below), there are some modifiers that can be additionally 
+ * specified:
+ * \code
+ *   [group:{name},][dir-only,][insens|nocase,][take,][mode:A:C,]pattern
+ * \endcode
+ * These are listed in the section \ref ign_mod below.
+ *
+ *
+ * These kinds of ignore patterns are available:
  * 
  * \section ign_shell Shell-like patterns
  * 
@@ -237,8 +363,8 @@
  * meaning, and \c ** is a wildcard for directory levels.
  *
  * You can use a backslash \c \\ outside of character classes to match
- * usually special characters literally, eg. \c \\* within a pattern will
- * match a literal asterisk character within a file or directory name.
+ * some common special characters literally, eg. \c \\* within a pattern 
+ * will match a literal asterisk character within a file or directory name.
  * Within character classes all characters except \c ] are treated
  * literally. If a literal \c ] should be included in a character class,
  * it can be placed as the first character or also be escaped using a
@@ -265,13 +391,14 @@
  * itself, use something like <tt>./dir/§*</tt> or <tt>./dir/§**</tt>
  *
  * If you're deep within your working copy and you'd like to ignore some 
- * files with a WC-relative ignore pattern, you might like to use the \ref 
- * rign command.
+ * files with a WC-relative ignore pattern, you might like to use the 
+ * \ref rign "rel-ignore" command.
  * 
  *
  * \subsection ignpat_shell_abs Absolute shell patterns
  *
- * There's another way to specify shell patterns - using absolute paths.
+ * There is another way to specify shell patterns - using absolute paths.  
+ * \n
  * The syntax is similar to normal shell patterns; but instead of the 
  * <tt>./</tt> prefix the full path, starting with \c /, is used.
  *
@@ -287,11 +414,12 @@
  * does simply work; the patterns don't have to be modified.
  *
  * Internally this simply tries to remove the working copy base directory 
- * at the start of the patterns; then they are processed as usually.
+ * at the start of the patterns (on loading); then they are processed as 
+ * usual.
  *
  * If a pattern does \b not match the wc base, and neither has the 
- * wild-wildcard prefix \c /§**, a \ref warn_ign_abs_not_base "warning" is 
- * issued; this can be handled as usual.
+ * wild-wildcard prefix <tt>/§**</tt>, a \ref warn_ign_abs_not_base 
+ * "warning" is issued.
  *
  * 
  * 
@@ -299,10 +427,11 @@
  * 
  * PCRE stands for Perl Compatible Regular Expressions; you can read about
  * them with <tt>man pcre</tt> (if the manpages are installed), and/or
- * <tt>perldoc perlre</tt> (if perldoc is installed)
+ * <tt>perldoc perlre</tt> (if perldoc is installed). \n
+ * If both fail for you, just google it.
  * 
- * These patterns have the form \c PCRE:{pattern} (with \c PCRE in
- * uppercase, to distinguish from modifiers).
+ * These patterns have the form <tt>PCRE:{pattern}</tt>, with \c PCRE in
+ * uppercase.
  * 
  * An example:
  * \code
@@ -318,7 +447,11 @@
  * This would match \c /home/anthony , \c /home/guest , \c /home/somebody 
  * and so on, but would not match \c /home/theodore .
  * 
- * 
+ * One more:
+ * \code
+ *     PCRE:./.*(\.(tmp|bak|sik|old|dpkg-\w+)|~)$
+ * \endcode
+ *
  * Note that the pathnames start with \c ./ , just like above, and that the
  * patterns are anchored at the beginning. To additionally anchor at the 
  * end you could use a <tt>$</tt> at the end.
@@ -329,16 +462,17 @@
  * Another form to discern what is needed and what not is possible with
  * <tt>DEVICE:[&lt;|&lt;=|&gt;|&gt;=]major[:minor]</tt>.
  * 
- * This takes advantage of the major and minor numbers of inodes (see <tt>
- * man 1 stat</tt> and <tt>man 2 stat</tt>).
+ * This takes advantage of the major and minor device numbers of inodes 
+ * (see <tt>man 1 stat</tt> and <tt>man 2 stat</tt>).
  * 
  * The rule is as follows:
  * - Directories have their parent matched against the given string
  * - All other entries have their own device matched.
  * 
- * This is because the mount-point (ie. the directory, where the other
- * filesystem gets attached) should be versioned (as it's needed after
- * restore), but all entries (and all binding mounts) should not.
+ * This is because mount-points (ie. directories where other
+ * filesystems get attached) show the device of the mounted device, but 
+ * should be versioned (as they are needed after restore); all entries (and 
+ * all binding mounts) below should not.
  * 
  * The possible options \c &lt;= or \c &gt;= define a less-or-equal-than 
  * respective bigger-or-equal-than relationship, to ignore a set of device 
@@ -364,23 +498,23 @@
  * 
  * 
  * Note: The values are parsed with \c strtoul() , so you can use decimal,
- * hexadecimal (with \c 0x prepended) and octal (with \c 0 prepended)
- * notation.
+ * hexadecimal (by prepending \c "0x", like \c "0x102") and octal (\c "0", 
+ * like \c "0777") notation.
  * 
  * 
  * \section ign_inode Ignoring a single file, by inode
  * 
  * At last, another form to ignore entries is to specify them via the
- * device their on and their inode:
+ * device they are on and their inode:
  * \code
  *     INODE:major:minor:inode
  * \endcode
  * This can be used if a file can be hardlinked to many places, but only 
  * one copy should be stored. Then one path can be marked as to \e take , 
- * and other instances are ignored.
+ * and other instances can get ignored.
+ *
  * \note That's probably a bad example. There should be a better mechanism 
  * for handling hardlinks, but that needs some help from subversion.
- * 
  * 
  * 
  * \section ign_mod Modifiers
@@ -388,45 +522,57 @@
  * All of these patterns can have one or more of these modifiers \b before 
  * them, with (currently) optional \c "," as separators; not all 
  * combinations make sense.
- * 
- * <table>
- * <tr><th>Modifier<th>Meaning
- * <tr><th>i
- *   <td>Ignore case for matching
- * <tr><th>t
- *   <td>A negative ignore pattern, ie. a take pattern.
- * <tr><th>d
- *   <td>Match directories only. This is useful if you have a directory
- *   tree in which only certain files should be taken; see below.
- * <tr><th>m:<i>specification</i>
- *   <td>Mode matching; this expects a specification of two octal values in 
- *   the form <tt>m:<i>and_value</i>:<i>compare_value</i></tt>, like 
- *   <tt>m:04:00</tt>; the following examples give only the numbers. \n
- *   As an example: the file has mode \c 0750; a specification of<UL>
- *   <LI><tt>0700:0700</tt> matches, and
- *   <LI><tt>0007:0007</tt> doesn't match.</UL> \n
- *   A real-world example: <tt>0007:0000</tt> would match all entries that 
- *   have \b no right bits set for \e "others", and could be used to 
- *   exclude private files (like \c /etc/shadow). (Alternatively, the \e 
- *   others-read bit could be used: <tt>0004:0000</tt>. \n
- *   FSVS will give an error for invalid specifications, ie. ones that can 
- *   never match; an example would be <tt>0700:0007</tt>.
- * </table>
  *
- * For patterns with the \c m (mode match) and \c d (dironly) modifiers the 
+ * For patterns with the \c m (mode match) or \c d (dironly) modifiers the 
  * filename pattern gets optional; so you don't have to give an all-match 
  * wildcard pattern (<tt>./§**</tt>) for these cases.
  *
- * \code
- *     t./proc/stat
- *     ./proc/
- * \endcode
- * Such declaration would store \e only \c /proc/stat , and nothing else 
- * of \c /proc .
  * 
+ * \subsection ign_mod_t "take": Take pattern
+ * This modifier is just a short-hand for assigning the group \ref 
+ * ign_g_take "take".
+ *
+ * \subsection ign_mod_ignore "ignore": Ignore pattern
+ * This modifier is just a short-hand for assigning the group 
+ * \ref ign_g_ignore "ignore".
+ *
+ * \subsection ign_mod_i "insens" or "nocase": Case insensitive
+ * With this modifier you can force the match to be case-insensitive; this 
+ * can be useful if other machines use eg. \c samba to access files, and 
+ * you cannot be sure about them leaving \c ".BAK" or \c ".bak" behind.
+ * 
+ * \subsection ign_mod_d "dironly": Match only directories
+ * This is useful if you have a directory tree in which only certain files 
+ * should be taken; see below.
+ *
+ * \subsection ign_mod_m "mode": Match entries' mode
+ * This expects a specification of two octal values in the form 
+ * <tt>m:<i>and_value</i>:<i>compare_value</i></tt>, like <tt>m:04:00</tt>; 
+ * the bits set in \c and_value get isolated from the entries' mode, and 
+ * compared against \c compare_value.
+ *
+ * As an example: the file has mode \c 0750; a specification of<UL>
+ *   <LI><tt>m:0700:0700</tt> matches,
+ *   <LI><tt>m:0700:0500</tt> doesn't; and
+ *   <LI><tt>m:0007:0000</tt> matches, but
+ *   <LI><tt>m:0007:0007</tt> doesn't.</UL>
+ *
+ * A real-world example: <tt>m:0007:0000</tt> would match all entries that 
+ * have \b no right bits set for \e "others", and could be used to exclude 
+ * private files (like \c /etc/shadow). (Alternatively, the \e others-read 
+ * bit could be used: <tt>m:0004:0000</tt>.
+ * 
+ * FSVS will reject invalid specifications, ie. when bits in \c 
+ * compare_value are set that are cleared in \c and_value: these patterns 
+ * can never match. \n
+ * An example would be <tt>m:0700:0007</tt>.
+ *
+ *
+ * \subsection ign_mod_examples Examples
+ *
  * \code
- *     t,d,./var/vmail/§**
- *     t./var/vmail/§**§/.*.sieve
+ *     take,dironly,./var/vmail/§**
+ *     take,./var/vmail/§**§/.*.sieve
  *     ./var/vmail/§**
  * \endcode
  * This would take all \c ".*.sieve" files (or directories) below 
@@ -436,41 +582,82 @@
  * If your files are at a certain depth, and you don't want all other 
  * directories taken, too, you can specify that exactly:
  * \code
- *     td./var/vmail/§*§
- *     td./var/vmail/§*§/§*
- *     t./var/vmail/§*§/§*§/.*.sieve
+ *     take,dironly,./var/vmail/§*
+ *     take,dironly,./var/vmail/§*§/§*
+ *     take,./var/vmail/§*§/§*§/.*.sieve
  *     ./var/vmail/§**
  * \endcode
  *
  * \code
- *     m:04:0
- *     t,./etc/
+ *     mode:04:0
+ *     take,./etc/
  *     ./§**
  * \endcode
  * This would take all files from \c /etc, but ignoring the files that are 
- * not world-readable (\c other-read bit cleared).
+ * not world-readable (\c other-read bit cleared); this way only "public" 
+ * files would get taken.
+ * */
+
+/** \section dev_groups Groups
+ * \ingroup dev
+ *
+ * Some thoughts about groups in FSVS.
+ *
+ * Groups have to be considered as follows:<UL>
+ * <li>On commit the auto-props must be used
+ * <li>if an entry was <tt>add</tt>ed manually, they should apply as usual
+ * <li>unless they're overridden by \c prop-set or \c prop-del
+ * </ul>
+ *
+ * The easiest way seems to be to write the properties in the filesystem 
+ * when the entries are being stored in the entry list, ie. at \c add, \c 
+ * prop-set, \c prop-del or \c commit time. \n
+ * The simplest way to do that would be in \ref waa__output_tree() - we see 
+ * that an entry is newly allocated, and push all (not already set) 
+ * properties there. \n
+ * But that wouldn't work with the \c prop-del command, as an automatically 
+ * assigned property wouldn't get removed.
+ *
+ * So there's the function ops__apply_group(), which is called in the 
+ * appropriate places.
  * */
 
 
- /* They are only pointers */
+/** All groups, addressed by name. */
+apr_hash_t *ign___groups=NULL;
+
+/** The length of the longest group name, used for formatting the status 
+ * output.
+ * This is initialized to 6, because "ignore" at least takes that much 
+ * space - and "(none)" too. */
+int ign__max_group_name_len=6;
+
+/* They are only pointers */
 #define RESERVE_IGNORE_ENTRIES (4)
 
-/* number of entries */
-static const char ign_header_str[] = "%u";
+/** Header definition - currently only number of entries. */
+static const char ign_header_str[] = "%u",
+						 ign__group_take[]="take",
+						 ign__group_ign[]="ignore";
 
-int max_ignore_len=0,
-		max_ignore_entries=0,
-		used_ignore_entries=0;
+const char ign___parm_delimiter=',';
 
+/** For how many grouping patterns memory is allocated. */
+int max_ignore_entries=0;
+		/** How many grouping patterns are actually used. */
+int	used_ignore_entries=0;
+
+/** Allocated array of grouping patterns. */
 static struct ignore_t *ignore_list=NULL;
 
+/** Place where the patterns are mmap()ed. */
 static char *memory;
 
 
 /** The various strings that define the pattern types.
  * @{ */
 static const char 
-	pcre_prefix[]="PCRE:",
+pcre_prefix[]="PCRE:",
 	dev_prefix[]="DEVICE:",
 	inode_prefix[]="INODE:",
 	norm_prefix[]= { '.', PATH_SEPARATOR, 0 },
@@ -484,7 +671,7 @@ static const char
 /** Processes a character class in shell ignore patterns.
  * */
 int ign___translate_bracketed_expr(char *end_of_buffer,
-																	 char **src, char **dest)
+		char **src, char **dest)
 {
 	int status = 0;
 	int pos_in_bracket_expr = -1; // zero-based, -1 == outside
@@ -492,8 +679,8 @@ int ign___translate_bracketed_expr(char *end_of_buffer,
 
 
 	STOPIF(**src != '[',
-				 "invalid argument, **src does not point to "
-				 "start of bracket expression");
+			"invalid argument, **src does not point to "
+			"start of bracket expression");
 
 	do
 	{
@@ -518,7 +705,7 @@ int ign___translate_bracketed_expr(char *end_of_buffer,
 			if (**src == ']' && pos_in_bracket_expr > 0)
 			{
 				/* Bracket expression ends. Set "end of expression"
-				   marker and fall through to copy the closing bracket. */
+					 marker and fall through to copy the closing bracket. */
 				pos_in_bracket_expr = -1;
 			}
 			else
@@ -538,7 +725,7 @@ int ign___translate_bracketed_expr(char *end_of_buffer,
 		 * Here we just have to be careful to not overwrite the stack - the 
 		 * real length check is in ign__compile_pattern(). */
 		STOPIF_CODE_ERR( end_of_buffer - *dest < 5, ENOSPC,
-										 "not enough space in buffer");
+				"not enough space in buffer");
 	}
 	while(**src && pos_in_bracket_expr >= 0);
 
@@ -567,12 +754,9 @@ int ign__compile_pattern(struct ignore_t *ignore)
 	else if (ignore->type == PT_SHELL ||
 			ignore->type == PT_SHELL_ABS)
 	{
-		ignore->has_wildwildcard=0;
 		/* translate shell-like syntax into pcre */
-
 		len=strlen(ignore->compare_string)*5+16;
-		buffer=malloc(len);
-		STOPIF_ENOMEM(!buffer);
+		STOPIF( hlp__alloc( &buffer, len), NULL);
 
 		dest=buffer;
 		src=ignore->compare_string;
@@ -604,14 +788,14 @@ int ign__compile_pattern(struct ignore_t *ignore)
 			}
 			else
 				STOPIF( wa__warn(WRN__IGNPAT_WCBASE, EINVAL,
-						"The absolute shell pattern\n"
-						"  \"%s\"\n"
-						"does neither have the working copy base path\n"
-						"  \"%s\"\n"
-						"nor a wildcard path (like \"%s\") at the beginning;\n"
-						"maybe you want a wc-relative pattern, "
-						"starting with \"%s\"?",
-						src, wc_path, wildcard_prefix, norm_prefix), NULL);
+							"The absolute shell pattern\n"
+							"  \"%s\"\n"
+							"does neither have the working copy base path\n"
+							"  \"%s\"\n"
+							"nor a wildcard path (like \"%s\") at the beginning;\n"
+							"maybe you want a wc-relative pattern, "
+							"starting with \"%s\"?",
+							src, wc_path, wildcard_prefix, norm_prefix), NULL);
 
 			/* Before:  /etc/X11/?      /etc/X11/?
 			 * wc_path: /etc            /
@@ -639,7 +823,6 @@ int ign__compile_pattern(struct ignore_t *ignore)
 					case '*':
 						if (src[1] == '*')
 						{
-							ignore->has_wildwildcard=1;
 							if (dest[-1] == PATH_SEPARATOR && src[2] == PATH_SEPARATOR)
 							{
 								/* Case 1: "/§**§/xxx"; this gets transformed to
@@ -735,8 +918,7 @@ int ign__compile_pattern(struct ignore_t *ignore)
 
 		*dest=0;
 		/* return unused space */
-		buffer=realloc(buffer, dest-buffer+2);
-		STOPIF_ENOMEM(!buffer);
+		STOPIF( hlp__realloc( &buffer, dest-buffer+2), NULL);
 		ignore->compare_string=buffer;
 		dest=buffer;
 	}
@@ -778,12 +960,14 @@ ex:
 int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 {
 	int status, stop;
-	int and_value, cmp_value;
-	char *cp;
+	int and_value, cmp_value, speclen;
+	char *cp, *eo_word, *param, *eo_parm;
+	int data_seen, pattern_len;
 
 
 	status=0;
-	cp=pattern+strlen(pattern);
+	pattern_len=strlen(pattern);
+	cp=pattern+pattern_len;
 	if (!end || end>cp) end=cp;
 
 	/* go over \n and other white space. These are not allowed 
@@ -794,72 +978,318 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 		STOPIF_CODE_ERR( pattern>=end, EINVAL, "pattern has no pattern");
 	}
 
+
+	data_seen=0;
+	int have_now(int cur, char *err)
+	{
+		int status;
+
+		status=0;
+		STOPIF_CODE_ERR(data_seen & cur, EINVAL, 
+				"!The pattern \"%s\" includes more than a single %s specification.",
+				ignore->pattern, err);
+		data_seen |= cur;
+ex:
+		return status;
+	}
+
+
+	/* gcc reports "used unitialized" - it doesn't see that the loop gets 
+	 * terminated in the case speclen==0. */
+	eo_parm=NULL;
 	/* This are the defaults: */
 	memset(ignore, 0, sizeof(*ignore));
 	ignore->pattern = pattern;
-	ignore->is_ignore=1;
-	stop=0;
-	while (!stop)
+	while (*pattern)
 	{
-		switch (*pattern)
+		eo_word=pattern;
+		while (isalpha(*eo_word)) eo_word++;
+		speclen=eo_word-pattern;
+		/* The used codes are (sorted by first character):
+		 *  Ignore types          Other flags
+		 *   device,                dironly,
+		 *                          group,
+		 *   inode,                 ignore,
+		 *                          insens (=nocase),
+		 *                          mode,
+		 *                          nocase,
+		 *   pcre,
+		 *                          take,
+		 *   "./"
+		 *   "/"
+		 * 
+		 * The order below reflects the relative importance for shortened 
+		 * strings. */
+
+		/* For shell patterns we need not look for parameters; and a comparison 
+		 * with 0 characters makes no sense anyway.  */
+		if (speclen == 0)
+			goto shell_pattern;
+
+		if (*eo_word == ':')
 		{
-			case 't':
-				ignore->is_ignore=0;
-				break;
-			case 'd':
-				ignore->dir_only=1;
-				break;
-			case 'i':
-				ignore->is_icase=1;
-				break;
-			case ',':
-				/* Separator, currently just ignored. */
-				break;
-			case 'm':
-				STOPIF_CODE_ERR( ignore->mode_match_and, EINVAL,
-						"!Pattern \"%s\" has two or more mode specifications.",
-						ignore->pattern);
-
-				STOPIF_CODE_ERR( sscanf(pattern+1, ":%o:%o%n", 
-						&and_value, &cmp_value, &stop) != 2, EINVAL,
-						"!Ignore pattern \"%s\" has a bad mode specification;\n"
-						"the expected syntax is \"m:<AND>:<CMP>\".",
-						ignore->pattern);
-
-				STOPIF_CODE_ERR( and_value>07777 || cmp_value>0777 ||
-						(cmp_value & ~and_value), EINVAL,
-						"Mode matching specification in \"%s\" has invalid numbers.",
-						ignore->pattern);
-
-				ignore->mode_match_and=and_value;
-				ignore->mode_match_cmp=cmp_value;
-				pattern += stop;
-				stop=0;
-				break;
-			default:
-				stop=1;
-				break;
+			/* Look for the end of this specification. */
+			param= eo_word + 1;
 		}
+		else
+			param=NULL;
+
+		eo_parm=strchr(eo_word, ign___parm_delimiter);
+		if (!eo_parm) eo_parm=eo_word+strlen(eo_word);
+		/* Now eo_parm points to the first non-parameter character - either ',' 
+		 * or \0. */
+
+		if (strncmp(ign__group_take, pattern, speclen)==0)
+		{
+			STOPIF( have_now(HAVE_GROUP, "group"), NULL);
+			ignore->group_name=ign__group_take;
+		}
+		else if (strncmp(ign__group_ign, pattern, speclen)==0)
+		{
+			STOPIF( have_now(HAVE_GROUP, "group"), NULL);
+			ignore->group_name=ign__group_ign;
+		}
+		else if (strncmp("group:", pattern, speclen)==0)
+		{
+			STOPIF( have_now(HAVE_GROUP, "group"), NULL);
+			STOPIF_CODE_ERR( !param || eo_parm==param, EINVAL, 
+					"!Missing group name in pattern \"%s\".",
+					ignore->pattern);
+
+			speclen=eo_parm-param;
+			STOPIF( hlp__strnalloc( speclen, 
+						(char**)&ignore->group_name, param), NULL);
+
+			if (speclen > ign__max_group_name_len)
+				ign__max_group_name_len=speclen;
+
+			/* Test for valid characters. */
+			while (param != eo_parm)
+			{
+				STOPIF_CODE_ERR( !isalnum(*param), EINVAL,
+						"!The group name may (currently) "
+						"only use alphanumeric characters;\n"
+						"so \"%s\" is invalid.", ignore->pattern);
+				param++;
+			}
+		}
+		else if (strncmp("dironly", pattern, speclen)==0)
+		{
+			ignore->dir_only=1;
+			STOPIF( have_now(HAVE_DIR, "dironly"), NULL);
+			data_seen |= HAVE_PATTERN_SUBST;
+		}
+		else if (strncmp("nocase", pattern, speclen)==0 ||
+				strncmp("insens", pattern, speclen)==0)
+		{
+			ignore->is_icase=1;
+			STOPIF( have_now(HAVE_CASE, "case ignore"), NULL);
+		}
+		else if (strncmp("mode:", pattern, speclen)==0)
+		{
+			STOPIF( have_now(HAVE_MODE, "mode"), NULL);
+			STOPIF_CODE_ERR( !param, EINVAL,
+					"!Invalid mode specification in \"%s\".", ignore->pattern);
+
+			STOPIF_CODE_ERR( sscanf(param, "%o:%o%n", 
+						&and_value, &cmp_value, &stop) != 2, EINVAL,
+					"!Ignore pattern \"%s\" has a bad mode specification;\n"
+					"the expected syntax is \"mode:<AND>:<CMP>\".",
+					ignore->pattern);
+
+			STOPIF_CODE_ERR( param+stop != eo_parm, EINVAL,
+					"!Garbage after mode specification in \"%s\".",
+					ignore->pattern);
+
+			STOPIF_CODE_ERR( and_value>07777 || cmp_value>07777 ||
+					(cmp_value & ~and_value), EINVAL,
+					"!Mode matching specification in \"%s\" has invalid numbers.",
+					ignore->pattern);
+
+			ignore->mode_match_and=and_value;
+			ignore->mode_match_cmp=cmp_value;
+			data_seen |= HAVE_PATTERN_SUBST;
+			stop=0;
+		}
+		/* The following branches cause the loop to terminate, as there's no 
+		 * delimiter character defined *within* patterns.
+		 * (Eg. a PCRE can use *any* character). */
+		else if (strncmp(dev_prefix, pattern, strlen(dev_prefix)) == 0)
+		{
+			ignore->type=PT_DEVICE;
+			ignore->compare_string = pattern;
+			ignore->compare = PAT_DEV__UNSPECIFIED;
+			pattern+=strlen(dev_prefix);
+
+			stop=0;
+			while (!stop)
+			{
+				switch (*pattern)
+				{
+					case '<': 
+						ignore->compare |= PAT_DEV__LESS;
+						break;
+					case '=': 
+						ignore->compare |= PAT_DEV__EQUAL;
+						break;
+					case '>': 
+						ignore->compare |= PAT_DEV__GREATER;
+						break;
+					default:
+						stop=1;
+						break;
+				}
+				if (!stop) pattern++;
+			}
+
+			if (ignore->compare == PAT_DEV__UNSPECIFIED)
+				ignore->compare = PAT_DEV__EQUAL;
+
+			ignore->major=strtoul(pattern, &cp, 0);
+			DEBUGP("device pattern: major=%d, left=%s", ignore->major, cp);
+			STOPIF_CODE_ERR( cp == pattern, EINVAL, 
+					"!No major number found in \"%s\"", ignore->pattern);
+
+			/* we expect a : here */
+			if (*cp)
+			{
+				STOPIF_CODE_ERR( *(cp++) != ':', EINVAL,
+						"!Expected ':' between major and minor number in %s",
+						ignore->pattern);
+
+				pattern=cp;
+				ignore->minor=strtoul(pattern, &cp, 0);
+				STOPIF_CODE_ERR( cp == pattern, EINVAL, 
+						"!No minor number in \"%s\"", ignore->pattern);
+
+				STOPIF_CODE_ERR( *cp, EINVAL, 
+						"!Garbage after minor number in \"%s\"",
+						ignore->pattern);
+				ignore->has_minor=1; 
+			}
+			else 
+			{
+				ignore->minor=PAT_DEV__UNSPECIFIED;
+				ignore->has_minor=0; 
+			}
+			status=0;
+			data_seen |= HAVE_PATTERN;
+		}
+		else if (strncmp(inode_prefix, pattern, strlen(inode_prefix)) == 0)
+		{
+#ifdef DEVICE_NODES_DISABLED
+			DEVICE_NODES_DISABLED();
+#else
+			int mj, mn;
+
+			ignore->type=PT_INODE;
+			ignore->compare_string = pattern;
+			pattern+=strlen(inode_prefix);
+
+			mj=strtoul(pattern, &cp, 0);
+			STOPIF_CODE_ERR( cp == pattern || *(cp++) != ':', EINVAL,
+					"!No major number in %s?", ignore->pattern);
+
+			pattern=cp;
+			mn=strtoul(pattern, &cp, 0);
+			STOPIF_CODE_ERR( cp == pattern || *(cp++) != ':', EINVAL,
+					"!No minor number in %s?", ignore->pattern);
+
+			ignore->dev=MKDEV(mj, mn);
+
+			pattern=cp;
+			ignore->inode=strtoull(pattern, &cp, 0);
+			STOPIF_CODE_ERR( cp == pattern || *cp!= 0, EINVAL,
+					"!Garbage after inode in %s?", ignore->pattern);
+
+#endif
+			status=0;
+			data_seen |= HAVE_PATTERN;
+		}
+		else
+		{
+shell_pattern:
+			if (strncmp(pattern, norm_prefix, strlen(norm_prefix)) == 0)
+			{
+				ignore->type=PT_SHELL;
+				DEBUGP("shell pattern matching");
+				/* DON'T pattern+=strlen(norm_prefix) - it's needed for matching ! */
+			}
+			else if (strncmp(pattern, abs_shell_prefix, strlen(abs_shell_prefix)) == 0)
+			{
+				ignore->type=PT_SHELL_ABS;
+				DEBUGP("absolute shell pattern matching");
+			}
+			else if (strncmp(pcre_prefix, pattern, strlen(pcre_prefix)) == 0)
+			{
+				ignore->type=PT_PCRE;
+				pattern += strlen(pcre_prefix);
+				DEBUGP("pcre matching");
+			}
+			else
+				STOPIF_CODE_ERR(1, EINVAL, 
+						"!Expected a shell pattern, starting with \"%s\" or \"%s\"!",
+						norm_prefix, abs_shell_prefix);
+
+
+			STOPIF_CODE_ERR( strlen(pattern)<3, EINVAL,
+					"!Pattern \"%s\" too short!", ignore->pattern);
+
+
+			ignore->compare_string = pattern;
+			status=ign__compile_pattern(ignore);
+			STOPIF(status, "compile returned an error");
+			data_seen |= HAVE_PATTERN;
+		}
+
+		/* If we got what we want ... */
+		if (data_seen & HAVE_PATTERN) break;
+
+
+		/* Else do the next part of the string. */
+		pattern=eo_parm;
+		/* Go beyond the delimiter. */
+		while (*pattern == ign___parm_delimiter) pattern++;
 
 		DEBUGP("now at %d == %p; end=%p", *pattern, pattern, end);
-		if (!stop) 
-		{
-			pattern++;
-			STOPIF_CODE_ERR( pattern>end || (pattern == end && *end!=0), 
-					EINVAL, "pattern not \\0-terminated");
-		}
+		STOPIF_CODE_ERR( pattern>end || (pattern == end && *end!=0), 
+				EINVAL, "pattern not \\0-terminated");
 	}
-	
+
 	/* Don't know if it makes *really* sense to allow a dironly pattern 
 	 * without pattern - but there's no reason to deny it outright. */
-	STOPIF_CODE_ERR(!(*pattern || ignore->mode_match_and || 
-				ignore->dir_only), EINVAL, 
-			"!Pattern \"%s\"ends prematurely", ignore->pattern);
+	STOPIF_CODE_ERR(!(data_seen & (HAVE_PATTERN | HAVE_PATTERN_SUBST)),
+			EINVAL, "!Pattern \"%s\" ends prematurely", ignore->pattern);
 
-	DEBUGP("pattern: %ccase, %s, %sdironly, mode&0%o==0%o",
-			ignore->is_icase ? 'I' : ' ',
-			ignore->is_ignore ? "ignore" : "take",
-			ignore->dir_only ? "" : "not ",
+	/* If we're in the "ignore" command, and *no* group was given, assign a 
+	 * default.
+	 * If an empty string was given, put always an error. */
+	/* COMPATIBILITY MODE FOR 1.1.18: always put a groupname there, if 
+	 * necessary.
+	 * Needed so that the old ignore patterns can be read from the ignore 
+	 * lists. */
+//	if (!ignore->group_name && (action->i_val & HAVE_GROUP))
+	if (!ignore->group_name)
+	{
+		ignore->group_name=ign__group_ign;
+		eo_word="group:";
+		/* gcc optimizes that nicely. */
+		STOPIF( hlp__strmnalloc( 
+					strlen(eo_word) + strlen(ign__group_ign) + 1 + 
+					pattern_len + 1,
+					&ignore->pattern,
+					eo_word, ign__group_ign, ",", 
+					ignore->pattern, NULL), NULL);
+	}
+
+	STOPIF_CODE_ERR( !ignore->group_name || !*ignore->group_name, EINVAL,
+			"!No group name given in \"%s\".", ignore->pattern);
+
+
+	DEBUGP("pattern: %scase, group \"%s\", %s, mode&0%o==0%o",
+			ignore->is_icase ? "I" : "",
+			ignore->group_name,
+			ignore->dir_only ? "dironly" : "all entries",
 			ignore->mode_match_and, ignore->mode_match_cmp);
 
 	if (!*pattern)
@@ -867,135 +1297,6 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 		/* Degenerate case of shell pattern without pattern; allowed in certain 
 		 * cases. */
 		ignore->type=PT_SHELL;
-	}
-	else if (strncmp(dev_prefix, pattern, strlen(dev_prefix)) == 0)
-	{
-		ignore->type=PT_DEVICE;
-		ignore->compare_string = pattern;
-		ignore->compare = PAT_DEV__UNSPECIFIED;
-		pattern+=strlen(dev_prefix);
-
-		stop=0;
-		while (!stop)
-		{
-			switch (*pattern)
-			{
-				case '<': 
-					ignore->compare |= PAT_DEV__LESS;
-					break;
-				case '=': 
-					ignore->compare |= PAT_DEV__EQUAL;
-					break;
-				case '>': 
-					ignore->compare |= PAT_DEV__GREATER;
-					break;
-				default:
-					stop=1;
-					break;
-			}
-			if (!stop) pattern++;
-		}
-
-		if (ignore->compare == PAT_DEV__UNSPECIFIED)
-			ignore->compare = PAT_DEV__EQUAL;
-
-		ignore->major=strtoul(pattern, &cp, 0);
-		DEBUGP("device pattern: major=%d, left=%s", ignore->major, cp);
-		STOPIF_CODE_ERR( cp == pattern, EINVAL, 
-				"no major number found in %s", ignore->pattern);
-
-		/* we expect a : here */
-		if (*cp)
-		{
-			STOPIF_CODE_ERR( *(cp++) != ':', EINVAL,
-					"expected ':' between major and minor number in %s",
-					ignore->pattern);
-
-			pattern=cp;
-			ignore->minor=strtoul(pattern, &cp, 0);
-			STOPIF_CODE_ERR( cp == pattern, EINVAL, 
-					"no minor number found in %s", ignore->pattern);
-
-			STOPIF_CODE_ERR( *cp, EINVAL, 
-					"I don't want to see anything behind the minor number in %s!",
-					ignore->pattern);
-			ignore->has_minor=1; 
-		}
-		else 
-		{
-			ignore->minor=PAT_DEV__UNSPECIFIED;
-			ignore->has_minor=0; 
-		}
-		status=0;
-	}
-	else if (strncmp(inode_prefix, pattern, strlen(inode_prefix)) == 0)
-	{
-#ifdef DEVICE_NODES_DISABLED
-		DEVICE_NODES_DISABLED();
-#else
-		int mj, mn;
-
-		ignore->type=PT_INODE;
-		ignore->compare_string = pattern;
-		pattern+=strlen(inode_prefix);
-
-		mj=strtoul(pattern, &cp, 0);
-		STOPIF_CODE_ERR( cp == pattern || *(cp++) != ':', EINVAL,
-				"no major number in %s?", ignore->pattern);
-
-		pattern=cp;
-		mn=strtoul(pattern, &cp, 0);
-		STOPIF_CODE_ERR( cp == pattern || *(cp++) != ':', EINVAL,
-				"no minor number in %s?", ignore->pattern);
-
-		ignore->dev=MKDEV(mj, mn);
-
-		pattern=cp;
-		ignore->inode=strtoull(pattern, &cp, 0);
-		STOPIF_CODE_ERR( cp == pattern || *cp!= 0, EINVAL,
-				"garbage after inode in %s?", ignore->pattern);
-
-#endif
-		status=0;
-	}
-	else
-	{
-		if (strncmp(pcre_prefix, pattern, strlen(pcre_prefix)) == 0)
-		{
-			ignore->type=PT_PCRE;
-			pattern += strlen(pcre_prefix);
-			DEBUGP("pcre matching");
-		}
-		else if (strncmp(pattern, norm_prefix, strlen(norm_prefix)) == 0)
-		{
-			ignore->type=PT_SHELL;
-			DEBUGP("shell pattern matching");
-			/* DON'T pattern+=strlen(norm_prefix) - it's needed for matching ! */
-		}
-		else if (strncmp(pattern, abs_shell_prefix, strlen(abs_shell_prefix)) == 0)
-		{
-			ignore->type=PT_SHELL_ABS;
-			DEBUGP("absolute shell pattern matching");
-		}
-		else
-			STOPIF_CODE_ERR(1, EINVAL, 
-					"!Expected a shell pattern, starting with \"%s\" or \"%s\"!",
-					norm_prefix, abs_shell_prefix);
-
-
-		STOPIF_CODE_ERR( strlen(pattern)<3, EINVAL,
-			"!Pattern \"%s\" too short!", ignore->pattern);
-
-		/* count number of PATH_SEPARATORs */
-		cp=strchr(pattern, PATH_SEPARATOR);
-		for(ignore->path_level=0;
-				cp;
-				ignore->path_level++)
-			cp=strchr(cp+1, PATH_SEPARATOR);
-
-		ignore->compare_string = pattern;
-		status=ign__compile_pattern(ignore);
-		STOPIF(status, "compile returned an error");
 	}
 
 ex:
@@ -1043,7 +1344,7 @@ int ign__load_list(char *dir)
 		/* This means no entries.
 		 * Maybe we should check?
 		 */
-		DEBUGP("Ignore list header is invalid.");
+		DEBUGP("Grouping list header is invalid.");
 		status=0;
 		goto ex;
 	}
@@ -1051,7 +1352,7 @@ int ign__load_list(char *dir)
 	status=sscanf(memory, ign_header_str, 
 			&count);
 	STOPIF_CODE_ERR( status != 1, EINVAL, 
-			"ignore header is invalid");
+			"grouping header is invalid");
 
 	cp++;
 	STOPIF( ign__new_pattern(count, NULL, NULL, 0, 0), NULL );
@@ -1113,6 +1414,212 @@ inline int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
 }
 
 
+int ign___new_group(struct ignore_t *ign, struct grouping_t **result)
+{
+	int status;
+	int gn_len;
+	struct grouping_t *group;
+
+
+	status=0;
+	DEBUGP("making group %s", ign->group_name);
+	gn_len=strlen(ign->group_name);
+
+	if (ign___groups)
+		group=apr_hash_get(ign___groups, ign->group_name, gn_len);
+	else
+	{
+		ign___groups=apr_hash_make(global_pool);
+		group=NULL;
+	}
+
+	if (group)
+	{
+		/* Already loaded by another pattern. */
+	}
+	else
+	{
+		STOPIF( hlp__calloc(&group, 1, sizeof(*group)), NULL);
+		apr_hash_set(ign___groups, ign->group_name, gn_len, group);
+	}
+
+	*result=group;
+	ign->group_def=group;
+
+ex:
+	return status;
+}
+
+
+/** Loads the grouping definitions, and stores them via a \ref grouping_t.
+ **/
+int ign___load_group(struct ignore_t *ign)
+{
+	int status;
+	struct grouping_t *group;
+	char *copy, *fn, *eos, *conf_start, *input;
+	FILE *g_in;
+	int is_ok, gn_len;
+	static const char ps[]= { PATH_SEPARATOR, 0 };
+	char *cause;
+	svn_string_t *str;
+
+
+	BUG_ON(ign->group_def, "already loaded");
+
+	status=0;
+	copy=NULL;
+	g_in=NULL;
+	gn_len=strlen(ign->group_name);
+
+	STOPIF( ign___new_group(ign, &group), NULL);
+
+	/* Initialize default values. */
+	if (strcmp(ign->group_name, ign__group_take) == 0)
+		is_ok=1;
+	else if (strcmp(ign->group_name, ign__group_ign) == 0)
+		is_ok=2;
+	else
+		is_ok=0;
+
+
+	/* waa__open() could be used for the WC-specific path; but we couldn't 
+	 * easily go back to the common directory.
+	 * So we just compute the path, and move the specific parts for the 
+	 * second try. */
+	STOPIF( waa__get_waa_directory( wc_path, 
+				&fn, &eos, &conf_start, GWD_CONF), NULL);
+	/* We have to use a new allocation, because the group name can be 
+	 * (nearly) arbitrarily long. */
+	STOPIF( hlp__strmnalloc(waa_tmp_path_len +
+				strlen(CONFIGDIR_GROUP) + 1 + gn_len + 1, &copy, 
+				fn, CONFIGDIR_GROUP, ps, ign->group_name, NULL), NULL);
+
+
+	DEBUGP("try specific group: %s", copy);
+	g_in=fopen(copy, "rt");
+	if (!g_in)
+	{
+		STOPIF_CODE_ERR(errno != ENOENT, errno,
+				"!Cannot read group definition \"%s\"", copy);
+
+		/* This range is overlapping:
+		 *   /etc/fsvs/XXXXXXXXXXXX...XXXXXX/groups/<name>
+		 *   ^fn       ^conf_start           ^eos
+		 * gets
+		 *   /etc/fsvs/groups/<name>
+		 **/
+		memmove(copy + (conf_start-fn),
+				copy + (eos-fn),
+				strlen(CONFIGDIR_GROUP) + 1 + gn_len + 1); /* ==strlen(eos)+1 */
+
+		DEBUGP("try for common: %s", copy);
+		g_in=fopen(copy, "rt");
+		STOPIF_CODE_ERR(!g_in && errno != ENOENT, errno,
+				"!Cannot read group definition \"%s\"", copy);
+	}
+
+	DEBUGP("Got filename %s", copy);
+
+	if (!g_in)
+	{
+		STOPIF_CODE_ERR(!is_ok, ENOENT,
+				"!Group definition for \"%s\" not found;\n"
+				"used in pattern \"%s\".",
+				ign->group_name, ign->pattern);
+		/* Else it's a default name, and we can just use the defaults. */
+		goto defaults;
+	}
+
+
+	hlp__string_from_filep(NULL, NULL, NULL, SFF_RESET_LINENUM);
+
+	while (1)
+	{
+		status=hlp__string_from_filep(g_in, &input, NULL,
+				SFF_WHITESPACE | SFF_COMMENT);
+		if (status == EOF) break;
+		STOPIF(status, "reading group file %s", copy);
+
+		conf_start=input;
+		DEBUGP("parsing %s", conf_start);
+		eos=hlp__get_word(conf_start, &conf_start);
+
+		if (*eos) *(eos++)=0;
+		else eos=NULL;
+
+		if (strcmp(conf_start, "take") == 0)
+		{
+			group->is_take=1;
+			continue;
+		}
+		else if (strcmp(conf_start, "ignore") == 0)
+		{
+			group->is_ignore=1;
+			continue;
+		}
+		else if (strcmp(conf_start, "auto-prop") == 0)
+		{
+			cause="no property name";
+			if (!eos) goto invalid;
+			cause="no whitespace after name";
+			if (sscanf(eos, "%s%n", input, &gn_len) != 1) goto invalid;
+
+			eos=hlp__skip_ws(eos+gn_len);
+			DEBUGP("Got property name=%s, value=%s", input, eos);
+
+			cause="no property value";
+			if (!*input || !*eos) goto invalid;
+
+			if (!group->auto_props)
+				group->auto_props=apr_hash_make(global_pool);
+
+			STOPIF( hlp__strdup( &fn, eos), NULL);
+
+			gn_len=strlen(input);
+			STOPIF( hlp__strnalloc( gn_len, &eos, input), NULL);
+
+			/* We could just store the (char*), too; but prp__set_from_aprhash() 
+			 * takes the values to be of the kind svn_string_t.  */
+			str=svn_string_create(fn, global_pool);
+			apr_hash_set(group->auto_props, eos, gn_len, str);
+		}
+		else
+		{
+			cause="invalid keyword";
+invalid:
+			STOPIF( EINVAL, "!Cannot parse line #%d in file \"%s\" (%s).",
+					hlp__string_from_filep(NULL, NULL, NULL, SFF_GET_LINENUM), 
+					copy, cause);
+		}
+	}
+
+defaults:
+	status=0;
+
+	STOPIF_CODE_ERR( group->is_ignore && group->is_take, EINVAL,
+			"Either \"take\" or \"ignore\" must be given, in \"%s\".",
+			copy);
+	if (!group->is_ignore && !group->is_take)
+	{
+		if (is_ok == 2)
+			group->is_ignore=1;
+		else
+			group->is_take=1;
+	}
+
+	DEBUGP("group has %sauto-props; ign=%d, take=%d, url=%s",
+			group->auto_props ? "" : "no ",
+			group->is_ignore, group->is_take, 
+			group->url ? group->url->url : "(default)");
+
+ex:
+	IF_FREE(copy);
+	if (g_in) fclose(g_in);
+	return status;
+}
+
+
 /** -.
  *
  * Searches this entry for a take/ignore pattern.
@@ -1157,145 +1664,93 @@ int ign__is_ignore(struct estat *sts,
 	/* currently all entries are checked against the full ignore list -
 	 * not good performance-wise! */
 	STOPIF( ops__build_path(&cp, sts), NULL);
+	DEBUGP("testing %s for being ignored", cp);
 
 	len=strlen(cp);
 	for(i=0; i<used_ignore_entries; i++)
 	{
 		ign=ignore_list+i;
 
-#if 0
-		ign_list=dir->active_ign;
-		if (!ign_list) goto ex;
+		if (!ign->group_def)
+			STOPIF( ign___load_group(ign), NULL);
 
+		ign->stats_tested++;
 
-		namelen=strlen(sts->name);
-		path=NULL;
-		while ( (ign = *ign_list) )
+		if (ign->type == PT_SHELL || ign->type == PT_PCRE ||
+				ign->type == PT_SHELL_ABS)
 		{
-			if (ign->path_level)
+			DEBUGP("matching %s(0%o) against \"%s\" "
+					"(dir_only=%d; and=0%o, cmp=0%o)",
+					cp, sts->st.mode, ign->pattern, ign->dir_only,
+					ign->mode_match_and, ign->mode_match_cmp);
+			if (ign->dir_only && !S_ISDIR(sts->st.mode))
 			{
-				/* no need to calculate the full path if it's not used. */
-				if (!path)
-				{
-					status=ops__build_path(&path, sts);
-					if (status) goto ex;
-
-					path_len=strlen(path);
-				}
-
-				/* search for the corresponding slash */
-				i=ign->path_level;
-				cp=path+path_len;
-				while (cp >= path)
-				{
-					if (*cp == PATH_SEPARATOR)
-						if (--i<0) break;
-
-					cp--;
-				}
-				/* Pattern matches only for greater depth.
-				 * It should not be mentioned here. */
-				if (cp<path) 
-				{
-					DEBUGP("pattern \"%s\" matches only further below (currently at %s)!",
-							ign->pattern, path);
-#if 0
-					BUG();
-#else
-					goto next;
-#endif
-				}
-
-				/* now cp is >= path, with the specified number of directory levels
-				 * deep */
-				len=path+path_len-cp;
+				status=PCRE_ERROR_NOMATCH;
 			}
-			else
+			else if (ign->mode_match_and && 
+					((sts->st.mode & ign->mode_match_and) != ign->mode_match_cmp))
 			{
-				cp=sts->name;
-				len=namelen;
+				status=PCRE_ERROR_NOMATCH;
 			}
-#endif
-
-			if (ign->type == PT_SHELL || ign->type == PT_PCRE ||
-					ign->type == PT_SHELL_ABS)
+			else if (ign->compiled)
 			{
-				DEBUGP("matching %s(0%o) against \"%s\" "
-						"(dir_only=%d; and=0%o, cmp=0%o)",
-						cp, sts->st.mode, ign->pattern, ign->dir_only,
-						ign->mode_match_and, ign->mode_match_cmp);
-				if (ign->dir_only && !S_ISDIR(sts->st.mode))
-				{
-					status=PCRE_ERROR_NOMATCH;
-				}
-				else if (ign->mode_match_and && 
-						((sts->st.mode & ign->mode_match_and) != ign->mode_match_cmp))
-				{
-					status=PCRE_ERROR_NOMATCH;
-				}
-				else if (ign->compiled)
-				{
-					status=pcre_exec(ign->compiled, ign->extra, 
-							cp, len, 
-							0, 0,
-							NULL, 0);
-					STOPIF_CODE_ERR( status && status != PCRE_ERROR_NOMATCH, 
-							status, "cannot match pattern %s on data %s",
-							ign->pattern, cp);
-				}
+				status=pcre_exec(ign->compiled, ign->extra, 
+						cp, len, 
+						0, 0,
+						NULL, 0);
+				STOPIF_CODE_ERR( status && status != PCRE_ERROR_NOMATCH, 
+						status, "cannot match pattern %s on data %s",
+						ign->pattern, cp);
 			}
-			else if (ign->type == PT_DEVICE)
-			{
-				/* device compare */
-				st=(S_ISDIR(sts->st.mode)) ? &(dir->st) : &(sts->st);
-
-				switch (ign->compare)
-				{
-					case PAT_DEV__LESS:
-						status= ign___compare_dev(st, ign) <  0;
-						break;
-					case PAT_DEV__LESS | PAT_DEV__EQUAL:
-						status= ign___compare_dev(st, ign) <= 0;
-						break;
-				 	case PAT_DEV__EQUAL:
-						status= ign___compare_dev(st, ign) == 0;
-						break;
-				 	case PAT_DEV__EQUAL | PAT_DEV__GREATER:
-						status= ign___compare_dev(st, ign) >= 0;
-						break;
-					case PAT_DEV__GREATER:
-						status= ign___compare_dev(st, ign) >  0;
-						break;
-				}
-
-				/* status = 0 if *matches* ! */
-				status = !status;
-				DEBUGP("device compare pattern status=%d", status);
-			}
-			else if (ign->type == PT_INODE)
-			{
-				sts_cmp.st.dev=ign->dev;
-				sts_cmp.st.ino=ign->inode;
-				status = dir___f_sort_by_inodePP(&sts_cmp, sts) != 0;
-				DEBUGP("inode compare %llX:%llu status=%d", 
-						(t_ull)ign->dev, (t_ull)ign->inode, status);
-			}
-			else
-				BUG("unknown pattern type 0x%X", ign->type);
-
-			/* here status == 0 means pattern matches */
-			if (status == 0) 
-			{
-				*is_ignored = ign->is_ignore ? +1 : -1;
-				DEBUGP("pattern found -  result %d", *is_ignored);
-				goto ex;
-			}
-
-#if 0
-next:
-			ign_list++;
 		}
-#endif
+		else if (ign->type == PT_DEVICE)
+		{
+			/* device compare */
+			st=(S_ISDIR(sts->st.mode)) ? &(dir->st) : &(sts->st);
+
+			switch (ign->compare)
+			{
+				case PAT_DEV__LESS:
+					status= ign___compare_dev(st, ign) <  0;
+					break;
+				case PAT_DEV__LESS | PAT_DEV__EQUAL:
+					status= ign___compare_dev(st, ign) <= 0;
+					break;
+				case PAT_DEV__EQUAL:
+					status= ign___compare_dev(st, ign) == 0;
+					break;
+				case PAT_DEV__EQUAL | PAT_DEV__GREATER:
+					status= ign___compare_dev(st, ign) >= 0;
+					break;
+				case PAT_DEV__GREATER:
+					status= ign___compare_dev(st, ign) >  0;
+					break;
+			}
+
+			/* status = 0 if *matches* ! */
+			status = !status;
+			DEBUGP("device compare pattern status=%d", status);
+		}
+		else if (ign->type == PT_INODE)
+		{
+			sts_cmp.st.dev=ign->dev;
+			sts_cmp.st.ino=ign->inode;
+			status = dir___f_sort_by_inodePP(&sts_cmp, sts) != 0;
+			DEBUGP("inode compare %llX:%llu status=%d", 
+					(t_ull)ign->dev, (t_ull)ign->inode, status);
+		}
+		else
+			BUG("unknown pattern type 0x%X", ign->type);
+
+		/* here status == 0 means pattern matches */
+		if (status == 0) 
+		{
+			ign->stats_matches++;
+			*is_ignored = ign->group_def->is_ignore ? +1 : -1;
+			sts->match_pattern=ign;
+			DEBUGP("pattern found -  result %d", *is_ignored);
+			goto ex;
+		}
 	}
 
 	/* no match, no error */
@@ -1315,8 +1770,16 @@ int ign__save_ignorelist(char *basedir)
 	char buffer[HEADER_LEN];
 
 
-	DEBUGP("saving ignore list");
+	DEBUGP("saving ignore list: have %d", used_ignore_entries);
 	fh=-1;
+	if (!basedir) basedir=wc_path;
+
+	if (used_ignore_entries==0)
+	{
+		STOPIF( waa__delete_byext(basedir, WAA__IGNORE_EXT, 1), NULL);
+		goto ex;
+	}
+
 	STOPIF( waa__open_byext(basedir, WAA__IGNORE_EXT, WAA__WRITE, &fh), NULL);
 
 	/* do header */
@@ -1329,7 +1792,7 @@ int ign__save_ignorelist(char *basedir)
 			ign_header_str, 
 			l);
 	STOPIF_CODE_ERR(status >= sizeof(buffer)-1, ENOSPC,
-		"can't prepare header to write; buffer too small");
+			"can't prepare header to write; buffer too small");
 
 	strcat(buffer, "\n");
 	l=strlen(buffer);
@@ -1384,9 +1847,8 @@ int ign__new_pattern(unsigned count, char *pattern[],
 	if (used_ignore_entries+count >= max_ignore_entries)
 	{
 		max_ignore_entries = used_ignore_entries+count+RESERVE_IGNORE_ENTRIES;
-		ignore_list=realloc(ignore_list, 
-				sizeof(*ignore_list) * max_ignore_entries);
-		STOPIF_ENOMEM(!ignore_list);
+		STOPIF( hlp__realloc( &ignore_list, 
+					sizeof(*ignore_list) * max_ignore_entries), NULL);
 	}
 
 
@@ -1497,6 +1959,79 @@ ex:
 }
 
 
+int ign___test_single_pattern(struct estat *sts)
+{
+	int status;
+	char *path;
+
+	status=0;
+	BUG_ON(!(sts->entry_status & FS_NEW));
+
+	if (sts->match_pattern)
+	{
+		STOPIF( ops__build_path(&path, sts), NULL);
+		if (opt__is_verbose() >= 0)
+			STOPIF_CODE_EPIPE( printf("%s\n", path), NULL);
+	}
+
+ex:
+	return status;
+}
+
+
+int ign___test_all_patterns(struct estat *sts)
+{
+	int status;
+	char *path;
+	struct ignore_t *ign;
+
+
+	status=0;
+	BUG_ON(!(sts->entry_status & FS_NEW));
+
+	STOPIF( ops__build_path(&path, sts), NULL);
+	ign=sts->match_pattern;
+
+	if (opt__is_verbose() >= 0)
+		STOPIF_CODE_EPIPE( 
+				opt__is_verbose()>0 ? 
+				printf("%s\t%s\t%s\n", 
+					ign ? ign->group_name : "(none)",
+					ign ? ign->pattern : "(none)",
+					path) : 
+				printf("%s\t%s\n", ign ? ign->group_name : "(none)", path), NULL);
+
+ex:
+	return status;	return 0;
+}
+
+
+/** -. */
+int ign__print_group_stats(FILE *output)
+{
+	int status;
+	int i;
+	struct ignore_t *ign;
+
+	STOPIF_CODE_EPIPE( fprintf(output, "\nGrouping statistics ("
+				"tested, matched, groupname, pattern):\n\n"), NULL);
+
+	for(i=0; i<used_ignore_entries; i++)
+	{
+		ign=ignore_list+i;
+
+		if (ign->is_user_pat || opt__is_verbose()>0)
+		{
+			STOPIF_CODE_EPIPE( fprintf(output, "%u\t%u\t%s\t%s\n",
+						ign->stats_tested, ign->stats_matches, 
+						ign->group_name, ign->pattern), NULL);
+		}
+	}
+
+ex:
+	return status;
+}
+
 
 /** -.
  * This is called to append new ignore patterns.
@@ -1506,6 +2041,8 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 	int status;
 	int position, i;
 	char *cp, *copy;
+	char *arg[2];
+	struct grouping_t *group;
 
 
 	status=0;
@@ -1527,21 +2064,79 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 	DEBUGP("first argument is %s", argv[0]);
 
 	status=0;
-	if (strcmp(argv[0], parm_load) == 0)
+	if (strcmp(argv[0], parm_test) == 0)
+	{
+		argv++;
+		argc--;
+
+		if (argc>0)
+		{
+			STOPIF( ign___parse_position(argv[0], &position, &i), NULL);
+			argv+=i;
+			argc-=i;
+
+			/* Even though we might have been called with "groups" instead of 
+			 * "ignore", we just assume the "ignore" group, so that testing is 
+			 * easier. */
+			action->i_val |= HAVE_GROUP;
+
+			STOPIF( ign__new_pattern(argc, argv, NULL, 1, position), NULL);
+
+			action->local_callback=ign___test_single_pattern;
+		}
+		else
+		{
+			STOPIF( ign__load_list(NULL), NULL);
+			action->local_callback=ign___test_all_patterns;
+		}
+
+		opt__set_int(OPT__FILTER, PRIO_MUSTHAVE, FS_NEW);
+
+		/* The entries would be filtered, and not even given to the output 
+		 * function, so we have to fake the ignore groups into take groups. */
+		for(i=0; i<used_ignore_entries; i++)
+		{
+			STOPIF( ign___new_group(ignore_list+i, &group), NULL);
+			ignore_list[i].group_def->is_ignore=0;
+			ignore_list[i].group_def->is_take=1;
+		}
+
+		/* We have to load the URLs. */
+		STOPIF( url__load_list(NULL, 0), NULL);
+
+		/* We fake the start path as (relative) argument; if it's the WC base, 
+		 * we use ".".  */
+		if (start_path_len == wc_path_len)
+			arg[0]=".";
+		else
+			arg[0]=start_path+wc_path_len+1;
+
+		arg[1]=NULL;
+		STOPIF( waa__read_or_build_tree(root, 1, arg, arg, NULL, 0), NULL);
+
+		if (opt__get_int(OPT__GROUP_STATS))
+			STOPIF( ign__print_group_stats(stdout), NULL);
+
+		/* We must not store the list! */
+		goto dont_store;
+	}
+	else if (strcmp(argv[0], parm_load) == 0)
 	{
 		i=0;
 		while (1)
 		{
-			status=hlp__string_from_filep(stdin, &cp, 1);
+			status=hlp__string_from_filep(stdin, &cp, NULL, SFF_WHITESPACE);
 			if (status == EOF) break;
 
-			copy=strdup(cp);
+			STOPIF(status, NULL);
+
+			STOPIF( hlp__strdup( &copy, cp), NULL);
 			STOPIF( ign__new_pattern(1, &copy, NULL, 
 						1, PATTERN_POSITION_END), NULL);
 			i++;
 		}
 
-		if (opt_verbose>=0)
+		if (opt__is_verbose() >= 0)
 			printf("%d pattern%s loaded.\n", i, i==1 ? "" : "s");
 	}
 	else
@@ -1555,14 +2150,14 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 			for(i=position=0; i < used_ignore_entries; i++, position++)
 				if (ignore_list[i].is_user_pat)
 				{
-					if (opt_verbose>0) 
+					if (opt__is_verbose() > 0) 
 						printf("%3d: ", position);
 
 					printf("%s\n", ignore_list[i].pattern);
 				}
 
 			/* No need to save. */
-			goto ex;
+			goto dont_store;
 		}
 		else 
 		{
@@ -1575,6 +2170,7 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 
 	STOPIF( ign__save_ignorelist(NULL), NULL);
 
+dont_store:
 ex:
 	return status;
 }
@@ -1598,7 +2194,8 @@ int ign__rign(struct estat *root UNUSED, int argc, char *argv[])
 	argc-=i;
 
 	/* Goto correct base. */
-	status=waa__find_common_base2(argc, argv, &normalized, 1);
+	status=waa__find_common_base2(argc, argv, &normalized,
+			FCB__PUT_DOTSLASH | FCB__NO_REALPATH);
 	if (status == ENOENT)
 		STOPIF(EINVAL, "!No working copy base was found.");
 	STOPIF(status, NULL);
@@ -1611,128 +2208,4 @@ int ign__rign(struct estat *root UNUSED, int argc, char *argv[])
 ex:
 	return status;
 }
-
-
-#if 0
-inline int ign___do_parent_list(struct ignore_t ***target, int next_index,
-		struct ignore_t **source,
-		struct estat *sts,
-		char *path, int pathlen)
-{
-	int all_parent, take;
-	struct ignore_t **list;
-
-
-	if (!source) goto ex;
-
-	list=source;
-	all_parent=1;
-	while (*list)
-	{
-		take= (*list)->has_wildwildcard ?
-			sts->path_level >= (*list)->path_level :
-			sts->path_level == (*list)->path_level;
-
-		if (take)
-		{
-			(*target)[next_index] = *list;
-			next_index++;
-		}
-		else
-			all_parent=0;
-
-		list++;
-	}
-
-	/* Same entries as parent? Copy pointer, save memory */
-	if (all_parent)
-	{
-		IF_FREE(*target);
-		*target=source;
-	}
-
-ex:
-	return next_index;
-}
-
-
-/* Here we have to find the possibly matching entries.
- * All entries of the parent directory are looked at,
- * and the possible subdirectory-entries of the parent.
- *
- * Patterns on the active list define patterns for this and lower
- * levels; they may or may not be needed for the sub-entry.
- *
- * Patterns of the subdir list have a specified minimum level;
- * these may be applicable here, and possibly below. */
-int ign__set_ignorelist(struct estat *sts)
-{
-	BUG_ON(!S_ISDIR(sts->st.mode));
-	/* TODO TODO - see below */
-	return 0;
-
-	int status,i, act, sub;
-	struct estat *parent;
-	char *path;
-	int pathlen;
-
-
-	IF_FREE(sts->active_ign);
-	IF_FREE(sts->subdir_ign);
-
-	/* NULL terminated */
-	sts->active_ign=calloc(used_ignore_entries+1, sizeof(*sts->active_ign));
-	sts->subdir_ign=calloc(used_ignore_entries+1, sizeof(*sts->subdir_ign));
-	STOPIF_ENOMEM(!sts->active_ign || !sts->subdir_ign);
-
-	act=sub=0;
-
-	STOPIF( ops__build_path(&path, sts), NULL);
-	pathlen=strlen(path);
-
-
-	parent=sts->parent;
-	if (parent) 
-	{
-		act=ign___do_parent_list(	&(sts->active_ign), 0,
-				parent->active_ign,
-				sts,
-				path, pathlen);
-
-		/* doesn't work this way --- TODO TODO TODO */
-		act=ign___do_parent_list(	&(sts->subdir_ign), act,
-				parent->active_ign,
-				sts,
-				path, pathlen);
-	}
-	else
-	{
-		for(i=0; i<used_ignore_entries; i++)
-		{
-			/* TODO TODO TODO */
-		}
-	}
-
-	/* for 0 elements we could let realloc give us as NULL pointer -
-	 * but I like that to be explicit.
-	 * [We'd have to change that (act+1), too.] */
-	if (act)
-		sts->active_ign=realloc(sts->active_ign, 
-				(act+1)* sizeof(*sts->active_ign) );
-	else
-		IF_FREE(sts->active_ign);
-
-	if (sub)
-		sts->subdir_ign=realloc(sts->subdir_ign,
-				(sub+1)* sizeof(*sts->subdir_ign) );
-	else
-		IF_FREE(sts->subdir_ign);
-
-
-	status=0;
-
-ex:
-	return status;
-}
-#endif
 

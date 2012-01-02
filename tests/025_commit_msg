@@ -1,0 +1,41 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC1
+
+logfile=$LOGDIR/025.commit_msg
+
+mkdir abc
+touch 123
+
+$BINq	ci -m1
+
+
+cd abc
+date > uzt
+if $BINq ci -F uzt
+then
+	$SUCCESS "Messagefile found."
+else
+	$ERROR "Messagefile in non-WC-base directory not taken."
+fi
+
+
+cd $WC1
+touch jj
+if $BINq ci -F jj -o empty_message=no
+then
+	$ERROR "empty message taken"
+else
+	$SUCCESS "empty message not taken"
+fi
+
+if $BINq ci -F jj -o empty_message=yes
+then
+	$SUCCESS "empty message allowed"
+else
+	$ERROR "empty message not allowed"
+fi

@@ -1,8 +1,13 @@
-.TH "FSVS - Master/Local HOWTO" 5 "29 Oct 2008" "Version trunk:2782" "fsvs" \" -*- nroff -*-
+.TH "FSVS - Master/Local HOWTO" 5 "11 Mar 2010" "Version trunk:2424" "fsvs" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-HOWTO: Master/Local repositories \- Please read the \fBHOWTO: Backup\fP first, to know about basic steps using FSVS.
+HOWTO: Master/Local repositories \- 
+.PP
+This HOWTO describes how to use a single working copy with multiple repositories.  
+This HOWTO describes how to use a single working copy with multiple repositories. 
+
+Please read the \fBHOWTO: Backup\fP first, to know about basic steps using FSVS.
 .SH "Rationale"
 .PP
 If you manage a lot of machines with similar or identical software, you might notice that it's a bit of work keeping them all up-to-date. Sure, automating distribution via rsync or similar is easy; but then you get identical machines, or you have to play with lots of exclude patterns to keep the needed differences.
@@ -278,7 +283,7 @@ Conflicts should not be automatically merged. If two or more trees bring the sam
 .PP
 So keep your base installation at highest priority, and you've got good chances that you won't loose control in case of conflicting files.
 .SS "2"
-If you don't know which files are diffent in your installs,
+If you don't know which files are different in your installs,
 .IP "\(bu" 2
 install two machines,
 .IP "\(bu" 2
@@ -303,5 +308,6 @@ BTW, how would you merge your binaries, eg. \fC/bin/ls\fP?
 If you've got any questions, ideas, wishes or other feedback, please tell us in the mailing list \fCusers [at] fsvs.tigris.org\fP.
 .PP
 Thank you! 
-.PP
-
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for fsvs from the source code.

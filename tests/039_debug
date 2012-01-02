@@ -20,20 +20,52 @@ logfile3=$logfile-3
 # We have to give some option so that the number of parameters is the same.
 # We cut the timestamp and the memory addresses away, as they might be
 # different if address space randomization is enabled.
-$BINdflt -o diff_extra=1 -d -D main | cut -f2- -d' ' | perl -pe 's#0x\w+#0x*#g' > $logfile1
+function Clean
+{
+	cut -f2- -d' ' | perl -pe 's#0x\w+#0x*#g; s#\d+ KB#* KB#;' 
+}
 
-$BINdflt -o debug_output=$logfile3 -d -D main
-cut -f2- -d' ' < $logfile3 | perl -pe 's#0x\w+#0x*#g' > $logfile2
+$BINdflt -o debug_output=$logfile1 -d -D main
+Clean < $logfile1 > $logfile2
 
-$BINdflt -o debug_output="| cut -f2- -d' ' | perl -pe 's#0x\w+#0x*#g' > $logfile3" -d -D main
+$BINdflt -o debug_output="cat > $logfile1" -d -D main
+Clean < $logfile1 > $logfile3
+
+$BINdflt -o diff_extra=1 -d -D main | Clean > $logfile1
 
 if [[ `md5sum $logfile-* | cut -f1 -d" " | sort -u | wc -l` -eq 1 ]]
 then
-	$SUCCESS "Debug tests successfull."
+	$SUCCESS "Debug tests successful."
 else
   md5sum $logfile-*
   $ERROR "Debug output is different."
 fi
 
+
+# Check debug_buffer, if enabled.
+if ! $BINdflt -v -V | grep ENABLE_DEBUGBUFFER
+then
+	$WARN "Option debugbuffer not enabled, won't test."
+else
+	function fsize
+	{
+		ls -1ds "$1" | cut -f1 -d" "
+	}
+
+	# Check tree and a non-existing file, to an error.
+	$BINdflt -o debug_buffer=4 st tree g > $logfile1 2> /dev/null || true
+	if [[ `fsize $logfile1` -gt 4 ]]
+	then
+		$ERROR "debug_buffer doesn't limit to 4kB"
+	fi
+	> $logfile1
+	$BINdflt -o debug_output="cat > /dev/zero" -o debug_buffer=4 -d st tree g > $logfile1 2> /dev/null || true
+	if [[ `fsize $logfile1` -lt 4 ]]
+	then
+		$ERROR "debug_buffer should turn debug_buffer and debug_output off."
+	fi
+
+	$SUCCESS "debug_buffer behaves as designed."
+fi
 
 # vi: textwidth=0 formatoptions=

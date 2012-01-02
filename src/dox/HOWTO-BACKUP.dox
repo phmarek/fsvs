@@ -15,7 +15,7 @@
 	\defgroup howto_backup HOWTO: Backup
 	\ingroup howto
 
-	This document is a step-by-step explanation how to do backups using \c fsvs.
+	This document is a step-by-step explanation how to do backups using FSVS.
 
 	\section howto_backup_prep Preparation
 
@@ -27,7 +27,7 @@
 	<li> Do you only want to backup your data in \c /home?<ul>
 		<li> Less storage requirements
 		<li> In case of hardware crash the OS must be set up again</ul>
-	<li> Do you want to keep track of your configuration in \c etc?<ul>
+	<li> Do you want to keep track of your configuration in \c /etc?<ul>
 		<li> Very small storage overhead
 		<li> Not much use for backup/restore, but shows what has been changed</ul>
 	<li> Or do you want to backup your whole installation, from \c / on?<ul>
@@ -70,7 +70,7 @@
 	\section howto_backup_first_steps Telling FSVS what to do
 
 	Given \c $WC as the <i>working directory</i> - the base of the data you'd  
-	like backup'ed (\c /, \c /home), and \c $URL as a valid subversion URL to 
+	like backed up (\c /, \c /home), and \c $URL as a valid subversion URL to 
 	your (already created) repository path.
 
 	Independent of all these details the first steps look like these:
@@ -112,7 +112,7 @@
 	\section howto_backup_first_commit The first backup
 
 	\code
-		fsvs commit -m "First commit!"
+		fsvs commit -m "First commit."
 	\endcode
 	That's all there is to it!
 
@@ -155,7 +155,7 @@
   In case of a real emergency, when your harddisks crashed or your 
 	filesystem was eaten and you have to re-partition or re-format, you 
 	should get your system working again by<UL>
-	<li>booting from a knoppix or some other Live-CD (with \c fsvs on it),
+	<li>booting from a knoppix or some other Live-CD (with FSVS on it),
 	<li>partition/format as needed,
 	<li>mount your harddisk partitions below eg. \c /mnt,
 	<li>and then recovering by</ul>

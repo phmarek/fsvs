@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -68,7 +68,7 @@
  * <tt>fsvs command [options] [args]</tt>
  *
  *
- * The following commands are understood by \c fsvs:
+ * The following commands are understood by FSVS:
  *
  * \section cmds_local Local configuration and information:
  * <dl>
@@ -80,7 +80,7 @@
  *   <dt>\ref log<dd><tt>Fetch the log messages from the repository</tt>
  *   <dt>\ref diff<dd><tt>Get differences between files (local and 
  *   remote)</tt>
- *   <dt>\ref cpfd "copyfrom-detect"<dd><tt>Ask \c fsvs about probably 
+ *   <dt>\ref cpfd "copyfrom-detect"<dd><tt>Ask FSVS about probably 
  *   copied/moved/renamed entries; see \ref cp</tt>
  * </dl>
  *
@@ -89,7 +89,7 @@
  *   <dt>\ref ignore and \ref rign<dd><tt>Define ignore patterns</tt>
  *   <dt>\ref unversion<dd><tt>Remove entries from versioning</tt>
  *   <dt>\ref add<dd><tt>Add entries that would be ignored</tt>
- *   <dt>\ref cp, \ref mv<dd><tt>Tell \c fsvs that entries were 
+ *   <dt>\ref cp, \ref mv<dd><tt>Tell FSVS that entries were 
  *   copied</tt>
  * </dl>
  *
@@ -132,11 +132,11 @@
  *
  *
  * \subsection glob_opt_version -V -- show version
- * \c -V makes \c fsvs print the version and a copyright notice, and exit.
+ * \c -V makes FSVS print the version and a copyright notice, and exit.
  *
  *
  * \subsection glob_opt_deb -d and -D -- debugging
- * If \c fsvs was compiled using \c --enable-debug you can enable printing 
+ * If FSVS was compiled using \c --enable-debug you can enable printing 
  * of debug messages (to \c STDOUT) with \c -d.
  * Per default all messages are printed; if you're only interested in a 
  * subset, you can use \c -D \e start-of-function-name.
@@ -146,35 +146,23 @@
  * would call the \a status action, printing all debug messages of all WAA 
  * functions - \c waa__init, \c waa__open, etc.
  *
- * Furthermore you can specify the debug output destination with 
- * the option \c debug_output. This can be a simple filename 
- * (which gets truncated), or, if it starts with a \c |, a 
- * command that the output gets piped into.
- *
- * If the destination cannot be opened (or none is given), 
- * debug output goes to \c STDOUT.
- *
- * \note That string is taken only once - at the first debug output line.
- * So you have to use the correct order of parameters: 
- * <tt>-o debug_output=... -d</tt>.
- *
- * An example: writing the last 200 lines of debug output into a file.
- * \code
- *   fsvs -o debug_output='| tail -200 > /tmp/debug.log' -d ....
- * \endcode
+ * For more details on the other debugging options \ref o_debug_output 
+ * "debug_output" and \ref o_debug_buffer "debug_buffer" please see the 
+ * options list.
  *
  *
  * \subsection glob_opt_rec -N, -R -- recursion
  * The \c -N and \c -R switches in effect just decrement/increment a  
- * counter; the behavious is chosen depending on that. So <tt>-N -N -N 
- * -R -R</tt> is equivalent to \c -N. 
+ * counter; the behaviour is chosen depending on that. So a command line of 
+ * <tt>-N -N -N -R -R</tt> is equivalent to <tt>-3 +2 = -1</tt>, this 
+ * results in \c -N. 
  *
  *
  * \subsection glob_opt_verb -q, -v -- verbose/quiet
- * Like the options for recursive behaviour (\c -R and \c -N) \c -v and \c 
- * -q just inc/decrement a counter. The higher the value, the more verbose.
- * \n Currently only the values \c -1 (quiet), \c 0 (normal), and \c +1 
- * (verbose) are used.
+ * <tt>-v<tt>/<tt>-q<tt> set/clear verbosity flags, and so give more/less 
+ * output.
+ *
+ * Please see \ref o_verbose "the verbose option" for more details.
  *
  *
  * \subsection glob_opt_chksum -C -- checksum
@@ -188,7 +176,7 @@
  *
  * It requires a specification at the end, which can be any combination of 
  * \c any, \c text, \c new, \c deleted (or \c removed), \c meta, \c mtime, \c group, \c mode,
- * \c changed or \c owner.
+ * \c changed or \c owner; \c default or \c def use the default value.
  *
  * By giving eg. the value \c text, with a \ref status action only entries 
  * that are new or changed are shown; with \c mtime,group only entries 
@@ -252,21 +240,19 @@
  *
  * <tr><td>\e chmod-eperm, \e chown-eperm<td>
  * If you update a working copy as normal user, and get to update a file 
- * which has another owner but you may modify, you'll get errors because 
- * neither the user, group, nor mode can be set.
+ * which has another owner but which you may modify, you'll get errors 
+ * because neither the user, group, nor mode can be set. \n
+ * This way you can make the errors non-fatal.
  *
  * <tr><td>\e chmod-other, \e chown-other<td>
  * If you get another error than \c EPERM in the situation above, you might 
  * find these useful.
  *
- * <tr><td>\e overlayed-entries<td>
- * This is not yet used.
- *
  * <tr><td>\e mixed-rev-wc<td>
  * If you specify some revision number on a \ref revert, it will complain 
- * that mixed-revision working copies are not allowed.
- * By using this specification you cannot enable mixed-revision working 
- * copies, of course, but you can avoid getting told every time.
+ * that mixed-revision working copies are not allowed. \n
+ * While you cannot enable mixed-revision working copies (I'm working on 
+ * that) you can avoid being told every time.
  *
  * <tr><td>\e propname-reserved<td>
  * It is normally not allowed to set a property with the \ref prop-set 
@@ -274,19 +260,20 @@
  *
  * <tr><td>\anchor warn_ign_abs_not_base \e ignpat-wcbase<td>
  * This warning is issued if an \ref ignpat_shell_abs "absolute ignore 
- * pattern" does not match the working copy base directory. 
+ * pattern" does not match the working copy base directory. \n
+ * See \ref ignpat_shell_abs "absolute shell patterns" for more details.
  *
  * <tr><td>\e diff-status<td>
  * GNU diff has defined that it returns an exit code 2 in case of an error; 
  * sadly it returns that also for binary files, so that a simply <tt>fsvs 
  * diff some-binary-file text-file</tt> would abort without printing the 
- * diff for the second file.
- * So the exit status of diff is per default ignored, but can be used by 
- * setting this option to eg. \e stop.
+ * diff for the second file. \n
+ * Because of this FSVS currently ignores the exit status of diff per 
+ * default, but this can be changed by setting this option to eg. \e stop.
  *
  * </table>
  *
- * Also an environment variable \c FSVS_WARNINGS is used and parsed; it is 
+ * Also an environment variable FSVS_WARNINGS is used and parsed; it is 
  * simply a whitespace-separated list of option specifications.
  *
  *
@@ -307,10 +294,7 @@
  * \endcode
  *
  * This would get \c HEAD of \c base_install and \c gcc, and set the target 
- * revision of the \c boot URL at 32.
- *
- * \note The second revision specification will be used for eg. the \ref 
- * diff command; but this is not yet implemented.
+ * revision of the \c boot URL <b>for this command</b> at 32.
  *
  *
  * \subsection glob_options -o [name[=value]] -- other options
@@ -319,20 +303,26 @@
  * command-line).
  *
  * For a list of these please see \ref options.
- * */
+ *
+ *
+ * \section Signals
+ * 
+ * If you have a running FSVS, and you want to change its verbosity, you can send the process either
+ * \c SIGUSR1 (to make it more verbose) or \c SIGUSR2 (more quiet). 
+ *
+ */
 
 
 /** -.
  * */
 char parm_dump[]="dump",
+		 parm_test[]="test",
 		 parm_load[]="load";
 
 
 int debuglevel=0,
-		only_check_status=0,
 		/** -. We start with recursive by default. */
-		opt_recursive=1,
-		opt_verbose=0;
+		opt_recursive=1;
 
 svn_revnum_t target_revision;
 svn_revnum_t opt_target_revision=SVN_INVALID_REVNUM;
@@ -370,8 +360,47 @@ struct url_t *current_url;
 char **environ=NULL;
 
 
+/** Opens the debug output file or pipe, as specified.
+ *
+ * If a debug buffer is given, this is filled first; and only in case of a 
+ * buffer flush the given file or pipe is opened, to receive the buffer 
+ * contents.
+ *
+ * This function cannot return errors. */
+void _DEBUGP_open_output(FILE **output, int *was_popened)
+{
+	const char *fn;
+	FILE *tmp;
+
+
+	*output=stdout;
+	*was_popened=0;
+
+	fn=opt__get_string(OPT__DEBUG_OUTPUT);
+	if (fn)
+	{
+		*was_popened= (fn[0] == '|');
+		if (*was_popened)
+			tmp=popen(fn+1, "w");
+		else
+			tmp=fopen(fn, "w");
+
+		if (tmp) *output=tmp;
+		else DEBUGP("'%s' cannot be opened: %d=%s", 
+				opt__get_string(OPT__DEBUG_OUTPUT),
+				errno, strerror(errno)); 
+	}
+}
+
+/** This constant is used to determine when to rotate the debug output 
+ * buffer. */
+#define MAX_DEBUG_LINE_LEN (1024)
+
 /** -.
- * Never called directly, used only via the macro DEBUGP().  */
+ * Never called directly, used only via the macro DEBUGP().
+ *
+ * For uninitializing in the use case \c debug_buffer the \c line value is 
+ * misused to show whether an error occured. */
 void _DEBUGP(const char *file, int line, 
 		const char *func, 
 		char *format, ...)
@@ -383,19 +412,45 @@ void _DEBUGP(const char *file, int line,
 	static FILE *debug_out=NULL;
 	static int was_popened=0;
 	int ms;
-	FILE *tmp;
 	const char *fn;
+	static char *buffer_start=NULL;
+	static int did_wrap=0;
+	FILE *real_out;
+	long mem_pos;
 
-/* Uninit? */
+	/* Uninit? */
 	if (!file)
 	{
+		if (line && opt__get_int(OPT__DEBUG_BUFFER) && debug_out)
+		{
+			/* Error in program, do output. */
+			_DEBUGP_open_output(&real_out, &was_popened);
+
+			mem_pos=ftell(debug_out);
+			if (mem_pos>=0 && did_wrap)
+			{
+				buffer_start[mem_pos]=0;
+
+				/* Look for the start of a line. */
+				fn=strchr(buffer_start+mem_pos,'\n');
+				if (fn)
+					fputs(fn+1, real_out);
+			}
+			fputs(buffer_start, real_out);
+
+			/* This is just the mem stream */
+			fclose(debug_out);
+			/* The "real" stream might be a pipe. */
+			debug_out=real_out;
+		}
 		/* Error checking makes not much sense ... */
 		if (debug_out)
 		{
 			if (was_popened)
 				pclose(debug_out);
 			else
-				fclose(debug_out);
+				if (debug_out != stdout)
+					fclose(debug_out);
 			debug_out=NULL;
 		}
 		return;
@@ -413,29 +468,54 @@ void _DEBUGP(const char *file, int line,
 		/* Default to STDOUT. */
 		debug_out=stdout;
 
-		fn=opt__get_string(OPT__DEBUG_OUTPUT);
-		if (fn)
+#ifdef ENABLE_DEBUGBUFFER
+		if (opt__get_int(OPT__DEBUG_BUFFER))
 		{
-			was_popened= (fn[0] == '|');
-			if (was_popened)
-				tmp=popen(fn+1, "w");
-			else
-				tmp=fopen(fn, "w");
+			buffer_start=malloc(opt__get_int(OPT__DEBUG_BUFFER));
+			if (buffer_start)
+				debug_out=fmemopen(buffer_start, 
+						opt__get_int(OPT__DEBUG_BUFFER), "w+");
 
-			if (tmp) debug_out=tmp;
-			else DEBUGP("'%s' cannot be opened: %d=%s", 
-					opt__get_string(OPT__DEBUG_OUTPUT),
-					errno, strerror(errno)); 
+			if (buffer_start && debug_out)
+			{
+				DEBUGP("using a buffer of %d bytes.", opt__get_int(OPT__DEBUG_BUFFER));
+			}
+			else
+			{
+				opt__set_int(OPT__DEBUG_BUFFER, PRIO_MUSTHAVE, 0);
+				debug_out=stdout;
+				DEBUGP("cannot use memory buffer for debug");
+			}
 		}
+		else
+		{
+			_DEBUGP_open_output(&debug_out, &was_popened);
+		}
+#else
+		_DEBUGP_open_output(&debug_out, &was_popened);
+#endif
 	}
 
 	gettimeofday(&tv, &tz);
 	tm=localtime(&tv.tv_sec);
-	ms=(tv.tv_usec+500)/1000;
-	/* You wouldn't believe it, but I saw xx:xx:xx.1000 as time stamp ... */
-	if (ms == 1000)
-		ms=999;
-	/* Repeated incrementing of sec, min, hour is too much. */
+	/* Just round down, else we'd have to increment the other fields for 
+	 * >= 999500 us. */
+	ms=tv.tv_usec/1000;
+
+
+#ifdef ENABLE_DEBUGBUFFER
+	if (opt__get_int(OPT__DEBUG_BUFFER))
+	{
+		/* Check whether we should rotate. */
+		mem_pos=ftell(debug_out);
+		if (mem_pos+MAX_DEBUG_LINE_LEN >= opt__get_int(OPT__DEBUG_BUFFER))
+		{
+			/* What can possibly go wrong ;-/ */
+			fseek(debug_out, 0, SEEK_SET);
+			did_wrap++;
+		}
+	}
+#endif
 
 	fprintf(debug_out, "%02d:%02d:%02d.%03d %s[%s:%d] ",
 			tm->tm_hour, tm->tm_min, tm->tm_sec, ms,
@@ -486,8 +566,8 @@ int _STOP(const char *file, int line, const char *function,
 
 
 	/* With verbose all lines are printed; else only the first non-empty. */
-	if (opt_verbose<=0 && 
-			( already_stopping || !format )) 
+	if ( (already_stopping || !format) &&
+			!(opt__get_int(OPT__VERBOSE) & VERBOSITY_STACKTRACE))
 		return error_number;
 
 	if (! (already_stopping++))
@@ -499,13 +579,14 @@ int _STOP(const char *file, int line, const char *function,
 		{
 			va_start(va, format);
 			vfprintf(stop_out, format, va);
-			if (!(debuglevel || opt_verbose>0)) goto eol;
+			if (!(debuglevel || opt__is_verbose()>0))
+				goto eol;
 		}
 
 
 		fputs("\n\nAn error occurred", stop_out);
 
-		if (debuglevel || opt_verbose>0)
+		if (debuglevel || opt__is_verbose()>0)
 		{
 			gettimeofday(&tv, &tz);
 			tm=localtime(&tv.tv_sec);
@@ -549,11 +630,11 @@ eol:
 /** For keyword expansion - the version string. */
 const char* Version(FILE *output)
 {
-	static const char Id[] ="$Id: fsvs.c 1953 2008-10-25 11:12:13Z pmarek $";
+	static const char Id[] ="$Id: fsvs.c 2420 2010-01-25 09:29:49Z pmarek $";
 
 	fprintf(output, "FSVS (licensed under the GPLv3), (C) by Ph. Marek;"
 			" version " FSVS_VERSION "\n");
-	if (opt_verbose>0)
+	if (opt__is_verbose()>0)
 	{
 		fprintf(output, "compiled on " __DATE__ " " __TIME__ 
 				", with options:\n\t"
@@ -614,6 +695,25 @@ const char* Version(FILE *output)
 #ifdef DEVICE_NODES_DISABLED
 				STRINGIFY(DEVICE_NODES_DISABLED)
 #endif
+#ifdef HAVE_STRSEP
+				STRINGIFY(HAVE_STRSEP)
+#endif
+#ifdef HAVE_LUTIMES
+				STRINGIFY(HAVE_LUTIMES)
+#endif
+#ifdef HAVE_LCHOWN
+				STRINGIFY(HAVE_LCHOWN)
+#endif
+#ifdef WAA_WC_MD5_CHARS
+				STRINGIFY(WAA_WC_MD5_CHARS)
+#endif
+#ifdef HAVE_FMEMOPEN
+				STRINGIFY(HAVE_FMEMOPEN)
+#endif
+#ifdef ENABLE_DEBUGBUFFER
+				STRINGIFY(ENABLE_DEBUGBUFFER)
+#endif
+				STRINGIFY(NAME_MAX)
 				"\n");
 	}
 	return Id;
@@ -721,6 +821,40 @@ ex:
 	return 0;
 }
 
+/** USR1 increases FSVS' verbosity. */
+void sigUSR1(int num)
+{
+	if (opt__verbosity() < VERBOSITY_DEFAULT)
+		opt__set_int(OPT__VERBOSE, PRIO_MUSTHAVE, VERBOSITY_DEFAULT);
+	else if (debuglevel < 3) 
+	{
+		debuglevel++;
+		DEBUGP("more debugging via SIGUSR1");
+	}
+}
+/** USR2 decreases FSVS' verbosity. */
+void sigUSR2(int num)
+{
+	if (debuglevel)
+	{
+		DEBUGP("less debugging via SIGUSR2");
+		debuglevel--;
+	}
+	else if (opt__verbosity() >= VERBOSITY_DEFAULT)
+		opt__set_int(OPT__VERBOSE, PRIO_MUSTHAVE, VERBOSITY_QUIET);
+}
+
+
+/** Handler for SIGPIPE.
+ * We give the running action a single chance to catch an \c EPIPE, to 
+ * clean up on open files and similar; if it doesn't take this chance, the 
+ * next \c SIGPIPE kills FSVS. */
+void sigPipe(int num)
+{
+	DEBUGP("got SIGPIPE");
+	signal(SIGPIPE, SIG_DFL);
+}
+
 
 /** Signal handler for debug binaries.
  * If the \c configure run included \c --enable-debug, we intercept 
@@ -741,14 +875,17 @@ void sigDebug(int num)
 	/* if already tried to debug, dump core on next try. */
 	signal(SIGSEGV, SIG_DFL);
 
-	/* We use a pipe here for stopping/continuing the parent.
+	/* Try to spew the debug buffer. */
+	_DEBUGP(NULL, EBUSY, NULL, NULL);
+
+	/* We use a pipe here for stopping/continuing the active process.
 	 *
-	 * The parent tries to read from the pipe. That blocks.
-	 * The child tries to start gdb.
+	 * The child tries to read from the pipe. That blocks.
+	 * The parent tries to start gdb.
 	 *   - If the exec() returns with an error, we simply close
-	 *     the pipe, and the parent re-runs into its SEGV.
-	 *   - If the exec() works, the parent will be debugged.
-	 *     When gdb exits, the pipe end is closed, so the parent
+	 *     the pipe, and the child re-runs into its SEGV.
+	 *   - If the exec() works, the child will be debugged.
+	 *     When gdb exits, the pipe end is closed, so the child
 	 *     will no longer be blocked. */
 	pipes[0]=pipes[1]=-1;
 	if ( pipe(pipes) == -1) goto ex;
@@ -756,11 +893,10 @@ void sigDebug(int num)
 	pid=fork();
 	if (pid == -1) return;
 
-	if (pid == 0)
+	if (pid)
 	{
-		/* Child tries to start gdb for parent. */
-		pid=getppid();
-
+		/* Parent tries to start gdb for child.
+		 * We already have the correct pid. */
 		close(pipes[0]);
 
 		sprintf(ppid_str, "%d", pid);
@@ -782,18 +918,6 @@ void sigDebug(int num)
 ex:
 	if (pipes[0] != -1) close(pipes[0]);
 	if (pipes[1] != -1) close(pipes[1]);
-}
-
-
-/// FSVS GCOV MARK: sigPipe should not be executed
-/** Handler for SIGPIPE.
- * We give the running action a single chance to catch an \c EPIPE, to 
- * clean up on open files and similar; if it doesn't take this chance, the 
- * next \c SIGPIPE kills FSVS. */
-void sigPipe(int num)
-{
-	DEBUGP("got SIGPIPE");
-  signal(SIGPIPE, SIG_DFL);
 }
 
 
@@ -884,7 +1008,7 @@ void *_do_component_tests(int a)
  *
  *   parm [shape=record,
  *     label="{ { <0>fsvs | <1>update | <2>-u | <3>baseinstall | <4>/bin }}"]
-*
+ *
  *   list [shape=record,
  *     label="{ args | { <0>0 | <1>1 | NULL | <3>3 | <4>4 | NULL }}" ];
  *
@@ -903,29 +1027,29 @@ void *_do_component_tests(int a)
  *
  *
  * <h2>Argumentation for parsing the urllist</h2>
- *
- * I'd have liked to keep the \ref url__parm_list in the original \a args 
- * as well; but we cannot easily let it start at the end, and putting it 
- * just after the non-parameter arguments
- * - might run out of space before some argument (because two extra \c NULL 
- *   pointers are needed, and only a single one is provided on startup),
- * - and we'd have to move the pointers around every time we find a 
- *   non-option argument.
- *
- * Consider the case <tt>[fsvs, update, /bin/, -uURLa, -uURLb, /lib, 
- * NULL]</tt>.
- * That would be transformed to
- * -# <tt>[update, NULL, /bin/, -uURLa, -uURLb, /lib, NULL]</tt>
- * -# <tt>[update, /bin/, NULL, -uURLa, -uURLb, /lib, NULL]</tt>
- * -# And now we'd have to do <tt>[update, /bin/, NULL, -uURLa, NULL, 
- *  -uURLb, /lib, NULL]</tt>; this is too long.
- *   We could reuse the \c NULL at the end ... but that's not that fine, 
- *   either -- the \ref url__parm_list wouldn't be terminated.
- *
- * So we go the simple route - allocate an array of pointers, and store 
- * them there.
- *
- * */
+*
+* I'd have liked to keep the \ref url__parm_list in the original \a args 
+* as well; but we cannot easily let it start at the end, and putting it 
+* just after the non-parameter arguments
+* - might run out of space before some argument (because two extra \c NULL 
+		*   pointers are needed, and only a single one is provided on startup),
+	* - and we'd have to move the pointers around every time we find a 
+	*   non-option argument.
+	*
+	* Consider the case <tt>[fsvs, update, /bin/, -uURLa, -uURLb, /lib, 
+	* NULL]</tt>.
+	* That would be transformed to
+	* -# <tt>[update, NULL, /bin/, -uURLa, -uURLb, /lib, NULL]</tt>
+	* -# <tt>[update, /bin/, NULL, -uURLa, -uURLb, /lib, NULL]</tt>
+	* -# And now we'd have to do <tt>[update, /bin/, NULL, -uURLa, NULL, 
+	*  -uURLb, /lib, NULL]</tt>; this is too long.
+	*   We could reuse the \c NULL at the end ... but that's not that fine, 
+	*   either -- the \ref url__parm_list wouldn't be terminated.
+	*
+	* So we go the simple route - allocate an array of pointers, and store 
+	* them there.
+	*
+	* */
 int main(int argc, char *args[], char *env[])
 {
 	struct estat root = { };
@@ -946,14 +1070,15 @@ int main(int argc, char *args[], char *env[])
 	if (isatty(STDIN_FILENO) && isatty(STDOUT_FILENO))
 		signal(SIGSEGV, sigDebug);
 
-	signal(SIGPIPE, sigPipe);
-
 	/* Very early debugging */
 	cmd=getenv(FSVS_DEBUG_ENV);
 	if (cmd)
 		debuglevel = atoi(cmd);
 #endif
 
+	signal(SIGPIPE, sigPipe);
+	signal(SIGUSR1, sigUSR1);
+	signal(SIGUSR2, sigUSR2);
 	mem_start=sbrk(0);
 
 
@@ -1011,13 +1136,13 @@ int main(int argc, char *args[], char *env[])
 	STOPIF( waa__save_cwd(&start_path, &start_path_len, 0), NULL);
 
 
-  if (!isatty(STDOUT_FILENO))
-    opt__set_int( OPT__STATUS_COLOR, PRIO_PRE_CMDLINE, 0);
+	if (!isatty(STDOUT_FILENO))
+		opt__set_int( OPT__STATUS_COLOR, PRIO_PRE_CMDLINE, 0);
 
 	/* direct initialization doesn't work because
 	 * of the anonymous structures */
 	root.repos_rev=0;
-	root.name=root.strings=strdup(".");
+	root.name=root.strings=".";
 	root.st.size=0;
 	root.st.mode=S_IFDIR | 0700;
 	root.entry_count=0;
@@ -1070,21 +1195,7 @@ int main(int argc, char *args[], char *env[])
 				break;
 
 			case 'C':
-				/* Find the rightmost 0 bit, and set it. */
-
-				i = opt__get_int(OPT__CHANGECHECK);
-				/* Algorithm for finding the rightmost 1 bit:
-				 * orig i=   ... x 0 1 1 1
-				 * XOR i+1   ... x 1 0 0 0
-				 *   gives   ... 0 1 1 1 1
-				 * AND i+1   ... 0 1 0 0 0
-				 *
-				 * Maybe there's an easier way ... don't have "Numerical Recipes"
-				 * here with me. */
-				i = (i ^ (i+1)) & (i+1);
-
-				DEBUGP("checksum bits %X | %X", 
-						opt__get_int(OPT__CHANGECHECK), i);
+				i = hlp__rightmost_0_bit(opt__get_int(OPT__CHANGECHECK));
 				opt__set_int(OPT__CHANGECHECK, PRIO_CMDLINE,
 						opt__get_int(OPT__CHANGECHECK) | i);
 				break;
@@ -1093,13 +1204,13 @@ int main(int argc, char *args[], char *env[])
 				STOPIF( opt__parse( optarg, NULL, PRIO_CMDLINE, 0), 
 						"!Cannot parse option string '%s'.", optarg);
 				break;
+
 			case 'f':
 				STOPIF( opt__parse_option(OPT__FILTER, PRIO_CMDLINE, optarg), NULL);
 				break;
 
 			case 'u':
-				/* Why is a new command line parameter necessary?
-				 * Some functions want URLs \b and some filename parameter (eg.  
+				/* Some functions want URLs \b and some filename parameter (eg.  
 				 * update, to define the wc base), and we have to separate them.
 				 *
 				 * As update will take an arbitrary number of URLs and filenames, 
@@ -1158,20 +1269,55 @@ int main(int argc, char *args[], char *env[])
 				/* Yes, that could be merged with the next lines ... :*/
 				break;
 			case 'd':
-				/* On first -d we allocate some stack usage, to allow the component 
-				 * tests to work. */
+				/* Debugging wanted.
+				 * If given twice, any debugbuffer and debug_output settings are 
+				 * overridden, to get clear, find debug outputs directly to the 
+				 * console. */
+				if (debuglevel == 1)
+				{
+					/* Close any redirection or memory buffer that might already be 
+					 * used. */
+					_DEBUGP(NULL, 0, NULL, NULL);
+
+					/* Manual override. */
+					opt__set_string(OPT__DEBUG_OUTPUT, PRIO_MUSTHAVE, NULL);
+					opt__set_int(OPT__DEBUG_BUFFER, PRIO_MUSTHAVE, 0);
+
+					/* Now we're going directly. */
+					DEBUGP("Debugging set to unfiltered console");
+				}
 				debuglevel++;
 				break;
 #endif
 			case 'q':
-				opt_verbose--;
+				/* -q gives a default level, or, if already there, goes one level 
+				 * down.
+				 * If we would like to remove one bit after another from the 
+				 * bitmask, we could use
+				 *   i=opt__get_int(OPT__VERBOSE);
+				 *   if (i < VERBOSITY_DEFAULT) i=0;
+				 *   else i &= ~hlp__rightmost_0_bit(~i);
+				 *   opt__set_int(OPT__VERBOSE, PRIO_CMDLINE, i);
+				 * (similar to the 'v' case) */
+				opt__set_int(OPT__VERBOSE, PRIO_CMDLINE, 
+						opt__verbosity() <= VERBOSITY_QUIET ?
+						VERBOSITY_VERYQUIET : VERBOSITY_QUIET);
 				break;
+
 			case 'v':
-				opt_verbose++;
-				opt__set_int(OPT__FILTER, PRIO_CMDLINE, FILTER__ALL);
+				/* A bit more details. */
+				i=opt__get_int(OPT__VERBOSE);
+				if (i == VERBOSITY_QUIET)
+					i=VERBOSITY_DEFAULT;
+				else
+					i |= hlp__rightmost_0_bit(i);
 
+				opt__set_int(OPT__VERBOSE, PRIO_CMDLINE, i);
+
+				/* If not overridden by the commandline explicitly */
+				opt__set_int(OPT__FILTER, PRIO_PRE_CMDLINE, FILTER__ALL);
 				break;
-
+				
 			case 'V':
 				Version(stdout);
 				exit(0);
@@ -1185,6 +1331,15 @@ int main(int argc, char *args[], char *env[])
 	/* Say we're starting with index 1, to not pass the program name. */
 	optind=1;
 
+
+	/* Special case: debug buffer means capture, but don't print normally. */
+	if (opt__get_int(OPT__DEBUG_BUFFER) && 
+			opt__get_prio(OPT__DEBUG_BUFFER)==PRIO_CMDLINE &&
+			!debuglevel)
+	{
+		debuglevel++;
+		DEBUGP("debug capturing started by the debug_buffer option.");
+	}
 
 
 	/* first non-argument is action */
@@ -1202,12 +1357,13 @@ int main(int argc, char *args[], char *env[])
 		action=action_list+0;
 	}
 
-	DEBUGP("optind=%d per_sts=%d action=%s rec=%d filter=%s", 
+	DEBUGP("optind=%d per_sts=%d action=%s rec=%d filter=%s verb=0x%x", 
 			optind, 
 			(int)sizeof(root),
 			action->name[0],
 			opt_recursive,
-			st__status_string_fromint( opt__get_int(OPT__FILTER)) );
+			st__status_string_fromint( opt__get_int(OPT__FILTER)),
+			opt__verbosity());
 
 	for(eo_args=1; eo_args<argc; eo_args++)
 		DEBUGP("argument %d: %s", eo_args, args[eo_args]);
@@ -1229,7 +1385,9 @@ int main(int argc, char *args[], char *env[])
 	 * coverage. */
 	STOPIF( wa__warn( WRN__TEST_WARNING, 0, "test warning" ), NULL );
 
-	if (debuglevel) _do_component_tests(opt_verbose);
+	/* We allocate some stack usage in _do_component_tests(), to allow the 
+	 * component tests to work. */
+	if (debuglevel) _do_component_tests(optind);
 #endif
 
 	/* Do some initializations. Some of them won't always be needed - 
@@ -1263,11 +1421,14 @@ ex:
 	DEBUGP("memory stats: %p to %p, %llu KB", 
 			mem_start, mem_end, (t_ull)(mem_end-mem_start)/1024);
 	if (status == -EPIPE)
+	{
 		DEBUGP("got EPIPE, ignoring.");
-	else if (status)
-		return 2;
+		status=0;
+	}
 
-	_DEBUGP(NULL, 0, NULL, NULL);
+	_DEBUGP(NULL, status, NULL, NULL);
+
+	if (status) return 2;
 
 	return 0;
 }

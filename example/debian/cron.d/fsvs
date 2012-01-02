@@ -1,0 +1,9 @@
+#
+# Cron Job for fsvs
+#
+SHELL=/bin/sh
+MAILTO=""
+MAILFROM="From: FSVS Monitoring <fsvs@localhost>"
+MAILSUBJECT="fsvs file monitoring on localhost"
+
+# */1 * * * * root /usr/share/fsvs/scripts/fsvs-cron 2>&1 | mail -a "$MAILFROM" -s "$MAILSUBJECT" $MAILTO

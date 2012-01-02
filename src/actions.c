@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,10 +35,10 @@ int ac__dispatch(struct estat *sts)
 	 * it's a special file, but not which type exactly. */
 #if 0
 	BUG_ON(!(
-				S_ISDIR(sts->updated_mode) || S_ISREG(sts->updated_mode) || 
-				S_ISCHR(sts->updated_mode) || S_ISBLK(sts->updated_mode) || 
-				S_ISLNK(sts->updated_mode) ),
-			"%s has mode 0%o", sts->name, sts->updated_mode);
+				S_ISDIR(sts->st.mode) || S_ISREG(sts->st.mode) || 
+				S_ISCHR(sts->st.mode) || S_ISBLK(sts->st.mode) || 
+				S_ISLNK(sts->st.mode) ),
+			"%s has mode 0%o", sts->name, sts->st.mode);
 #endif
 
 	if (ops__allowed_by_filter(sts) ||
@@ -55,16 +55,7 @@ int ac__dispatch(struct estat *sts)
 			STOPIF( action->local_callback(sts), NULL);
 	}
 	else 
-	{
 		DEBUGP("%s is not the entry you're looking for", sts->name);
-		/* We have to keep the removed flag for directories, so that children 
-		 * know that they don't exist anymore. */
-		if (S_ISDIR(sts->st.mode) && (sts->entry_status & FS_REMOVED))
-			sts->entry_status=FS_REMOVED;
-		else
-			sts->entry_status=0;
-		/** \todo solve that cleaner. */
-	}
 
 ex:
 	return status;
@@ -77,16 +68,17 @@ ex:
 int act__find_action_by_name(const char *cmd, 
 		struct actionlist_t **action_p)
 {
-	int len, i, status;
-	struct actionlist_t *action;
+	int i, status;
+	struct actionlist_t *action_v;
 	int match_nr;
 	char const* const* cp;
+	size_t len;
 
 
 	status=0;
 	len=strlen(cmd);
 	match_nr=0;
-	action=action_list;
+	action_v=action_list;
 
 	for (i=action_list_count-1; i >=0; i--)
 	{
@@ -95,7 +87,7 @@ int act__find_action_by_name(const char *cmd,
 		{
 			if (strncmp(*cp, cmd, len) == 0)
 			{
-				action=action_list+i;
+				action_v=action_list+i;
 
 				/* If it's am exact match, we're done.
 				 * Needed for "co" (checkout) vs. "commit". */
@@ -115,7 +107,7 @@ int act__find_action_by_name(const char *cmd,
 			"!Action \"%s\" is ambiguous. Try \"help\".", cmd);
 
 done:
-	*action_p=action;
+	*action_p=action_v;
 
 ex:
 	return status;

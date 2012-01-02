@@ -1,5 +1,5 @@
 ###########################################################################
- # Copyright (C) 2005-2008 Philipp Marek.                                #
+ # Copyright (C) 2005-2009 Philipp Marek.                                #
  #                                                                       #
  # This program is free software;  you can redistribute it and/or modify #
  # it under the terms of the GNU General Public License version 2 as #
@@ -11,14 +11,16 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.17/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 1951 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.2.3/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 2424 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
 CFLAGS	:= @CFLAGS@
 CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"' 
 LDFLAGS	:= @LDFLAGS@
 FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lapr-1 -laprutil-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm
+EXTRALIBS	:= @EXTRALIBS@
+WAA_CHARS?= @WAA_WC_MD5_CHARS@
 
 ifdef RPATH
 LDFLAGS	+= -Wl,-rpath,$(RPATH)
@@ -46,11 +48,17 @@ DEST	:= fsvs
 
 ################################ Targets ###################################
 ifeq (@CHROOTER_JAIL@, )
-all:	deps tags $(DEST) lsDEST
+all:	deps tags check-version check-dox $(DEST) lsDEST
 else
 all:	tools/fsvs-chrooter
 endif
 
+
+check-version: config.h fsvs.c
+	@dev/check-version-output.pl $^
+
+check-dox: options.c dox/options.dox
+	@dev/check-option-docs.pl $^
 
 tags:	$(C_FILES) $(wildcard *.h)
 	@echo "     $@"
@@ -80,9 +88,9 @@ exec_prefix= @exec_prefix@
 prefix	= @prefix@
 mandir	= @mandir@
 install:
-	for d in /etc/fsvs /var/spool/fsvs $(bindir) ; do test -d $$d || mkdir -p $$d; done
-	cp -a $(DEST) $(bindir)
-#	cp -a ../doc/fsvs.1 $(mandir)
+	mkdir -p /etc/fsvs /var/spool/fsvs $(bindir) /etc/fsvs/svn/auth/svn.{simple,ssl.server,ssl.client-passphrase}
+	install -m 0755 $(DEST) $(DESTDIR)/$(bindir)
+#	install -m 0644 ../doc/fsvs.1 $(DESTDIR)/(mandir)
 
 # No automatic rebuild (?)
 #../doc/USAGE: $(C_FILES) $(H_FILES)
@@ -92,8 +100,8 @@ MANDIR=../../doxygen/man/man1/
 MANDEST=../doc/
 DOXFLAG=../../doxygen/html/index.html
 $(DOXFLAG):
-	( cat doxygen-data/Doxyfile ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
 	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
+	( cat doxygen-data/Doxyfile ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
 	# Change the /§* to the correct /*
 	cd $(DOXDIR) && perl -i.bak -pe '1 while s#([/*])\xc2?\xa7([/*])#\1\2#;' *.html
 	cd $(MANDIR) && perl -i.bak -pe '1 while s#([/*])\xc2?\xa7([/*])#\1\2#;' *.?
@@ -116,6 +124,10 @@ $(MANDEST)/fsvs-options.5: $(MANDIR)/options.1
 	tools/man-repair.pl $@ "FSVS - Options and configfile" < $<
 $(MANDEST)/fsvs-url-format.5: $(MANDIR)/url_format.1
 	tools/man-repair.pl $@ "FSVS - URL format" < $<
+$(MANDEST)/fsvs-groups.5: $(MANDIR)/groups_spec.1
+	tools/man-repair.pl $@ "FSVS - Group definitions" < $<
+$(MANDEST)/fsvs-ignore-patterns.5: $(MANDIR)/ignpat.1
+	tools/man-repair.pl $@ "FSVS - Ignore definitions" < $<
 
 ../doc/USAGE: $(DOXDIR)/group__cmds.html
 	dev/dox2txt.pl $< > $@
@@ -126,7 +138,7 @@ doc.g-c: ../doc/USAGE
 	( cat $< ; echo "end" ) | dev/make_doc.pl > $@
 docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c 
 docs: $(MANDEST)/fsvs.1 $(MANDEST)/fsvs-options.5 
-docs: $(MANDEST)/fsvs-url-format.5 
+docs: $(MANDEST)/fsvs-url-format.5 $(MANDEST)/fsvs-groups.5
 docs: $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 .PHONY: docs $(DOXFLAG)
 
@@ -140,7 +152,7 @@ docs: $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 # change, too.
 $(DEST): $(C_FILES:%.c=%.o)
 	@echo "     Link $@"
-	@$(CC) $^ $(FSVS_LDFLAGS) $(LDLIBS) -o $@
+	@$(CC) $^ $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) $(EXTRALIBS) -o $@
 ifeq (@ENABLE_RELEASE@, 1)
 	-strip $@
 endif
@@ -206,7 +218,7 @@ structs: $(DEST)
 
 ################################ Testing ####################################
 run-tests: $(DEST)
-	$(MAKE) -C ../tests BINARY=$(shell pwd)/$(DEST) $(TESTS)
+	WAA_CHARS=$(WAA_CHARS) $(MAKE) -C ../tests BINARY=$(shell pwd)/$(DEST) $(TESTS)
 ifeq (@ENABLE_GCOV@, 1)
 # I don't know why, but gcov wants to open the .gcda and .gcno
 # files Read-Write. I filed a bug report for this.

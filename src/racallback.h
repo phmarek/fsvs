@@ -43,4 +43,17 @@ int cb__add_entry(struct estat *dir,
 		int may_create,
 		void **new);
 
+/** Checks whether a given remote path exists. */
+int cb__does_path_exist(svn_ra_session_t *session, 
+		char *path, svn_revnum_t rev, 
+		int *exists,
+		apr_pool_t *pool);
+
+/** Removes all entries belonging to \a to_remove from the tree \a root. */
+int cb__remove_from_url(struct estat *root, struct url_t *to_remove,
+		int *was_changed);
+
+/** Remove all entries from the given URL, and mark it for deletion. */
+int cb__remove_url(struct estat *root, struct url_t *to_remove);
+
 #endif

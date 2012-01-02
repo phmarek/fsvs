@@ -83,12 +83,12 @@ PATTERN_COUNT=15
 # We need the patterns in the order take, ignore.
 # Test the --prepend here, too.
 $BINq ignore "./**$PREFIX-s**" "PCRE:.*$PREFIX-p\."
-$BINq ignore prepend "t./**$PREFIX-s.$TAKE**" "tPCRE:.*$PREFIX-p\.$TAKE"
-$BINq ignore at=1 "ti./*/dir/*/W?LD/**/$PREFIX-s.$TAKE**"
-$BINq ignore at=1 "ti./**/$PREFIX-[ef].$TAKE**"
-$BINq ignore "t/**$PREFIX-S.$TAKE**" "/**$PREFIX-S**"
-$BINq ignore "t$WC/**$PREFIX-A.$TAKE**" "$WC/**$PREFIX-A**"
-$BINq ignore "i./**/$PREFIX-[ef]**"
+$BINq ignore prepend "take,./**$PREFIX-s.$TAKE**" "take,PCRE:.*$PREFIX-p\.$TAKE"
+$BINq ignore at=1 "take,nocase,./*/dir/*/W?LD/**/$PREFIX-s.$TAKE**"
+$BINq ignore at=1 "take,insens,./**/$PREFIX-[ef].$TAKE**"
+$BINq ignore "take,/**$PREFIX-S.$TAKE**" "/**$PREFIX-S**"
+$BINq ignore "take,$WC/**$PREFIX-A.$TAKE**" "$WC/**$PREFIX-A**"
+$BINq ignore "insens,./**/$PREFIX-[ef]**"
 $BINq ignore prepend "DEVICE:<0" "DEVICE:>=0xff:0xff"
 
 ignored_file=$PREFIX-perinode-$POSTFIX
@@ -169,12 +169,8 @@ fi
   # If we find differences in ignore files, it is ok - they should not
   # be committed, after all.
   # Files that should be taken should have no difference.
-  set +e
-  # grep should find no matches, so it would return an error.
-  # The verbose rsync gives all files; ignore files that are said to be 
-  # up-to-date.
-  after_up=`$COMPARE_1_2 expect-diff | grep -v "is uptodate" | grep $TAKE || true`
-  set -e
+  $COMPARE -x "IGN|igntest-perinode" $WC/ $WC2/ > $logfile
+  after_up=`grep $TAKE < $logfile || true`
   if [[ "$after_up" = "" ]]
   then
     $SUCCESS "update gets no ignored files"
@@ -196,21 +192,26 @@ popd > /dev/null
 echo "Testing pattern list edits."
 echo "" | $BINq ignore load
 #if [[ `cat $ign_file` == 0 ]]
-if [[ `md5sum - < $ign_file` == "897316929176464ebc9ad085f31e7284"* ]]
+if [[ -e $ign_file ]]
 then
-  $SUCCESS "empty state."
-else
   cat $ign_file
+  ls -la $ign_file
   $ERROR "not emptied"
+else
+  $SUCCESS "empty state."
 fi
 
-$BINq ignore prepend ./1
-$BINq ignore append ./3
-$BINq ignore at=1 ./2
-$BINq ignore prepend ./0
+$BINq ignore prepend group:ignore,./1
+$BINq ignore append  group:take,./3
+$BINq ignore at=1               ./2
+$BINq ignore prepend group:take,./0
 file=dump.txt
 $BINq ignore dump > $file
-if ( echo ./0 ; echo ./1 ; echo ./2 ; echo ./3 ) | cmp -s - $file 
+if ( 
+	echo group:take,./0 ; 
+	echo group:ignore,./1 ; 
+	echo group:ignore,./2 ; 
+	echo group:take,./3 ) | cmp -s - $file 
 then
   $SUCCESS "pattern edit operations work."
 else
@@ -276,7 +277,7 @@ $SUCCESS "Absolute ignore pattern warnings tests"
 
 # Test the "dir-only" specification
 true | $BINdflt ignore load
-$BINq ci -m1
+$BINq ci -m1 -o delay=yes
 # now we're clean.
 mkdir -p deep/a/b/c/dir
 touch deep/fileA
@@ -284,7 +285,9 @@ touch deep/a/fileB
 touch deep/a/b/fileC
 touch deep/a/b/c/fileD
 touch deep/a/b/c/dir/file-ok
-$BINq ignore 't./deep/**ok*' 'dt./deep/**' './deep/**'
+$BINq ignore 'take,./deep/**ok*' 'dir,take,./deep/**' './deep/**'
+# Store the statistic for later.
+$BINq ignore test -o group_stats=yes > $logfile
 $BINq ci -m1
 if [[ `$BINdflt log -v -r HEAD | grep file | wc -l` -eq 1 ]]
 then
@@ -293,4 +296,17 @@ else
   $ERROR "wrong commit for dir-only pattern"
 fi
 
+
+# Test group statistics.
+l1="Grouping statistics"
+l2=`echo -e "9\t1\ttake\ttake,./deep/**ok*"`
+l3=`echo -e "8\t4\ttake\tdir,take,./deep/**"`
+l4=`echo -e "4\t4\tignore\tgroup:ignore,./deep/**"`
+if [[ `cat $logfile` == *"$l1"*"$l2"*"$l3"*"$l4" ]]
+then
+	$SUCCESS "Group statistics"
+else
+	echo *"$l1"*"$l2"*"$l3"*"$l4"
+	$ERROR "Group statistics output"
+fi
 

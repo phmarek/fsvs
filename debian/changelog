@@ -1,3 +1,12 @@
+fsvs (1.2.3-0+nmu1) unstable; urgency=low
+
+  * Non-maintainer upload
+  * New upstream release
+  * Install manpages and additional documentation 
+  * Build-depend on unversioned libdb-dev (thanks, Lintian)
+
+ -- Iain Lane <laney@debian.org>  Mon, 02 Jan 2012 11:35:41 +0000
+
 fsvs (1.1.17-1.2) unstable; urgency=low
 
   * Non-maintainer upload.

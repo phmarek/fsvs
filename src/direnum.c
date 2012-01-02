@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -295,14 +295,13 @@ int dir__sortbyname(struct estat *sts)
 	int count, status;
 
 
-//	BUG_ON(!S_ISDIR(sts->updated_mode));
+//	BUG_ON(!S_ISDIR(sts->st.mode));
 	count=sts->entry_count+1;
 	/* After copying we can release some space, as 64bit inodes
 	 * are smaller than 32bit pointers.
 	 * Or otherwise we may have to allocate space anyway - this
 	 * happens automatically on reallocating a NULL pointer. */
-	sts->by_name=realloc(sts->by_name, count*sizeof(*sts->by_name));
-	STOPIF_ENOMEM(!sts->by_name);
+	STOPIF( hlp__realloc( &sts->by_name, count*sizeof(*sts->by_name)), NULL);
 
 	if (sts->entry_count!=0)
 	{
@@ -322,7 +321,7 @@ ex:
  * */
 int dir__sortbyinode(struct estat *sts)
 {
-//	BUG_ON(!S_ISDIR(sts->updated_mode));
+//	BUG_ON(!S_ISDIR(sts->st.mode));
 	if (sts->entry_count)
 	{
 		BUG_ON(!sts->by_inode);
@@ -427,8 +426,7 @@ int dir__enumerator(struct estat *this,
 	if (est_count < 32) est_count=32;
 
 	size=FREE_SPACE + est_count*( ESTIMATED_ENTRY_LENGTH + 1 );
-	strings=malloc(size);
-	STOPIF_ENOMEM(!strings);
+	STOPIF( hlp__alloc( &strings, size), NULL);
 
 	mark=count=0;
 	inode_numbers=NULL;
@@ -451,13 +449,12 @@ int dir__enumerator(struct estat *this,
 				else
 					alloc_count=alloc_count*19/16;
 
-				names=realloc(names, alloc_count*sizeof(*names));
-				STOPIF_ENOMEM( !names);
+				STOPIF( hlp__realloc( &names, alloc_count*sizeof(*names)), NULL);
 
 				/* temporarily we store the inode number in the *entries_by_inode
 				 * space; that changes when we've sorted them. */
-				inode_numbers=realloc(inode_numbers, alloc_count*sizeof(*inode_numbers));
-				STOPIF_ENOMEM(!inode_numbers);
+				STOPIF( hlp__realloc( &inode_numbers, 
+							alloc_count*sizeof(*inode_numbers)), NULL);
 			}
 
 			p_de=(fsvs_dirent*)(buffer+j);
@@ -465,9 +462,9 @@ int dir__enumerator(struct estat *this,
 			DEBUGP("found %llu %s", (t_ull)p_de->d_ino, p_de->d_name);
 
 			if (p_de->d_name[0] == '.' &&
-					((p_de->d_name[1] == '.' &&
-						p_de->d_name[2] == '\0') ||
-					 (p_de->d_name[1] == '\0')) )
+					((p_de->d_name[1] == '\0') ||
+					 (p_de->d_name[1] == '.' &&
+					  p_de->d_name[2] == '\0')) )
 			{
 				/* just ignore . and .. */
 			}
@@ -511,9 +508,8 @@ int dir__enumerator(struct estat *this,
 			 * take at least that much memory. */
 			if (size < mark+FREE_SPACE) size=mark+FREE_SPACE;
 
-			strings=realloc(strings, size);
+			STOPIF( hlp__realloc( &strings, size), NULL);
 			DEBUGP("strings realloc(%p, %d)", strings, size);
-			STOPIF_ENOMEM( !strings);
 		}
 	}
 
@@ -523,7 +519,7 @@ int dir__enumerator(struct estat *this,
 	this->entry_count=count;
 
 	/* Free allocated, but not used, memory. */
-	strings=realloc(strings, mark);
+	STOPIF( hlp__realloc( &strings, mark), NULL);
 	/* If a _down_-sizing ever gives an error, we're really botched.
 	 * But if it's an empty directory, a NULL pointer will be returned. */
 	BUG_ON(mark && !strings);
@@ -532,10 +528,9 @@ int dir__enumerator(struct estat *this,
 	strings=NULL;
 
 	/* Same again. Should never be NULL, as the size is never 0. */
-	inode_numbers=realloc(inode_numbers, (count+1)*sizeof(*inode_numbers));
-	BUG_ON(!inode_numbers);
-	names=realloc(names, (count+1)*sizeof(*names));
-	BUG_ON(!names);
+	STOPIF( hlp__realloc( &inode_numbers, 
+				(count+1)*sizeof(*inode_numbers)), NULL);
+	STOPIF( hlp__realloc( &names, (count+1)*sizeof(*names)), NULL);
 
 	/* Store end-of-array markers */
 	inode_numbers[count]=0;
@@ -585,17 +580,18 @@ int dir__enumerator(struct estat *this,
 		sts->parent=this;
 		sts->repos_rev=SVN_INVALID_REVNUM;
 		status=hlp__lstat(sts->name, &(sts->st));
-		if (status == ENOENT)
+		if (abs(status) == ENOENT)
 		{
-			STOPIF( wa__warn(WRN__LOCAL_VANISHED, status,
-				"Entry \"%s\" not found anymore!", sts->name), NULL);
+			DEBUGP("entry \"%s\" not interesting - maybe a fifo or socket?", 
+					sts->name);
 			sts->to_be_ignored=1;
 		}
 		else
 			STOPIF( status, "lstat(%s)", sts->name);
 
 		/* New entries get that set, because they're "updated". */
-		sts->updated_mode=sts->st.mode;
+		sts->old_rev_mode_packed = sts->local_mode_packed= 
+			MODE_T_to_PACKED(sts->st.mode);
 	}
 
 

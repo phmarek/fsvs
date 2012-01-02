@@ -55,9 +55,9 @@ fi
 SetProp "x" "x" "x" "x"
 $BINdflt up
 
-if perl -e 'exit 1 if -M shift() > (3/86400.0)' $filename
+if perl -e 'exit 1 if -M shift() > (10/86400.0)' $filename
 then
-  $SUCCESS "Invalid timestamps are current"
+  $SUCCESS "Invalid timestamps get converted to now()"
 else
   $ERROR "Invalid timestamps are wrong"
 fi

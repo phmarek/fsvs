@@ -180,7 +180,7 @@ $WC2_UP_ST_COMPARE
 # Now change data, and look whether filtering works.
 function TT
 {
-  expected=$1
+	expected=$1
 	do_changes=$3
 	other_changes=$4
 
@@ -212,7 +212,7 @@ function TT
 
 	if [[ "$other_changes" != "" ]]
 	then
-	  # Expect some changes.
+		# Expect some changes.
 		$BINdflt st > $log
 		if [[ `wc -l < $log` -ne $other_changes ]]
 		then

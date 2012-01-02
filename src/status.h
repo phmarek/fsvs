@@ -10,6 +10,7 @@
 #define __STATUS_H__
 
 #include "actions.h"
+#include "options.h"
 
 /** \file
  * \ref status output header file. */

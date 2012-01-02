@@ -1,0 +1,79 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/037.create_base
+
+
+subdir1=ä-$RANDOM/ö-$$
+subdir2=$subdir1/§-$RANDOM
+data_file=X1
+
+echo $REPURL/$subdir2 | $BINq urls load
+$BINdflt delay
+seq 1 $RANDOM > $data_file
+mkdir abc
+date > abc/file
+if $BINq ci -m1 > $logfile 2>&1
+then
+	$ERROR "invalid base directory silently accepted"
+else
+	$SUCCESS "invalid base directory rejected"
+fi
+
+if $BINq ci -m1 -o mkdir_base=yes > $logfile 2>&1
+then
+	$SUCCESS "mkdir_base didn't die."
+else
+	$ERROR "mkdir_base gives an error."
+fi
+
+echo $REPURL | $BINq urls load
+$BINq up
+$BINq diff
+$BINq sync
+$BINq diff
+$BINq ci -m1
+
+
+if [[ -d $subdir2 ]]
+then
+	$SUCCESS "Subdirectory created"
+else
+	$ERROR "Subdirectory doesn't exist"
+fi
+
+if [[ -f $subdir2/$data_file ]]
+then
+	$SUCCESS "Data file exists."
+else
+	$ERROR "No data file"
+fi
+
+if diff -u $data_file $subdir2/$data_file
+then
+	$SUCCESS "Data file ok."
+else
+	$ERROR "Data file with wrong data"
+fi
+
+
+if [[ `svn pl -v $REPURL/$subdir1` == "" ]]
+then
+	$SUCCESS "No properties in the intermediate levels."
+else
+	$ERROR "Properties in the intermediate levels?"
+fi
+
+
+# As the middle directories have no properties recorded, the updated 
+# entries will have different mtimes.
+# To avoid getting errors, we'll touch them; the
+$BINq up $WC2
+find $WC1 $WC2 -type d -iname "?*-*" | xargs touch --
+$COMPARE_1_2
+$SUCCESS "Correctly updated."
+

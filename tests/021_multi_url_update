@@ -17,29 +17,55 @@ logfile=$LOGDIR/021.multiurl.log
 for i in `seq 1 $DATA_WCs`
 do
   cd $WCBASE$i
+
 	tu=$REPURL/$i
 	svn mkdir $tu -m $i
 	echo $tu | $BINq urls load
-	mkdir dir-$i common
-	touch bfile-$i dir-$i/dfile-$i common/cfile-$i
+	mkdir dir-$i common common/sdir-$i
+
+	echo $RANDOM | tee bfile-$i dir-$i/dfile-$i 
+	echo $RANDOM | tee common/cfile-$i common/sdir-$i/csfile-$i
 	echo "Overlay $i" > overlayed
+
 	$BINq ci -m "ci$i"
 done
 
 cd $TESTBASE
 
+
 # In the first run we do an update, the others do changes.
+function CheckURL
+{
+	$BINdflt st -o verbose=none,url > $logfile
+
+	while [[ $# -ne 0 ]]
+	do
+		path="$1"
+		exp="$2"
+		shift 2
+		if ! grep "$REPURL/$exp/$path"'$' $logfile
+		then
+			grep "/$path"'$' $logfile || true
+			$ERROR "Expected $path to be in URL $exp"
+		fi
+	done
+}
+
 export _WC=$WCBASE$UP_WC
-make -C $TEST_PROG_DIR prepare_wc > /dev/null
+# make -C $TEST_PROG_DIR prepare_wc > /dev/null
 cd $_WC
 
+# A nice side-effect is that URL 4 has the highest priority afterwards.
 for prio_has in `seq 1 $DATA_WCs`
 do
 	$INFO "Going with prio_has=$prio_has"
 
+	rm -rf ./*
+	rm -f `$PATH2SPOOL $_WC dir`
+
 	# Construct the URL list and build the compare-directory
 	parm=--delete
-	echo "" | $BINq urls load
+	true | $BINq urls load
 	for i in `seq 1 $DATA_WCs`
 	do
 # rotate the highest-priority URL
@@ -53,7 +79,38 @@ do
 	done
 
 	$BINdflt up > $logfile
-	$COMPARE $WCBASE$UP_WC/ $WCBASE$CMP_WC/ 0 ignore_dirmtime
+	$COMPARE -d $WCBASE$UP_WC/ $WCBASE$CMP_WC/
+
+	CheckURL dir-1 1 dir-3 3 common $prio_has common/sdir-2 2 common/cfile-3 3
 done
 
+$SUCCESS "Priorities are taken into account."
+
+
+# Test what happens to entries in common directories, if such a directory 
+# gets removed.
+without=2
+cd $WCBASE$without
+rm -rf ./*
+$BINq ci -m remove $WCBASE$without 
+
+parm=--delete
+cd $_WC
+for i in `$BINdflt urls dump "%n\n" | cut -c2-`
+do
+	echo "Sync $i"
+	# We need to give the checksum parameter, so that rsync isn't misled by 
+	# the equal mtimes.
+	if [[ $i -ne $without ]]
+	then
+		rsync -a $parm $WCBASE$i/ $WCBASE$CMP_WC/ -c -c
+	fi
+	parm=--ignore-existing
+done
+
+$BINdflt up $_WC > $logfile 
+$COMPARE -d $_WC/ $WCBASE$CMP_WC/
+
 $SUCCESS "Multi-url update test passed."
+
+

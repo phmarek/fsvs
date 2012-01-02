@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2008 Philipp Marek.
+ * Copyright (C) 2007-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -53,6 +53,7 @@ enum prp__set_from_aprhash_e {
 int prp__set_from_aprhash(struct estat *sts, 
 		apr_hash_t *props,
 		enum prp__set_from_aprhash_e flags,
+		hash_t *props_db,
 		apr_pool_t *pool);
 
 /** Wrapper functions, if we need to have some compatibility layer. */
@@ -108,6 +109,8 @@ static inline int prp__fetch(hash_t db, datum key, datum *value)
  * */
 int prp__open_get_close(struct estat *sts, char *name, 
 		char **data, int *len);
+
+int prp__unlink_db_for_estat(struct estat *sts);
 /** @} */
 
 

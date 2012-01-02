@@ -12,6 +12,8 @@ set start_path_len=strlen(start_path)
 
 ## set opt_debugprefix=0
 
+shell mkdir a b c
+
 set charp_array_1[0]="$#$ENV{'WC'}#/a"
 set charp_array_1[1]="$#$ENV{'WC'}#/b"
 set charp_array_1[2]="$#$ENV{'WC'}#/c"
@@ -23,6 +25,8 @@ print charpp[0]
 print charpp[1]
 #~ 0x\w+ "c"
 print charpp[2]
+
+shell mkdir a/h a/j
 
 set charp_array_1[0]="$#$ENV{'WC'}#/a/h"
 set charp_array_1[1]="$#$ENV{'WC'}#/b"
@@ -46,6 +50,15 @@ set charp_array_1[0]="/does_never/exist"
 set charp_array_1[1]="/never/so_we/get_an/error"
 #= 2
 print waa__find_common_base2(2, charp_array_1, &charpp, 0)
+
+
+# test "/." 
+set start_path="/"
+set charp_array_1[0]="."
+#= 0
+print waa__find_common_base2(1, charp_array_1, &charpp, 0)
+#~ 0x\w+ "."
+print charpp[0]
 
 
 kill
