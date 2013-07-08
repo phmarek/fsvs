@@ -1,0 +1,17 @@
+Description: Add DESTDIR support for install directories.
+ Upstream make system had DESTDIR for file installation but not for the 
+ directories created.
+Author: Barry deFreese <bdefreese@debian.org>
+Index: fsvs-1.2.5/src/Makefile.in
+===================================================================
+--- fsvs-1.2.5.orig/src/Makefile.in	2013-07-08 12:29:48.000000000 -0400
++++ fsvs-1.2.5/src/Makefile.in	2013-07-08 12:31:34.000000000 -0400
+@@ -88,7 +88,7 @@
+ prefix	= @prefix@
+ mandir	= @mandir@
+ install:
+-	mkdir -p /etc/fsvs /var/spool/fsvs $(bindir) /etc/fsvs/svn/auth/svn.{simple,ssl.server,ssl.client-passphrase}
++	mkdir -p $(DESTDIR)/etc/fsvs $(DESTDIR)/var/spool/fsvs $(DESTDIR)$(bindir) $(DESTDIR)/etc/fsvs/svn/auth/svn.simple $(DESTDIR)/etc/fsvs/svn/auth/svn.ssl.server $(DESTDIR)/etc/fsvs/svn/auth/svn.ssl.client-passphrase
+ 	install -m 0755 $(DEST) $(DESTDIR)/$(bindir)
+ #	install -m 0644 ../doc/fsvs.1 $(DESTDIR)/(mandir)
+ 

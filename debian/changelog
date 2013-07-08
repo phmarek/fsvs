@@ -1,3 +1,20 @@
+fsvs (1.2.5-1) unstable; urgency=low
+
+  * QA upload.
+    + Set maintainer to Debian QA Group <packages@qa.debian.org>.
+  * New upstream release. (Closes: #612590).
+    + Fix security issue with non-world-readable files. (Closes: #681054).
+    + Remove old inline changes as they were integrated upstream.
+  * Acknowledge NMU. (Closes: #641765).
+  * Add patch to link in libdl. (Closes: #713729).
+  * Make package source format 3.0 (quilt).
+  * Add watch file.
+  * Update build system to dh style.
+    + Bump debhelper build-dep and compat to 9.
+  * Bump Standards Version to 3.9.4.
+
+ -- Barry deFreese <bdefreese@debian.org>  Mon, 08 Jul 2013 10:40:45 -0400
+
 fsvs (1.2.3-0+nmu1) unstable; urgency=low
 
   * Non-maintainer upload

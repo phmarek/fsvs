@@ -54,9 +54,10 @@ svn_error_t *cb__init(apr_pool_t *pool)
 	STOPIF_SVNERR( svn_cmdline_setup_auth_baton,
 			(&cb__cb_table.auth_baton,
 			 !(isatty(STDIN_FILENO) && isatty(STDOUT_FILENO)),
-			 opt__get_int(OPT__AUTHOR) ? 
+			 opt__get_int(OPT__AUTHOR) ?
 			 opt__get_string(OPT__AUTHOR) : NULL,
-			 NULL, /* Password */
+			 opt__get_int(OPT__PASSWD) ?
+			 opt__get_string(OPT__PASSWD) : NULL,
 			 cfg_usr_path,
 			 0, /* no_auth_cache */
 			 cfg,

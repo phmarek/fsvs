@@ -357,7 +357,11 @@ apr_pool_t *global_pool;
 struct url_t *current_url;
 
 /* For Solaris, which doesn't have one ... */
-char **environ=NULL;
+//char **environ=NULL;
+#ifdef NEED_ENVIRON_EXTERN
+extern 
+#endif
+char**environ;
 
 
 /** Opens the debug output file or pipe, as specified.
@@ -630,7 +634,7 @@ eol:
 /** For keyword expansion - the version string. */
 const char* Version(FILE *output)
 {
-	static const char Id[] ="$Id: fsvs.c 2420 2010-01-25 09:29:49Z pmarek $";
+	static const char Id[] ="$Id: fsvs.c 2457 2011-11-11 18:19:12Z pmarek $";
 
 	fprintf(output, "FSVS (licensed under the GPLv3), (C) by Ph. Marek;"
 			" version " FSVS_VERSION "\n");

@@ -286,6 +286,9 @@ struct opt__list_t opt__list[OPT__COUNT]=
 	[OPT__AUTHOR] = {
 		.name="author", .cp_val="", .parse=opt___store_env_noempty,
 	},
+	[OPT__PASSWD] = {
+		.name="password", .cp_val="", .parse=opt___store_string,
+	},
 
 	/* I thought about using opt___normalized_path() for these two; but that 
 	 * would be a change in behaviour. */

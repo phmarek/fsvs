@@ -885,3 +885,24 @@ int prp__unlink_db_for_estat(struct estat *sts)
 ex:
 	return status;
 }
+
+/** -. */
+int prp__sts_has_no_properties(struct estat *sts, int *result)
+{
+	hash_t db;
+	int status, rv;
+	datum key;
+
+	rv = prp__open_byestat( sts, GDBM_READER, &db);
+	if (rv == ENOENT)
+		goto done;
+	STOPIF(rv, NULL);
+
+	rv = prp__first(db, &key);
+	STOPIF( hsh__close(db, 0), NULL);
+
+done:
+	*result = (rv == ENOENT);
+ex:
+	return status;
+}

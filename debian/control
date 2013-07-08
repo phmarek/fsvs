@@ -1,9 +1,9 @@
 Source: fsvs
 Section: admin
 Priority: optional
-Maintainer: Sheldon Hearn <sheldonh@starjuice.net>
-Build-Depends: debhelper (>= 5), autotools-dev, libsvn-dev, libgdbm-dev, ctags, libdb-dev, libapr1-dev, libaprutil1-dev, libpcre3-dev
-Standards-Version: 3.8.0
+Maintainer: Debian QA Group <packages@qa.debian.org>
+Build-Depends: debhelper (>= 9), libsvn-dev, libgdbm-dev, ctags, libdb-dev, libapr1-dev, libaprutil1-dev, libpcre3-dev
+Standards-Version: 3.9.4
 Homepage: http://fsvs.tigris.org/
 
 Package: fsvs
@@ -12,6 +12,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: subversion
 Description: Full system versioning with metadata support
  FSVS is a backup/restore/versioning/deployment tool for whole directory
- trees or filesystems, with a subversion repository as the backend.
+ trees or filesystems, with a Subversion repository as the backend.
  It can do overlays of multiple repositories, to achieve some content
  separation (base install, local modifications, etc.)

@@ -1,3 +1,18 @@
+Changes since 1.2.4
+- Bugfix: auto-props not applied for explicitly specified entries.
+  Thanks to Peter for the detailed bug report!
+  Please note that the auto-props _only_ get applied if there are
+  _no_ properties on an entry set (yet); so, after
+    fsvs prop-set file property...
+  the auto-props will _not_ be applied (as they might overwrite
+  the manually set properties).
+
+Changes since 1.2.3
+- Compilation fixes for MacOS 10.6; thanks, Thomas!
+- Added "password" option, as sent by Mark. Thank you!
+- Workarounds for gcc-4.5 and gcc-4.6 regressions. Thank you, Brian!
+- Compatibility with autoconf 2.68.
+
 Changes since 1.2.2
 - Tried to get configuration/compilation to work with OSX 10.6.
   Thanks, Florian.

@@ -117,16 +117,16 @@ AC_SUBST(LDFLAGS)
 AC_MSG_NOTICE(["LDFLAGS=$LDFLAGS"])
 
 
-EXTRALIBS=""
+EXTRALIBS="-laprutil-1 -lapr-1"
 if [[ `uname -s` = "SunOS" ]]
 then
 	# Solaris 10, thanks Peter.
-	EXTRALIBS="-lsocket -lnsl -laprutil-1 -lapr-1"
+	EXTRALIBS="-lsocket -lnsl $EXTRALIBS"
 fi
 if [[ `uname -s` = "Darwin" ]]
 then
 	# OSX 10.6 - thanks, Florian.
-	EXTRALIBS="-laprutil-1 -lapr-1 -liconv"
+	EXTRALIBS="-liconv $EXTRALIBS"
 	have_fmemopen=no
 fi
 
@@ -177,7 +177,7 @@ fi
 # data.
 # If S_IFMT is dense, the increment results in a single carry bit.
 # Checked via changing /usr/include/bits/stat.h.
-AC_RUN_IFELSE([
+AC_RUN_IFELSE([AC_LANG_SOURCE([
   #include "src/preproc.h"
   int main(int argc, char *args[])
   {
@@ -186,7 +186,7 @@ AC_RUN_IFELSE([
   else
 	  return 1;
   }
-  ],
+  ])],
   [AC_MSG_NOTICE([No compatible valgrind version.])],
   [AC_MSG_FAILURE([You have a sparse S_IFMT. Please tell the dev@ mailing list.])])
 
@@ -229,6 +229,31 @@ if test x$have_o_directory = xyes ; then
 	AC_DEFINE(HAVE_O_DIRECTORY, 1, O_DIRECTORY found)
 fi
 AC_SUBST(HAVE_O_DIRECTORY)
+
+AC_COMPILE_IFELSE(
+	[AC_LANG_PROGRAM(
+		[[ #include <fcntl.h> ]], 
+		[[ void f1(int a) {
+				 int f2(void) {
+					 return a;
+				 }
+				 return f2();
+			 } ]] )],
+		[need_fnested_functions=no], [need_fnested_functions=yes])
+if test x$have_o_directory = xyes ; then
+	AC_DEFINE(NEED_FNESTED_FUNCTIONS, -fnested-functions, -fnested-functions needed)
+fi
+AC_SUBST(NEED_FNESTED_FUNCTIONS)
+
+AC_LINK_IFELSE(
+	[AC_LANG_PROGRAM(
+	 [[ #include <stdio.h> ]], 
+	 [[ char **environ; int main(void) { return environ == NULL; } ]] )],
+		 [need_environ_extern=no], [need_environ_extern=yes])
+if test x$need_environ_extern = xyes ; then
+	AC_DEFINE(NEED_ENVIRON_EXTERN, 1, "char **environ" needs "extern")
+fi
+AC_SUBST(NEED_ENVIRON_EXTERN)
 
 if test x$have_fmemopen = x
 then
@@ -307,6 +332,7 @@ if [[ `uname -m` = i?86 ]]
 then
 	HAS_FASTCALL=1
 fi
+
 
 AC_TYPE_UINT32_T
 AC_SUBST(HAVE_UINT32_T)
