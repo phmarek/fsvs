@@ -1,2 +1,4 @@
 link_libdl.patch
 use_destdir.patch
+verbose-build.diff
+upstream-r2472.diff

@@ -1,3 +1,13 @@
+fsvs (1.2.5-2) unstable; urgency=medium
+
+  * QA upload.
+  * Apply upstream commit for GCC 5 compatibility. Closes: #777857.
+  * Enable verbose build.
+  * Fix build with --as-needed.
+  * Build using -fgnu89-inline.
+
+ -- Matthias Klose <doko@debian.org>  Sat, 25 Jul 2015 15:05:24 +0200
+
 fsvs (1.2.5-1) unstable; urgency=low
 
   * QA upload.
