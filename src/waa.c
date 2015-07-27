@@ -121,7 +121,7 @@ waa__header_line[]="%u %lu %u %u %u %u";
 
 
 /** Convenience function for creating two paths. */
-inline void waa___init_path(enum opt__settings_e which,
+static inline void waa___init_path(enum opt__settings_e which,
 		char *dest, char **eos)
 {
 	int l;
@@ -1406,6 +1406,80 @@ ex:
 }
 
 
+static struct estat *old;
+static struct estat current;
+static int nr_new;
+/** Compares the directories.
+ * Every element found in old will be dropped from current;
+ * only new elements are added to old, by temporarily using 
+ * current.by_inode.
+ *
+ * Example:
+ *
+ * Old has these elements.
+ *    b   c   e   g   h
+ *
+ * current gets these entries in by_name before the correlation
+ * (by_inode has just another order):
+ *    A   b   c   D   e   F   g   h   NULL
+ * Now we need A, D, and F.
+ * 
+ * After the loop current has:
+ *   by_inode   A   D   F
+ *   by_name    NULL   b   c   NULL   e   NULL   g   h   NULL
+ * with nr_new=3.
+ *
+ * */
+int new_entry(struct estat *sts, struct estat **sts_p)
+{
+	int status;
+	int ignore;
+
+	STOPIF( ign__is_ignore(sts, &ignore), NULL);
+	if (ignore>0)
+		DEBUGP("ignoring entry %s", sts->name);
+	else
+	{
+		sts->parent=old;
+
+		*sts_p=NULL;
+		current.by_inode[nr_new]=sts;
+		nr_new++;
+
+		DEBUGP("found a new one!");
+		sts->entry_status=FS_NEW;
+		sts->flags |= RF_ISNEW;
+
+		/* Has to be done in that order, so that ac__dispatch() already finds 
+		 * sts->do_filter_allows set. */
+		ops__set_todo_bits(sts);
+		STOPIF( ac__dispatch(sts), NULL);
+
+		ops__mark_parent_cc(sts, entry_status);
+		approx_entry_count++;
+
+
+		/* if it's a directory, add all subentries, too. */
+		if (S_ISDIR(sts->st.mode) && 
+				ops__are_children_interesting(sts) &&
+				(opt__get_int(OPT__FILTER) & FS_NEW))
+		{
+			STOPIF_CODE_ERR( chdir(sts->name) == -1, errno,
+					"chdir(%s)", sts->name);
+
+			STOPIF( waa__build_tree(sts), NULL);
+
+			STOPIF_CODE_ERR( chdir("..") == -1, errno,
+					"parent went away");
+		}
+
+	}
+
+ex:
+	return status;
+}
+
+
 /** Checks for new entries in this directory, and updates the
  * directory information. 
  *
@@ -1418,14 +1492,14 @@ ex:
  *
  * On \c chdir() an eventual \c EACCES is ignored, and the "maybe changed" 
  * status returned. */
-int waa__update_dir(struct estat *old)
+int waa__update_dir(struct estat *_old)
 {
 	int dir_hdl, status;
-	struct estat current;
-	int nr_new, i;
+	int i;
 	char *path;
 
 
+	old = _old;
 	status=nr_new=0;
 	dir_hdl=-1;
 
@@ -1456,76 +1530,6 @@ int waa__update_dir(struct estat *old)
 	/* No entries means no new entries; but not old entries deleted! */
 	if (current.entry_count == 0) goto after_compare;
 
-
-	/* Now the directories get compared.
-	 * Every element found in old will be dropped from current;
-	 * only new elements are added to old, by temporarily using 
-	 * current.by_inode.
-	 *
-	 * Example:
-	 *
-	 * Old has these elements.
-	 *    b   c   e   g   h
-	 *
-	 * current gets these entries in by_name before the correlation
-	 * (by_inode has just another order):
-	 *    A   b   c   D   e   F   g   h   NULL
-	 * Now we need A, D, and F.
-	 * 
-	 * After the loop current has:
-	 *   by_inode   A   D   F
-	 *   by_name    NULL   b   c   NULL   e   NULL   g   h   NULL
-	 * with nr_new=3.
-	 *
-	 * */
-	int new_entry(struct estat *sts, struct estat **sts_p)
-	{
-		int status;
-		int ignore;
-
-		STOPIF( ign__is_ignore(sts, &ignore), NULL);
-		if (ignore>0)
-			DEBUGP("ignoring entry %s", sts->name);
-		else
-		{
-			sts->parent=old;
-
-			*sts_p=NULL;
-			current.by_inode[nr_new]=sts;
-			nr_new++;
-
-			DEBUGP("found a new one!");
-			sts->entry_status=FS_NEW;
-			sts->flags |= RF_ISNEW;
-
-			/* Has to be done in that order, so that ac__dispatch() already finds 
-			 * sts->do_filter_allows set. */
-			ops__set_todo_bits(sts);
-			STOPIF( ac__dispatch(sts), NULL);
-
-			ops__mark_parent_cc(sts, entry_status);
-			approx_entry_count++;
-
-
-			/* if it's a directory, add all subentries, too. */
-			if (S_ISDIR(sts->st.mode) && 
-					ops__are_children_interesting(sts) &&
-					(opt__get_int(OPT__FILTER) & FS_NEW))
-			{
-				STOPIF_CODE_ERR( chdir(sts->name) == -1, errno,
-						"chdir(%s)", sts->name);
-
-				STOPIF( waa__build_tree(sts), NULL);
-
-				STOPIF_CODE_ERR( chdir("..") == -1, errno,
-						"parent went away");
-			}
-
-		}
-
-ex:
-		return status;
-	}
 
 	nr_new=0;
 	STOPIF( ops__correlate_dirs( old, &current, 
@@ -1820,7 +1824,7 @@ ex:
  *   - it was freshly added.
  *
  * */
-inline int waa___check_dir_for_update(struct estat *sts)
+static inline int waa___check_dir_for_update(struct estat *sts)
 {
 	int status;
 
@@ -2734,7 +2738,7 @@ ex:
 
 
 /** Abbreviation function for tree recursion. */
-inline int waa___recurse_tree(struct estat **list, action_t handler, 
+static inline int waa___recurse_tree(struct estat **list, action_t handler, 
 		int (*me)(struct estat *, action_t ))
 {
 	struct estat *sts;
@@ -2831,6 +2835,19 @@ ex:
 }
 
 
+static struct estat **to_append;
+static int append_count;
+int remember_to_copy(struct estat *sts, struct estat **sts_p)
+{
+	char *path;
+	ops__build_path(&path, sts);
+	DEBUGP("copy %s", path);
+	to_append[append_count]=sts;
+	append_count++;
+	return 0;
+}
+
+
 /** -.
  *
  * \a dest must already exist; its name is \b not overwritten, as it is 
@@ -2843,11 +2860,16 @@ ex:
 int waa__copy_entries(struct estat *src, struct estat *dest)
 {
 	int status;
-	struct estat *newdata, **to_append, **tmp;
-	int append_count, left, space;
+	struct estat *newdata, **tmp, **_old_to_append;
+	int left, space;
+	int _old_append_count;
 
+
+	_old_append_count = append_count;
+	_old_to_append = to_append;
 
 	to_append=NULL;
+	append_count = 0;
 	status=0;
 
 	ops__copy_single_entry(src, dest);
@@ -2858,13 +2880,6 @@ int waa__copy_entries(struct estat *src, struct estat *dest)
 	append_count=0;
 	STOPIF( hlp__calloc( &to_append, 
 				src->entry_count+1, sizeof(src->by_name[0])), NULL);
-
-	int remember_to_copy(struct estat *sts, struct estat **sts_p)
-	{
-		to_append[append_count]=sts;
-		append_count++;
-		return 0;
-	}
 
 	STOPIF( ops__correlate_dirs( src, dest, 
 				remember_to_copy, 
@@ -2901,6 +2916,8 @@ int waa__copy_entries(struct estat *src, struct estat *dest)
 
 ex:
 	IF_FREE(to_append);
+	append_count = _old_append_count ;
+	to_append = _old_to_append ;
 	return status;
 }
 

@@ -955,6 +955,21 @@ ex:
 }
 
 
+static int data_seen;
+int have_now(struct ignore_t *ignore, int cur, char *err)
+{
+	int status;
+
+	status=0;
+	STOPIF_CODE_ERR(data_seen & cur, EINVAL, 
+			"!The pattern \"%s\" includes more than a single %s specification.",
+			ignore->pattern, err);
+	data_seen |= cur;
+ex:
+	return status;
+}
+
+
 /** Does all necessary steps to use the given \c ignore_t structure.
  * */
 int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
@@ -962,7 +977,7 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 	int status, stop;
 	int and_value, cmp_value, speclen;
 	char *cp, *eo_word, *param, *eo_parm;
-	int data_seen, pattern_len;
+	int pattern_len;
 
 
 	status=0;
@@ -980,19 +995,6 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 
 
 	data_seen=0;
-	int have_now(int cur, char *err)
-	{
-		int status;
-
-		status=0;
-		STOPIF_CODE_ERR(data_seen & cur, EINVAL, 
-				"!The pattern \"%s\" includes more than a single %s specification.",
-				ignore->pattern, err);
-		data_seen |= cur;
-ex:
-		return status;
-	}
-
 
 	/* gcc reports "used unitialized" - it doesn't see that the loop gets 
 	 * terminated in the case speclen==0. */
@@ -1041,17 +1043,17 @@ ex:
 
 		if (strncmp(ign__group_take, pattern, speclen)==0)
 		{
-			STOPIF( have_now(HAVE_GROUP, "group"), NULL);
+			STOPIF( have_now(ignore, HAVE_GROUP, "group"), NULL);
 			ignore->group_name=ign__group_take;
 		}
 		else if (strncmp(ign__group_ign, pattern, speclen)==0)
 		{
-			STOPIF( have_now(HAVE_GROUP, "group"), NULL);
+			STOPIF( have_now(ignore, HAVE_GROUP, "group"), NULL);
 			ignore->group_name=ign__group_ign;
 		}
 		else if (strncmp("group:", pattern, speclen)==0)
 		{
-			STOPIF( have_now(HAVE_GROUP, "group"), NULL);
+			STOPIF( have_now(ignore, HAVE_GROUP, "group"), NULL);
 			STOPIF_CODE_ERR( !param || eo_parm==param, EINVAL, 
 					"!Missing group name in pattern \"%s\".",
 					ignore->pattern);
@@ -1076,18 +1078,18 @@ ex:
 		else if (strncmp("dironly", pattern, speclen)==0)
 		{
 			ignore->dir_only=1;
-			STOPIF( have_now(HAVE_DIR, "dironly"), NULL);
+			STOPIF( have_now(ignore, HAVE_DIR, "dironly"), NULL);
 			data_seen |= HAVE_PATTERN_SUBST;
 		}
 		else if (strncmp("nocase", pattern, speclen)==0 ||
 				strncmp("insens", pattern, speclen)==0)
 		{
 			ignore->is_icase=1;
-			STOPIF( have_now(HAVE_CASE, "case ignore"), NULL);
+			STOPIF( have_now(ignore, HAVE_CASE, "case ignore"), NULL);
 		}
 		else if (strncmp("mode:", pattern, speclen)==0)
 		{
-			STOPIF( have_now(HAVE_MODE, "mode"), NULL);
+			STOPIF( have_now(ignore, HAVE_MODE, "mode"), NULL);
 			STOPIF_CODE_ERR( !param, EINVAL,
 					"!Invalid mode specification in \"%s\".", ignore->pattern);
 

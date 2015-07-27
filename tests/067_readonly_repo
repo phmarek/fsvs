@@ -1,0 +1,44 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+TMP=$LOGDIR/067.msg
+
+date > blabla
+chmod 765 tree/c
+
+
+function ER
+{
+	msg=$1
+	shift
+	if $@ &> $TMP
+	then
+		$ERROR "Shouldn't succeed."
+	else
+		echo "Got an error:"
+		cat $TMP
+		if grep -F "$msg" $TMP
+		then
+			$SUCCESS "correct message."
+		else
+			$ERROR "wrong message"
+		fi
+	fi
+}
+
+
+$INFO "ci to inaccessible dir"
+# chmod goes top-down, which doesn't work with removing rights.
+find $REP -depth | xargs chmod 000
+ER "Couldn't open a repository (180001)" $BINq ci -m "RO"
+
+$INFO "ci to readonly dir"
+chmod -R 555 $REP
+ER "Permission denied (13)" $BINq ci -m "RO"
+
+chmod -R 777 $REP
+

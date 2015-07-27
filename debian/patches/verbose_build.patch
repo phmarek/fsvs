@@ -1,0 +1,34 @@
+Index: fsvs-1.2.6/src/Makefile.in
+===================================================================
+--- fsvs-1.2.6.orig/src/Makefile.in
++++ fsvs-1.2.6/src/Makefile.in
+@@ -145,14 +145,14 @@ docs: $(MANDEST)/fsvs-howto-backup.5 $(M
+ 
+ ################################ Rules ######################################
+ %.o:	%.c
+-	@echo "     CC $<"
+-	@$(CC) $(CFLAGS) -c -o $@ $<
++#	@echo "     CC $<"
++	$(CC) $(CFLAGS) -c -o $@ $<
+ 
+ # if the Makefile has changed, the output will (at least sometimes)
+ # change, too.
+ $(DEST): $(C_FILES:%.c=%.o)
+-	@echo "     Link $@"
+-	@$(CC) $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) $(EXTRALIBS) -o $@ $^
++#	@echo "     Link $@"
++	$(CC) $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) $(EXTRALIBS) -o $@ $^
+ ifeq (@ENABLE_RELEASE@, 1)
+ 	-strip $@
+ endif
+@@ -168,8 +168,8 @@ endif
+ ############################### Dependencies ################################
+ deps:	$(D_FILES)
+ .%.d:	%.c
+-	@echo "     deps for $<"
+-	@$(CC) $(INCS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
++#	@echo "     deps for $<"
++	$(CC) $(INCS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
+ #	$(CC) $(INCS) -MM -MF $@ $<
+ include $(D_FILES)
+ 

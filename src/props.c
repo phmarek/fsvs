@@ -442,7 +442,7 @@ ex:
 
 /** -.
  * Wrapper for prp__fetch(). */
-int prp__get(hash_t db, char *keycp, datum *value)
+int prp__get(hash_t db, const char *keycp, datum *value)
 {
   static datum key;
 

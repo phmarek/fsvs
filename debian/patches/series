@@ -1,4 +1,3 @@
-link_libdl.patch
 use_destdir.patch
-verbose-build.diff
-upstream-r2472.diff
+verbose_build.patch
+build_using_gnu89_inline.patch

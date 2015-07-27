@@ -1,0 +1,13 @@
+Index: fsvs-1.2.6/src/Makefile.in
+===================================================================
+--- fsvs-1.2.6.orig/src/Makefile.in
++++ fsvs-1.2.6/src/Makefile.in
+@@ -16,7 +16,7 @@ HEADREV	:= "$Revision: 2467 $"
+ VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
+ 
+ CFLAGS	:= @CFLAGS@
+-CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'
++CFLAGS	+= -fgnu89-inline -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'
+ LDFLAGS	:= @LDFLAGS@
+ FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm -ldl
+ EXTRALIBS	:= @EXTRALIBS@

@@ -239,6 +239,37 @@ void ci___unset_copyflags(struct estat *root)
 
 
 
+/* Convenience function; checks for \c FSVS_PROP_COMMIT_PIPE.
+ * By putting that here we can avoid sending most of the parameters. */
+inline int send_a_prop(void *baton, int store_encoder,
+		struct estat *sts, change_any_prop_t function,
+		char *key, svn_string_t *value,
+		apr_pool_t *pool)
+{
+	int status;
+	svn_error_t *status_svn;
+
+	status=0;
+	/* We could tell the parent whether we need this property value, to avoid 
+	 * copying and freeing; but it's no performance problem, I think. */
+	if (store_encoder && strcmp(key, propval_commitpipe) == 0)
+	{
+		if (value)
+			STOPIF( hlp__strdup( &sts->decoder, value->data), NULL);
+		else 
+			sts->decoder=NULL;
+	}
+
+	status_svn=function(baton, key, value, pool);
+	TEST_FOR_OUT_OF_DATE(sts, status_svn, "send user props");
+
+ex:
+	return status;
+}
+
+
+
+
 /** Send the user-defined properties.
  *
  * The property table is left cleaned up, ie. any deletions that were 
@@ -257,38 +288,12 @@ int ci___send_user_props(void *baton,
 		apr_pool_t *pool)
 {
 	int status;
-	svn_error_t *status_svn;
 	datum key, value;
 	hash_t db;
 	svn_string_t *str;
 
 
 	db=NULL;
-
-	/* Convinience function; checks for \c FSVS_PROP_COMMIT_PIPE.
-	 * By putting that here we can avoid sending most of the parameters. */
-	int send_a_prop(char *key, svn_string_t *value)
-	{
-		int status;
-
-		status=0;
-		/* We could tell the parent whether we need this property value, to avoid 
-		 * copying and freeing; but it's no performance problem, I think. */
-		if (store_encoder && strcmp(key, propval_commitpipe) == 0)
-		{
-			if (value)
-				STOPIF( hlp__strdup( &sts->decoder, value->data), NULL);
-			else 
-				sts->decoder=NULL;
-		}
-
-		status_svn=function(baton, key, value, pool);
-		TEST_FOR_OUT_OF_DATE(sts, status_svn, "send user props");
-
-ex:
-		return status;
-	}
-
 
 	/* First do auto-props. */
 	STOPIF( ops__apply_group(sts, &db, pool), NULL);
@@ -310,7 +315,8 @@ ex:
 			{
 				DEBUGP("removing property %s", key.dptr);
 
-				STOPIF( send_a_prop(key.dptr, NULL), NULL);
+				STOPIF( send_a_prop(baton, store_encoder, sts, function,
+							key.dptr, NULL, pool), NULL);
 				STOPIF( hsh__register_delete(db, key), NULL);
 			}
 			else
@@ -319,7 +325,8 @@ ex:
 						value.dsize, value.dsize, value.dptr);
 
 				str=svn_string_ncreate(value.dptr, value.dsize-1, pool);
-				STOPIF( send_a_prop(key.dptr, str), NULL);
+				STOPIF( send_a_prop(baton, store_encoder, sts, function,
+							key.dptr, str, pool), NULL);
 			}
 
 			status=prp__next( db, &key, &key);

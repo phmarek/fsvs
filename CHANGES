@@ -1,3 +1,14 @@
+Changes since 1.2.6
+- Updates for GCC 5
+
+Changes since 1.2.5
+- Fix for segfault on deleted properties, eg. "svn:owner".
+- configure.in fix for OS X Lion with clang; thanks, Ryan!
+  http://fsvs.tigris.org/issues/show_bug.cgi?id=16
+- Removed nested functions, to make the stack non-executable
+  (gcc needs trampoline code).
+  See http://fsvs.tigris.org/issues/show_bug.cgi?id=17.
+
 Changes since 1.2.4
 - Bugfix: auto-props not applied for explicitly specified entries.
   Thanks to Peter for the detailed bug report!

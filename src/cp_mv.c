@@ -507,6 +507,11 @@ int cm___hash_register(struct estat *sts, struct cm___match_t *match)
 }
 
 
+
+static int common;
+int both(struct estat *a, struct estat *b) { common++; return 0; }
+
+
 /** -.
  * 
  * The big question is - should this work recursively? Would mean that the 
@@ -521,7 +526,6 @@ int cm___match_children(struct estat *sts, struct cm___match_t *match,
 	static struct cm___candidate_t similar_dirs[MAX_DUPL_ENTRIES*4];
 	struct cm___candidate_t *cur, tmp_cand={0};
 	size_t simil_dir_count;
-	int common;
 	struct estat **children, *curr;
 	struct estat **others, *other_dir;
 	int other_count, i;
@@ -587,7 +591,6 @@ next_child:
 		common=0;
 		other_dir=similar_dirs[i].sts;
 
-		int both(struct estat *a, struct estat*b) { common++; return 0; }
 		STOPIF( ops__correlate_dirs(sts, other_dir,
 					NULL, both, NULL, NULL), NULL);
 

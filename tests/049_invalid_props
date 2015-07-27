@@ -17,17 +17,19 @@ svnfile=$svndir/$filename
 
 function SetProp
 {
-  test -f $svnfile && rm $svnfile
+	test -f $svnfile && rm $svnfile
 	svn ci -m2 $svndir
 
 	echo $RANDOM > $svnfile
-	svn add $svnfile
+	# Grmpf ... svn: warning: W150002: '...asd' is already under version control
+	svn add $svnfile 2> /dev/null || true
 	test -n "$1" && svn ps fsvs:owner "$1" $svnfile
 	test -n "$2" && svn ps fsvs:group "$2" $svnfile
 	test -n "$3" && svn ps fsvs:text-time "$3" $svnfile
 	test -n "$4" && svn ps fsvs:unix-mode "$4" $svnfile
 	svn ci -m2 $svndir
 }
+
 
 SetProp
 $BINdflt up
@@ -76,4 +78,26 @@ then
 else
   $WARN "UID 0 needed to get arbitrary owner/group."
 fi
+
+
+svn pd fsvs:owner $svnfile
+svn pd fsvs:group $svnfile
+svn pd fsvs:text-time $svnfile
+svn pd fsvs:unix-mode $svnfile
+svn ci -m3 $svndir
+
+$BINdflt diff -r HEAD
+rev=`$BINdflt up | grep "revision	" | tail -1 | cut -f2 -d"	" | cut -f1 -d"."` 
+for ro in `seq 3 $rev` 
+do
+	$BINdflt up -r $ro > /dev/null
+	echo -n "Diff $ro: "
+	for r in `seq 3 $rev` 
+	do
+		echo -n "  $r"
+		$BINdflt diff -r $r > /dev/null
+	done
+	echo "."
+done
+$SUCCESS "All diff revision combinations ok."
 

@@ -179,7 +179,7 @@ fi
 # Checked via changing /usr/include/bits/stat.h.
 AC_RUN_IFELSE([AC_LANG_SOURCE([
   #include "src/preproc.h"
-  int main(int argc, char *args[])
+  int main(int argc, char **args)
   {
 	  if (_BITCOUNT( (S_IFMT >> MODE_T_SHIFT_BITS) + 1) == 1)
 	  return 0;
@@ -187,7 +187,7 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([
 	  return 1;
   }
   ])],
-  [AC_MSG_NOTICE([No compatible valgrind version.])],
+  [AC_MSG_NOTICE([S_IFMT is ok.])],
   [AC_MSG_FAILURE([You have a sparse S_IFMT. Please tell the dev@ mailing list.])])
 
 
@@ -230,20 +230,6 @@ if test x$have_o_directory = xyes ; then
 fi
 AC_SUBST(HAVE_O_DIRECTORY)
 
-AC_COMPILE_IFELSE(
-	[AC_LANG_PROGRAM(
-		[[ #include <fcntl.h> ]], 
-		[[ void f1(int a) {
-				 int f2(void) {
-					 return a;
-				 }
-				 return f2();
-			 } ]] )],
-		[need_fnested_functions=no], [need_fnested_functions=yes])
-if test x$have_o_directory = xyes ; then
-	AC_DEFINE(NEED_FNESTED_FUNCTIONS, -fnested-functions, -fnested-functions needed)
-fi
-AC_SUBST(NEED_FNESTED_FUNCTIONS)
 
 AC_LINK_IFELSE(
 	[AC_LANG_PROGRAM(

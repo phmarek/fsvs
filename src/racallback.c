@@ -42,6 +42,7 @@ svn_error_t *cb__init(apr_pool_t *pool)
 	char *cfg_usr_path;
 
 
+	cfg_usr_path = NULL;
 	STOPIF( hlp__get_svn_config(&cfg_hash), NULL);
 
 	cfg = apr_hash_get(cfg_hash, SVN_CONFIG_CATEGORY_CONFIG,

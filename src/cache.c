@@ -46,7 +46,7 @@
  *
  * Please note that memory may have to be reallocated, causing \c *cache to 
  * change! */
-inline int cch__entry_set(struct cache_entry_t **cache, 
+int cch__entry_set(struct cache_entry_t **cache, 
 		cache_value_t id, const char *data, int len,
 		int copy_old_data,
 		char **copy)

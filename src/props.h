@@ -36,7 +36,7 @@ int prp__open_byestat(struct estat *sts, int gdbm_mode, hash_t *db);
 /** Set a property by name and data/datalen. */
 int prp__set(hash_t db, const char *name, const char *data, int datalen);
 /** Set a property by svn_string_t. */
-inline int prp__set_svnstr(hash_t db, 
+int prp__set_svnstr(hash_t db, 
 		const char *name, 
 		const svn_string_t *utf8_value);
 
@@ -63,7 +63,7 @@ int prp__db_open_byname(char *wcfile, int flags, char *name,
 		hash_t *db);
 /** Get a value, addressed by a string; key length is calculated inclusive 
  * the \c \\0. */
-int prp__get(hash_t db, char *keycp, datum *value);
+int prp__get(hash_t db, const char *keycp, datum *value);
 /** Store the value; basic function. */
 int prp__store(hash_t db, datum key, datum value);
 /** Get first key. */

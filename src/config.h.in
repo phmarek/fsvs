@@ -85,8 +85,6 @@
 /** The chroot jail path given at configure time. */
 #undef CHROOTER_JAIL
 
-#undef NEED_FNESTED_FUNCTIONS
-
 #undef NEED_ENVIRON_EXTERN
 
 /** Comparision function definition (for \c qsort()) */

@@ -721,7 +721,7 @@ int df___diff_wc_remote(struct estat *entry, apr_pool_t *pool)
 	int status;
 	struct estat **sts;
 	int removed;
-	char *fn, *special_stg;
+	char *fn;
 	apr_pool_t *subpool;
 
 
@@ -774,8 +774,6 @@ int df___diff_wc_remote(struct estat *entry, apr_pool_t *pool)
 			else if (entry->entry_status || entry->remote_status)
 			{
 				/* Local changes, or changes to repository. */
-				special_stg=NULL;
-
 				if (S_ISDIR(entry->st.mode))
 				{
 					/* TODO: meta-data diff? */
