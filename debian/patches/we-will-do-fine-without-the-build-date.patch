@@ -1,0 +1,15 @@
+From: Santiago Vila <sanvila@debian.org>
+Subject: Don't use the build date
+
+--- fsvs-1.2.6.orig/src/fsvs.c
++++ fsvs-1.2.6/src/fsvs.c
+@@ -640,8 +640,7 @@ const char* Version(FILE *output)
+ 			" version " FSVS_VERSION "\n");
+ 	if (opt__is_verbose()>0)
+ 	{
+-		fprintf(output, "compiled on " __DATE__ " " __TIME__ 
+-				", with options:\n\t"
++		fprintf(output, "compiled with options:\n\t"
+ #ifdef HAVE_VALGRIND
+ 				STRINGIFY(HAVE_VALGRIND)
+ #endif
