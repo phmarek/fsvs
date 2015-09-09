@@ -1,3 +1,10 @@
+fsvs (1.2.6-3) unstable; urgency=medium
+
+  * QA upload.
+  * Fix build failure with ld --as-needed.
+
+ -- Matthias Klose <doko@debian.org>  Wed, 09 Sep 2015 14:10:39 +0200
+
 fsvs (1.2.6-2) unstable; urgency=medium
 
   * QA upload.

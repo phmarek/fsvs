@@ -2,3 +2,4 @@ use_destdir.patch
 verbose_build.patch
 build_using_gnu89_inline.patch
 we-will-do-fine-without-the-build-date.patch
+ld-as-needed.diff

@@ -1,0 +1,23 @@
+Index: b/src/Makefile.in
+===================================================================
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -18,7 +18,8 @@ VERSION	= $(shell  perl -e '($$r) = (q(
+ CFLAGS	:= @CFLAGS@
+ CFLAGS	+= -fgnu89-inline -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'
+ LDFLAGS	:= @LDFLAGS@
+-FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm -ldl
++FSVS_LDFLAGS = $(LDFLAGS)
++FSVS_LIBS = -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm -ldl
+ EXTRALIBS	:= @EXTRALIBS@
+ WAA_CHARS?= @WAA_WC_MD5_CHARS@
+ 
+@@ -152,7 +153,7 @@ docs: $(MANDEST)/fsvs-howto-backup.5 $(M
+ # change, too.
+ $(DEST): $(C_FILES:%.c=%.o)
+ #	@echo "     Link $@"
+-	$(CC) $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) $(EXTRALIBS) -o $@ $^
++	$(CC) $(FSVS_LDFLAGS) -o $@ $^ $(FSVS_LIBS) $(LDLIBS) $(LIBS) $(EXTRALIBS)
+ ifeq (@ENABLE_RELEASE@, 1)
+ 	-strip $@
+ endif
