@@ -499,7 +499,7 @@ int ops__save_1entry(struct estat *sts,
 		[sizeof(buffer)-1]=0xff,
 		[sizeof(buffer)-2]=0x0,
 	};
-	int is_dir, is_dev, status, is_spec;
+	int is_dir, is_dev, status;
 	int intnum;
 
 
@@ -518,8 +518,6 @@ int ops__save_1entry(struct estat *sts,
 
 	is_dir = S_ISDIR(sts->st.mode);
 	is_dev = S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode);
-	is_spec = S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode) ||
-		S_ISLNK(sts->st.mode);
 
 
 	if (sts->match_pattern)

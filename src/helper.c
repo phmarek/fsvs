@@ -84,7 +84,7 @@ ex:
  * \note If there's an irreparable conversion error, we must not print 
  * (parts of) the strings. One or even both might not be suitable for 
  * printing on the current console - so we do not know what could happen. */
-inline int hlp___do_convert(iconv_t cd, 
+static inline int hlp___do_convert(iconv_t cd, 
 		const char* from, char** to, 
 		int len)
 {
@@ -404,6 +404,42 @@ int hlp__fstat(int fd, struct sstat_t *st)
 /** @} */
 
 
+static const char *src;
+static const char *src_1, *src_2, *src_3;
+static int eop;
+static va_list va;
+static const char null=0;
+static int status;
+void Increment()
+{
+	src  =src_1;
+	src_1=src_2;
+	src_2=src_3;
+
+	/* Next character. */
+	if (*src_3) src_3++;
+
+	/* If just prepared character in \c *src_3 is a \c \\0 , 
+	 * wrap to next argument. 
+	 * (If there are still arguments.) */
+	if (!eop)
+		while (!*src_3)
+		{
+			src_3=va_arg(va, char*);
+			if (src_3) 
+				DEBUGP("adding %s", src_3);
+			else
+			{ 
+				/* End of parameters. Let the pointers point to a valid character
+				 * (instead of NULL), so that dereferencing works. */
+				eop=1;
+				src_3=&null;
+				break;
+			}
+		}
+}
+
+
 /** -.
  * \param dst A target buffer
  * \param len An optional length-saving field
@@ -440,11 +476,6 @@ char *hlp__pathcopy(char *dst, int *len, ...)
 	static const char ps[]={ PATH_SEPARATOR, 0 };
 	int had_path;
 	char *dest;
-	const char *src;
-	const char *src_1, *src_2, *src_3;
-	int status, eop;
-	va_list va;
-	static const char null=0;
 
 
 	status=0;
@@ -455,35 +486,6 @@ char *hlp__pathcopy(char *dst, int *len, ...)
 	dest=dst;
 	src_1=src_2=src_3=&null;
 
-
-	void Increment()
-	{
-		src  =src_1;
-		src_1=src_2;
-		src_2=src_3;
-
-		/* Next character. */
-		if (*src_3) src_3++;
-
-		/* If just prepared character in \c *src_3 is a \c \\0 , 
-		 * wrap to next argument. 
-		 * (If there are still arguments.) */
-		if (!eop)
-			while (!*src_3)
-			{
-				src_3=va_arg(va, char*);
-				if (src_3) 
-					DEBUGP("adding %s", src_3);
-				else
-				{ 
-					/* End of parameters. Let the pointers point to a valid character
-					 * (instead of NULL), so that dereferencing works. */
-					eop=1;
-					src_3=&null;
-					break;
-				}
-			}
-	}
 
 
 	/* Do first 4 characters */

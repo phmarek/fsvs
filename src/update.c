@@ -166,6 +166,12 @@ int up__parse_prop(struct estat *sts,
 	status=0;
 	if (!utf8_value)
 	{
+		/* A NULL here means that the property got deleted.
+		 * That mostly means that we cannot say whether the user
+		 * or group changed - the best we can do is not to crash.
+		 * Well, one case is special - if it's the propname_special
+		 * flag... */
+
 		DEBUGP("got NULL property for %s: %s", sts->name, loc_name);
 		//goto ex;
 		loc_value=NULL;
@@ -180,6 +186,37 @@ int up__parse_prop(struct estat *sts,
 
 	/* if an invalid utf8_value is detected, we'd better ignore it.
 	 * who knows which Pandora's box we'd open ... */
+	if (0 == strcmp(utf8_name, propname_special) &&
+			0 == strcmp(utf8_value->data, propval_special))
+	{
+		if (!utf8_value) {
+			sts->st.mode = (sts->st.mode & ~S_IFMT) | S_IFREG;
+			DEBUGP("no longer special");
+		}
+		else if (TEST_PACKED(S_ISANYSPECIAL, sts->new_rev_mode_packed))
+		{
+			DEBUGP("already marked as special");
+		}
+		else
+		{
+			/* Remove any S_IFDIR and similar bits, if it is not already marked 
+			 * as a special entry. */
+			if (!(S_ISLNK(PACKED_to_MODE_T(sts->new_rev_mode_packed)) ||
+						S_ISCHR(PACKED_to_MODE_T(sts->new_rev_mode_packed)) ||
+						S_ISBLK(PACKED_to_MODE_T(sts->new_rev_mode_packed))) )
+			{
+				sts->st.mode = (sts->st.mode & ~S_IFMT) | S_IFANYSPECIAL;
+				sts->new_rev_mode_packed = MODE_T_to_PACKED(sts->st.mode);
+			}
+			DEBUGP("this is a special node");
+		}
+
+		goto ex;
+	}
+
+	if (!utf8_value)
+		goto ex;
+
 	if (0 == strcmp(utf8_name, propname_owner))
 	{
 		/* for user and group we try to find the user name, and fall back
@@ -295,27 +332,6 @@ int up__parse_prop(struct estat *sts,
 							loc_value, sts->st.mode & 07777);
 				}
 			}
-		}
-	}
-	else if (0 == strcmp(utf8_name, propname_special) &&
-			0 == strcmp(utf8_value->data, propval_special))
-	{
-		if (TEST_PACKED(S_ISANYSPECIAL, sts->new_rev_mode_packed))
-		{
-			DEBUGP("already marked as special");
-		}
-		else
-		{
-			/* Remove any S_IFDIR and similar bits, if it is not already marked 
-			 * as a special entry. */
-			if (!(S_ISLNK(PACKED_to_MODE_T(sts->new_rev_mode_packed)) ||
-						S_ISCHR(PACKED_to_MODE_T(sts->new_rev_mode_packed)) ||
-						S_ISBLK(PACKED_to_MODE_T(sts->new_rev_mode_packed))) )
-			{
-				sts->st.mode = (sts->st.mode & ~S_IFMT) | S_IFANYSPECIAL;
-				sts->new_rev_mode_packed = MODE_T_to_PACKED(sts->st.mode);
-			}
-			DEBUGP("this is a special node");
 		}
 	}
 	else if (0 == strcmp(utf8_name, propname_origmd5))
