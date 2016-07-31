@@ -16,6 +16,7 @@
 # published by the Free Software Foundation.
 ##########################################################################
 
+use Encode qw(from_to);
 use Fcntl qw(FD_CLOEXEC F_SETFD F_GETFD);
 #
 
@@ -25,16 +26,25 @@ use Fcntl qw(FD_CLOEXEC F_SETFD F_GETFD);
 {
   @locales=`locale -a`;
 # look for UTF8
-  ($utf8_locale)=grep(/\.utf8/,@locales);
+  ($utf8_locale)=grep(/\.utf-?8/i,@locales);
   chomp $utf8_locale;
 # look for non-utf8
-  ($loc_locale)=grep(!/(POSIX|C|utf8$)/, @locales);
+  ($loc_locale)=grep(!/(POSIX|C|utf-?8$)/i, @locales);
   chomp $loc_locale;
 
   ($cur_locale)=map { /LC_CTYPE="(.*)"/ ? ($1) : (); } `locale`;
   @test_locales=($utf8_locale, $loc_locale);
+  ($cur_locale_norm = $cur_locale) =~ s#utf-8#utf8#i;
   push @test_locales, $cur_locale
-    unless grep($cur_locale eq $_, @test_locales);
+    unless grep(lc($cur_locale_norm) eq lc($_), @test_locales);
+
+  # Test the locales.
+  ($utf8, $loc)=`make -C ../tests locale_strings BINARY=/bin/true`;
+#  print $utf8,$loc;
+  $target_enc="ISO-8859-1";
+  from_to($utf8, "utf-8", $target_enc, Encode::FB_CROAK); 
+  from_to($loc, $target_enc, "utf-8", Encode::FB_CROAK);
+#  print $utf8,$loc; exit;
 
 
 # Use special directories, so that normal system operation is not harmed.
@@ -83,7 +93,7 @@ use Fcntl qw(FD_CLOEXEC F_SETFD F_GETFD);
 # Furthermore the "unusual" configurations are done first.
 #  for $release ("--enable-debug")
 #  for $release ("--enable-release")
-  for $release ("", "--enable-release", "--enable-debug")
+  for $release ("--with-waa_md5=8", "", "--enable-release", "--enable-debug")
   {
 # make sure that the binary gets recompiled
     $conf_cmd="( cd .. && ./configure $release ) && ".
@@ -158,7 +168,7 @@ sub MSG
 {
   my($type, @text)=@_;
 # We use the same shell functions, to get a nice consistent output.
-  system(". ../tests/test_functions\n\$$type '" . join(" ",@text) . "'");
+  Bash(". ../tests/test_functions\n\$$type '" . join(" ",@text) . "'");
 }
 
 
@@ -178,7 +188,8 @@ sub StartTest
 # keep them open.
 # So we have to give a path name to the children.
   $tl=$ENV{"TEST_LIST"};
-	$parms="LC_ALL=$lang" .
+	$parms="LANG=$lang" .
+    " LC_MESSAGES=C" .
     " 'TESTBASEx=$PTESTBASE2'" .
     " 'PROTOCOL=$prot'" .
     " RANDOM_ORDER=1" .
@@ -216,6 +227,8 @@ sub StartTest
 		open(STDIN, "< /dev/null") || die $!;
 		open(STDOUT, ">&LOG") || die $!;
 		open(STDERR, ">&LOG") || die $!;
+
+    system("make -C ../tests diag BINARY=true LC_ALL=$lang");
 
     $x=fcntl(FAILWRITE, F_GETFD, 0);
     fcntl(FAILWRITE, F_SETFD, $x & ~FD_CLOEXEC);
@@ -290,6 +303,16 @@ sub WaitForChilds
 		$fail++ if $ret;
 		$running--;
 	}
+}
+
+
+# Some of the things done in via the shell only works with bash; since 
+# debian has moved to dash recently, we make sure to use the correct 
+# program.
+sub Bash
+{
+  die unless @_ == 1;
+  system '/bin/bash', '-c', @_;
 }
 
 

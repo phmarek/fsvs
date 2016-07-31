@@ -1,0 +1,127 @@
+Repository Access with SSL Client Certificate (passwordless)
+============================================================
+
+This small guide explains the creation of a svn repository, that is accessible via https and client certificate authentication.
+Using client certificate authentication you won't neither need to supply a password on access nor you have to worry to store your password on that machine.
+
+Prerequisites:
+
+The basic configuration for access of to a repository via http is explained in
+http://svnbook.red-bean.com/en/1.5/svn-book.html#svn.serverconfig.httpd
+
+The steps are:
+
+a) install webdav and svn support
+b) configure apache2 to point to the repository
+c) setup of basic authentication
+
+For https access the additional steps are neccessary:
+
+a) enable ssl module for the webserver
+b) install ssl certificate and authority
+c) for passwordless access install the host key (pkcs12)
+  
+If the repository is open to public it is recommended to get a certificate / host key from from an external ca-authority.
+Otherwise self-signed keys can be used.
+
+Creating self-signed keys
+=========================
+
+Creation of self-signed keys can be done with the openssl-toolkit.
+It contains a script CA.pl to perform ca/certificate creation.
+Within Ubuntu/Debian the script can be found in /usr/lib/ssl/misc.
+
+CA.pl has a few options:
+
+ $ CA.pl -h
+  usage: CA -newcert|-newreq|-newreq-nodes|-newca|-sign|-verify
+  usage: CA -signcert certfile keyfile|-newcert|-newreq|-newca|-sign|-verify
+
+To create a new authority use
+
+ $ CA.pl -newca
+
+First a key is created. Afterwards a few questions about locality and company information will be asked.
+The ca-certificate and index files for ca-management are stored in ./default of the current directory.
+
+Creating the certificate is done via 
+
+ $ CA.pl -newcert
+
+This creates a new certificate.
+
+Both ca-authority, certificate and key will be used on the server where the repository is installed.
+Additionally a host certificate is created for the individual hosts to access the repository.
+
+ $ CA.pl -newcert
+
+For use with subversion/fsvs the key needs first be converted to pkcs12.
+
+ $ openssl pkcs12 -in newcert.pem -export -out $(hostname).p12
+
+Replace $(hostname) with the hostname of your server.
+
+Installation of SSL certificate for SVN repository
+==================================================
+
+A certificate .pem file contains both, the x509 certificate and the key.
+Before installation of the .pem file the password of the key should be removed.
+Otherwise on bootup the server will prompt for the password which is not convenient in HA environments.
+Of course the password should be removed from the servers' ssl certificate, in trusted environments, only.
+
+This command removes the password from a pem file.
+
+ $ openssl rsa -in newcert.pem -out server.pem
+
+On Debian/Ubuntu, the ca-authority and the certificate should be placed in the /etc/ssl folder. The authority file should be moved to /etc/ssl/certs.
+The certificate that contains the key should be moved to /etc/ssl/private.
+Folders are created with installation of the openssl package.
+
+Configuration of CA-Authority and Certificate
+=============================================
+
+The SSL configuration part for the apache server:
+
+ SSLKeyFile /etc/ssl/private/newkey.pem
+ SSLCertificate /etc/ssl/private/newkey.pem
+ SSLAuthorityFile /etc/ssl/certs/ca.crt
+ SSLCipherSuite HIGH:MEDIUM
+
+ <Location />
+    SSLVerifyClient require
+    SSLVerifyDepth 1
+    SSLRequireSSL
+    # ... SVN related config
+ </Location>
+
+Setup Authentication
+====================
+
+Authentication is not necessary because we relay on the Client Certificate.
+Only issue left, is that the name of users who perform checkins will not be shown in commit messages.
+For this way one can use anonymous authentication.
+
+First check if module is enabled
+
+ $ a2enmod authn_anon
+
+Global configuration for an host with fsvs-client:
+
+/etc/fsvs/svn/servers:
+
+[groups]
+fsvs = fsvs.repository.host
+[fsvs]
+ssl-client-cert-file = /etc/ssl/private/myhost.p12
+ssl-client-cert-password = mysecretpass
+[global]
+ssl-authority-files = /etc/ssl/default/cacert.pem
+store-plaintext-passwords=yes
+
+The global svn access configuration takes place by default in /etc/fsvs/svn/servers. 
+This can be changed  on compile time with DEFAULT_CONFIGDIR_SUB in interface.h
+The configuration for the authentication credentials is stored in ~/.subversion. If the
+folder does not exists it will be created. 
+Be aware that the initial creation tooks place with root privileges so if another svn client, running with user-only privileges, needs write access back this access should be restored e.g. via:
+
+$ chown -R username: ~/subversion.

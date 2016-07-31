@@ -17,7 +17,9 @@ echo Data=$$ > $path
 
 # We use update, to see whether the revision is set too.
 # We have to read from STDIN, else FSVS cries.
-$BINdflt ps fsvs:update-pipe "cat > /dev/null ; set | grep ^FSVS_ > $logenv " $path
+# Again we have to use perl, because some shells put single ticks around 
+# the values.
+$BINdflt ps fsvs:update-pipe "perl -e '<STDIN>; print \"\$_=\$ENV{\$_}\\n\" for grep(/^FSVS_/, keys %ENV);' > $logenv" $path
 $BINq ci -mx
 
 $BINdflt up $WC2 > $logrev
@@ -35,9 +37,10 @@ function Check
 Check FSVS_CONF=$FSVS_CONF
 Check FSVS_WAA=$FSVS_WAA
 Check FSVS_CURRENT_ENTRY=$path
-Check FSVS_SOFTROOT=
 Check FSVS_WC_ROOT=$WC2
 Check FSVS_WC_CONF=$($TEST_PROG_DIR/path2spool $WC2 "^")
 Check FSVS_TARGET_REVISION=$rev
+# This is now unsetenv() if empty.
+# FSVS_SOFTROOT=
 
 $SUCCESS "Environment correctly set."

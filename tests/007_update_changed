@@ -24,7 +24,7 @@ pushd $WC2 > /dev/null
 echo "A newly changed line" >> $filename
 echo "     up1"
 
-if $BINq up 2> /dev/null
+if FSVS_CONFLICT=STOP $BINq up 2> /dev/null
 then
   $ERROR "The modified file was overwritten!"
 else

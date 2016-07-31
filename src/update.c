@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -26,14 +26,30 @@
  * fsvs update [-u url@rev ...] [working copy base]
  * \endcode
  *
- * This command does an update on all specified URLs for the current 
- * working copy, or, if none is given via \ref glob_opt_urls "-u", \b all 
- * URLs.
+ * This command does an update on the current working copy; per default for 
+ * all defined URLs, but you can restrict that via \ref glob_opt_urls "-u". 
  *
- * It first reads all changes in the repositories, overlays them (so that
- * only the highest-priority entries are used), and fetches all necessary
- * changes.
+ * It first reads all filelist changes from the repositories, overlays them 
+ * (so that only the highest-priority entries are used), and then fetches 
+ * all necessary changes.
  *
+ *
+ * \subsection update_to_0 Updating to zero
+ *
+ * If you start an update with a target revision of zero, the entries 
+ * belonging to that URL will be removed from your working copy, and the 
+ * URL deleted from your URL list. \n
+ * This is a convenient way to replace an URL with another. \n
+ *
+ * \note As FSVS has no full mixed revision support yet, it doesn't know 
+ * whether under the removed entry is a lower-priority one with the same 
+ * path, which should get visible now. \n
+ * Directories get changed to the highest priority URL that has an entry 
+ * below (which might be hidden!).
+ *
+ * Because of this you're advised to either use that only for completely 
+ * distinct working copies, or do a \ref sync-repos (and possibly one or 
+ * more \ref revert calls) after the update.
  * */
 
 
@@ -104,11 +120,7 @@ int up__fetch_decoder(struct estat *sts)
 		 * know we'll need. */
 
 		if (prp__get(db, propval_updatepipe, &value) == 0)
-		{
-			sts->decoder=strdup(value.dptr);
-			STOPIF_ENOMEM( !sts->decoder );
-		}
-
+			STOPIF( hlp__strdup( &sts->decoder, value.dptr), NULL);
 	}
 
 	ex:
@@ -179,7 +191,7 @@ int up__parse_prop(struct estat *sts,
 					NULL);
 		else
 		{
-			while (*cp && isspace(*cp)) cp++;
+			cp=hlp__skip_ws(cp);
 			if (*cp)
 			{
 				status=hlp__get_uid(cp, &uid, pool);
@@ -211,7 +223,7 @@ int up__parse_prop(struct estat *sts,
 		else
 		{
 
-			while (*cp && isspace(*cp)) cp++;
+			cp=hlp__skip_ws(cp);
 			if (*cp)
 			{
 				status=hlp__get_gid(cp, &gid, pool);
@@ -288,18 +300,21 @@ int up__parse_prop(struct estat *sts,
 	else if (0 == strcmp(utf8_name, propname_special) &&
 			0 == strcmp(utf8_value->data, propval_special))
 	{
-		if (S_ISANYSPECIAL(sts->st.mode))
+		if (TEST_PACKED(S_ISANYSPECIAL, sts->new_rev_mode_packed))
 		{
 			DEBUGP("already marked as special");
 		}
 		else
 		{
-			/* Remove any S_IFDIR and similar bits. */
-			if (! (S_ISLNK(sts->updated_mode) ||
-						S_ISCHR(sts->updated_mode) ||
-						S_ISBLK(sts->updated_mode)) )
-				sts->updated_mode = sts->st.mode = 
-					(sts->st.mode & 07777) | S_IFANYSPECIAL;
+			/* Remove any S_IFDIR and similar bits, if it is not already marked 
+			 * as a special entry. */
+			if (!(S_ISLNK(PACKED_to_MODE_T(sts->new_rev_mode_packed)) ||
+						S_ISCHR(PACKED_to_MODE_T(sts->new_rev_mode_packed)) ||
+						S_ISBLK(PACKED_to_MODE_T(sts->new_rev_mode_packed))) )
+			{
+				sts->st.mode = (sts->st.mode & ~S_IFMT) | S_IFANYSPECIAL;
+				sts->new_rev_mode_packed = MODE_T_to_PACKED(sts->st.mode);
+			}
 			DEBUGP("this is a special node");
 		}
 	}
@@ -308,9 +323,9 @@ int up__parse_prop(struct estat *sts,
 		/* Depending on the order of the properties we might not know whether 
 		 * this is a special node or a regular file; so we only disallow that 
 		 * for directories. */
-		BUG_ON(S_ISDIR(sts->updated_mode));
-		STOPIF( cs__char2md5( utf8_value->data, sts->md5), NULL);
-		DEBUGP("got a orig-md5: %s", cs__md52hex(sts->md5));
+		BUG_ON(S_ISDIR(sts->st.mode));
+		STOPIF( cs__char2md5( utf8_value->data, NULL, sts->md5), NULL);
+		DEBUGP("got a orig-md5: %s", cs__md5tohex_buffered(sts->md5));
 		sts->has_orig_md5=1;
 	}
 	else
@@ -324,8 +339,7 @@ int up__parse_prop(struct estat *sts,
 				 * programs' names includes UTF-8.
 				 *
 				 * \todo utf8->local??  */
-				sts->decoder=strdup(utf8_value->data);
-				STOPIF_ENOMEM( !sts->decoder );
+				STOPIF( hlp__strdup( &sts->decoder, utf8_value->data), NULL);
 				sts->decoder_is_correct=1;
 				DEBUGP("got a decoder: %s", sts->decoder);
 			}
@@ -404,7 +418,8 @@ ex:
  *
  * If an entry does not exist (ENOENT), it is ignored.
  *
- * Only entries that are registered from \a url are removed.
+ * Only entries that are registered from URLs given on the command line 
+ * (with \c -u) are removed.
  *
  * If children that belong to other URLs are found we don't remove the 
  * directory.
@@ -429,10 +444,9 @@ int up__rmdir(struct estat *sts, struct url_t *url)
 			has_others++;
 		else
 		{
-			/* TODO: is that true any more? */
-			/* Checking the contents of sts here is not allowed any more -
-			 * it may (eg. on update) already contain newer data, and that can be
-			 * anything -- a file, a link, ... */
+			/* Checking the contents of sts here is allowed, because this should 
+			 * be the estat::old pointer - which should have the previous entries 
+			 * in it. */
 			/* Just trying the unlink is a single system call, like getting the 
 			 * type of the entry with \c lstat(). */
 			status=up__unlink(cur, NULL);
@@ -458,90 +472,93 @@ ex:
 }
 
 
-/* The file has current properties, which we'd like
- * to replace with the saved.
- * But all not-set properties should not be modified. 
+/** -.
  *
- * And all settings should be saved in the waa-area
- * _with the current values_, so that this entry won't
- * be seen as modified.
+ * The file has current properties, which we'd like to replace with the 
+ * saved. But all not-set properties should not be modified. 
  *
- * The easy way:
- * 	 We set what we can, and do a stat() afterwards
- * 	 to capture the current setting.
- * 	 This has a small race condition. 
- * 	 If another process changes the meta-data _after_ setting and
- * 	 _before_ querying, we don't see that it was changed.
+ * And all settings should be saved in the waa-area _with the current 
+ * values_, so that this entry won't be seen as modified.
  *
- * How it was done:
- *   We store a copy of the wanted things, and copy what we set.
- *   So there's no race-condition, except that we change meta-data
- *   a process has just changed. */
-/* Since svn 1.3.0 we no longer get all properties on an update,
+ * <b>The easy way:</b>
+ * We set what we can, and do a stat() afterwards to capture the current 
+ * setting.\n
+ * This has a small race condition: If another process changes the 
+ * meta-data \e after setting and \e before querying, we don't see that it 
+ * was changed.
+ *
+ * <b>How it was done previously:</b>
+ * We stored a copy of the wanted things, and copy what we set.\n
+ * So there's no race-condition, except that we change meta-data a process 
+ * has just changed.
+ *
+ * <B>Since svn 1.3.0</b> we no longer get all properties on an update,
  * only these that are different to the reported version.
  * That means that most times we'll get only the mtime as changed.
  *
- * Now, if the file has a unix-mode other than 0600 or an owner 
- * which is not equal to the current user, we wouldn't set that
- * because the change mask didn't tell to.
+ * Now, if the file has a unix-mode other than \c 0600 or an owner which is 
+ * not equal to the current user, we wouldn't set that because the change 
+ * mask didn't tell to. \n
  * So the file would retain the values of the temporary file, which are
  * 0600 and the current user and group.
  *
- * The new strategy is: write all values.
- * If there are no properties set for a file, we'll just
- * write the values it currently has - so no problem. */
-/* With one exception: the ctime will change, and so we'll believe that
- * it has changed next time. So fetch the *real* values afterwards. 
+ * The new strategy is: write all values. If there are no properties set 
+ * for a file, we'll just write the values it currently has - so no 
+ * problem. \n
+ * With one exception: the ctime will change, and so we'll believe that
+ * it has changed next time. So we fetch the \c real, current values 
+ * afterwards. 
  *
  * Meta-data-only changes happen too often, see this case:
- * - We're at rev N.
- * - We commit an entry and get rev M *for this entry*. The directory still 
- *   has N, because there might be other new entries in-between.
- * - We want to update to T.
- * - We're sending to subversion "directory is at N",
- * - "file is at M",
- * - and we get back "file has changed, properties ...  
- *   [svn:entry:committed-rev = M]".
- *
- * So we're saying we have file at M, and get back "changed, last change 
- * happened at M".
- * (Will file a bug report.)
+ * - We're at rev \c N.
+ * - We commit an entry and get rev \c M <B>for this entry</B>. The 
+ *   directory still has \c N, because there might be other new entries 
+ *   in-between.
+ * - We want to update to \c T.
+ * - We're sending to subversion <I>directory is at \c N</I>, <i>file is at 
+ *   \c M</i>,
+ * - and we get back <I>file has changed, properties ...  
+ *   [svn:entry:committed-rev = \c M]</i>.
+ * Basically we're saying we have file at \c M, and get back <I>changed, 
+ * last change happened at \c M</i>. (Will file a bug report.)
  *
  * So we get a meta-data change, update the meta-data (currently - will 
  * change that soon), and have another ctime (but don't update the entries' 
  * meta-data), so find the entry as changed ... 
  *
- * Current solution: read back the entries' meta-data after changing it. */
-/* Another thought - if we have different meta-data locally, that's 
+ * Current solution: read back the entries' meta-data after changing it.
+ *
+ * Another thought - if we have different meta-data locally, that's 
  * possibly something worth preserving. If the owner has changed in the 
- * repository *and* locally, we'd have to flag a conflict!
+ * repository \b and locally, we'd have to flag a conflict!
  * Furthermore the root entry gets no properties, so it gets set to owner 
- * 0.0, mode 0600 ... which is not right either. */
-int up__set_meta_data(struct estat *sts,
-		char *filename)
+ * \c 0.0, mode \c 0600 ... which is not right either. */
+int up__set_meta_data(struct estat *sts, char *filename)
 {
 	struct timeval tv[2];
 	int status;
+	mode_t current_mode;
 
 
 	status=0;
+	current_mode= PACKED_to_MODE_T(sts->new_rev_mode_packed);
 
 	if (!filename)
 		STOPIF( ops__build_path(&filename, sts), NULL );
 
-	/* A chmod or utimes on a symlink changes the *target*, not
-	 * the symlink itself. Don't do that. */
-	if (!S_ISLNK(sts->updated_mode))
+	DEBUGP_dump_estat(sts);
+
+	/* We have a small problem here, in that we cannot change *only* the 
+	 * user or group. It doesn't matter much; the problem case is that the 
+	 * owner has changed locally, the repository gives us another group, 
+	 * and we overwrite the owner. But still: TODO */
+	if (CHOWN_BOOL || !S_ISLNK(current_mode))
 	{
-		/* We have a small problem here, in that we cannot change *only* the user 
-		 * or group. It doesn't matter much; the problem case is that the owner 
-		 * has changed locally, the repository gives us another group, and we 
-		 * overwrite the owner. But still: TODO */
 		if (sts->remote_status & (FS_META_OWNER | FS_META_GROUP))
 		{
 			DEBUGP("setting %s to %d.%d",
 					filename, sts->st.uid, sts->st.gid);
-			status=chown(filename, sts->st.uid, sts->st.gid);
+			status=CHOWN_FUNC(filename, sts->st.uid, sts->st.gid);
 			if (status == -1)
 			{
 				STOPIF( wa__warn( errno==EPERM ? WRN__CHOWN_EPERM : WRN__CHOWN_OTHER,
@@ -550,14 +567,23 @@ int up__set_meta_data(struct estat *sts,
 						NULL );
 			}
 		}
+	}
+	else
+	{
+		DEBUGP("a symlink, but no lchown: %s", filename);
+	}
 
+	/* A chmod or utimes on a symlink changes the *target*, not
+	 * the symlink itself. Don't do that. */
+	if (!S_ISLNK(current_mode))
+	{
 		if (sts->remote_status & FS_META_UMODE)
 		{
 			/* The mode must be set after user/group.
 			 * If the entry has 07000 bits set (SGID, SUID, sticky),
 			 * they'd disappear after chown(). */
 			DEBUGP("setting %s's mode to 0%o", 
-					filename, sts->st.mode);
+					filename, sts->st.mode & 07777);
 			status=chmod(filename, sts->st.mode & 07777);
 			if (status == -1)
 			{
@@ -567,8 +593,10 @@ int up__set_meta_data(struct estat *sts,
 						NULL );
 			}
 		}
+	}
 
-
+	if (UTIMES_BOOL || !S_ISLNK(current_mode))
+	{
 		if (sts->remote_status & FS_META_MTIME)
 		{
 			/* index 1 is mtime */
@@ -581,12 +609,16 @@ int up__set_meta_data(struct estat *sts,
 			tv[0].tv_usec=sts->st.mtim.tv_nsec/1000;
 			DEBUGP("setting %s's mtime %24.24s", 
 					filename, ctime(& (sts->st.mtim.tv_sec) ));
-			STOPIF_CODE_ERR( utimes(filename, tv) == -1,
+			STOPIF_CODE_ERR( UTIMES_FUNC(filename, tv) == -1,
 					errno, "utimes(%s)", filename);
 		}
-
-		STOPIF( hlp__lstat(filename, & sts->st), NULL);
 	}
+	else
+	{
+		DEBUGP("a symlink, but no lutimes: %s", filename);
+	}
+
+	STOPIF( hlp__lstat(filename, & sts->st), NULL);
 
 ex:
 	return status;
@@ -595,7 +627,10 @@ ex:
 
 /** Handling non-file non-directory entries.
  * We know it's a special file, but not more; we have to take the filedata 
- * and retrieve the type. */
+ * and retrieve the type. 
+ *
+ * After this call \c sts->st.mode and \c sts->new_rev_mode_packed are set 
+ * to the current value. */
 int up__handle_special(struct estat *sts, 
 		char *path,
 		char *data,
@@ -604,14 +639,19 @@ int up__handle_special(struct estat *sts,
 	int status;
 	char *cp;
 
+
 	STOPIF( ops__string_to_dev(sts, data, &cp), NULL);
 	STOPIF( hlp__utf82local(cp, &cp, -1), NULL);
 
-	sts->stringbuf_tgt=NULL;
-	DEBUGP("special %s has mode 0%o", path, sts->updated_mode);
+	/* As we got that from the repository ... */
+	sts->new_rev_mode_packed=sts->local_mode_packed;
 
-	/* process */
-	switch (sts->updated_mode & S_IFMT)
+	sts->stringbuf_tgt=NULL;
+	DEBUGP("special %s has mode 0%o", path, sts->st.mode);
+
+	/* Process the entry. */
+	/* The (& S_IFMT) is a no-op, because of the packed storage. */
+	switch (PACKED_to_MODE_T(sts->new_rev_mode_packed) & S_IFMT)
 	{
 		case S_IFBLK:
 		case S_IFCHR:
@@ -626,7 +666,7 @@ int up__handle_special(struct estat *sts,
 
 		default:
 			STOPIF_CODE_ERR(1, EINVAL, 
-					"what kind of node is this??? (mode=0%o)", sts->updated_mode);
+					"what kind of node is this??? (mode=0%o)", sts->st.mode);
 	}
 
 ex:
@@ -823,8 +863,7 @@ svn_error_t *up__apply_textdelta(void *file_baton,
 	{
 		/* round to next kB */
 		status= (status+1024) & ~(1024-1);
-		filename_tmp=realloc(filename_tmp, status);
-		STOPIF_ENOMEM(!filename_tmp);
+		STOPIF( hlp__realloc( &filename_tmp, status), NULL);
 
 		tmp_len=status;
 	}
@@ -832,13 +871,13 @@ svn_error_t *up__apply_textdelta(void *file_baton,
 	strcpy(filename_tmp, filename);
 	strcat(filename_tmp, ".up.tmp");
 
-	DEBUGP("target is %s (0%o),", filename, sts->updated_mode);
+	DEBUGP("target is %s (0%o),", filename, sts->st.mode);
 	DEBUGP("  temp is %s", filename_tmp);
 
-	if (!S_ISREG(sts->updated_mode))
+	if (!S_ISREG(sts->st.mode))
 	{
 		/* special entries are taken into a svn_stringbuf_t */
-		if (S_ISLNK(sts->updated_mode))
+		if (S_ISLNK(sts->st.mode))
 		{
 			STOPIF( ops__link_to_string(sts, filename, &cp),
 					NULL);
@@ -972,19 +1011,19 @@ svn_error_t *up__close_file(void *file_baton,
 	{
 		/* now we have a new md5 */
 		DEBUGP("close file (0%o): md5=%s",
-				sts->updated_mode, cs__md52hex(sts->md5));
+				sts->st.mode, cs__md5tohex_buffered(sts->md5));
 
 
-		BUG_ON(!sts->updated_mode);
+		BUG_ON(!sts->st.mode);
 
-		if (S_ISREG(sts->updated_mode))
+		if (S_ISREG(sts->st.mode))
 		{
 			status=0;
 			/* See the comment mark FHP. */
 			/* This may be NULL if we got only property-changes, no file
 			 * data changes. */
 			if (sts->filehandle_pool)
-				apr_pool_clear(sts->filehandle_pool);
+				apr_pool_destroy(sts->filehandle_pool);
 			sts->filehandle_pool=NULL;
 			/* Now the filehandles should be closed. */
 			/* This close() before rename() is necessary to find out 
@@ -1121,20 +1160,22 @@ int up__work(struct estat *root, int argc, char *argv[])
 	opt__set_int(OPT__CHANGECHECK, PRIO_MUSTHAVE,
 			opt__get_int(OPT__CHANGECHECK) | CHCHECK_FILE);
 
-	only_check_status=1;
 	/* Do that here - if some other checks fail, it won't take so long
 	 * to notice the user */ 
 	STOPIF( waa__read_or_build_tree(root, argc, argv, argv, NULL, 0), NULL);
-	only_check_status=0;
 
 	while ( ! ( status=url__iterator(&rev) ) )
 	{
-		STOPIF( cb__record_changes(root, rev, global_pool), NULL);
+		if (rev == 0)
+			STOPIF( cb__remove_url(root, current_url), NULL);
+		else
+			STOPIF( cb__record_changes(root, rev, current_url->pool), NULL);
 
 		if (action->is_compare)
 		{
 			/* This is for remote-status. Just nothing to be done. */
-			printf("Remote-status against revision\t%ld.\n", rev);
+			if (opt__verbosity() > VERBOSITY_VERYQUIET)
+				printf("Remote-status against revision\t%ld.\n", rev);
 		}
 		else
 		{
@@ -1142,8 +1183,9 @@ int up__work(struct estat *root, int argc, char *argv[])
 			DEBUGP("setting revision to %llu", (t_ull)rev);
 			STOPIF( ci__set_revision(root, rev), NULL);
 
-			printf("Updating %s to revision\t%ld.\n", 
-					current_url->url, rev);
+			if (opt__verbosity() > VERBOSITY_VERYQUIET)
+				printf("Updating %s to revision\t%ld.\n", 
+						current_url->url, rev);
 		}
 	}
 	STOPIF_CODE_ERR( status != EOF, status, NULL);

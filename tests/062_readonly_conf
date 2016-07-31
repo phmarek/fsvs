@@ -1,0 +1,77 @@
+#!/bin/bash
+
+set -e
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+logfile=$LOGDIR/062.ro-conf
+
+$BINdflt delay
+
+echo a > x$RANDOM.$$
+echo $RANDOM.$$ > empty-file
+
+
+function Go
+{
+	run="$1"
+
+	$BINdflt st > $logfile.$run,st
+	$BINdflt diff > $logfile.$run,diff
+	$BINdflt log -rHEAD > $logfile.$run,log
+	$BINdflt pl -v * > $logfile.$run,pl
+	$BINdflt pg fsvs:commit-pipe enc-dec > $logfile.$run,pg
+	$BINdflt info -v tree > $logfile.$run,info
+}
+
+# Get compare values. 
+# The chmod must be done before, to get the same status output.
+#chmod -R a-w .
+Go 1
+
+
+# Don't allow any changes here; "diff" must use /tmp.
+chmod -R a-w $FSVS_WAA
+chmod -R a-w $FSVS_CONF
+
+# We must be careful to clean up after this test, so that normal testing 
+# can resume.
+# So we run in a subshell, and look at the return value afterwards.
+if ! result=$(
+		Go 2
+		if ! $BINdflt diff -r HEAD > /dev/null
+		then
+			echo "diff -r HEAD gives an error"
+			exit 1
+		fi
+	)
+then
+	if [[ "$result" == "" ]]
+	then
+		result="Exit code"
+	fi
+fi
+
+# Allow removing these hierarchies
+chmod -R u+w $FSVS_WAA
+chmod -R u+w $FSVS_CONF
+
+if [[ "$result" != "" ]]
+then
+	$ERROR "$result"
+fi
+
+for file in `/bin/ls $logfile.* | cut -f2 -d, | sort -u`
+do
+	if diff -u $logfile.1,$file $logfile.2,$file
+	then
+		$SUCCESS "compared $file output."
+	else
+		$ERROR "'$file' output different"
+	fi
+done
+
+$SUCCESS "read-only WAA and CONF ok."
+

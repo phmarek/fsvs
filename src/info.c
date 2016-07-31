@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2008 Philipp Marek.
+ * Copyright (C) 2007-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,8 +21,7 @@
  * \endcode
  * 
  * Use this command to show information regarding one or more entries in your
- * working copy.
- * Currently you must be at the working copy root; but that will change.
+ * working copy. \n
  * You can use \c -v to obtain slightly more information.
  * 
  * This may sometimes be helpful for locating bugs, or to obtain the
@@ -48,7 +47,7 @@
  *
  * The default is to print information about the given entry only.
  * With a single \c -R you'll get this data about \b all entries of a given 
- * directory; with a second \c -R you'll get the whole (sub-)tree. */
+ * directory; with another \c -R you'll get the whole (sub-)tree. */
 
 
 #include <unistd.h>
@@ -102,8 +101,20 @@ int info__work(struct estat *root, int argc, char *argv[])
 	/* Default is single-element only. */
 	opt_recursive-=2;
 
+	/* If verbose operation was wanted, we want return the copyfrom URL.
+	 * We cannot simply look at opt__is_verbose() and set VERBOSITY_COPYFROM, 
+	 * because with "-v" the OPT__VERBOSE priority is already at 
+	 * PRIO_CMDLINE, so PRIO_PRE_CMDLINE doesn't work - and simply overriding 
+	 * a specific wish (as given with "-o verbose=") isn't nice, too.
+	 *
+	 * So we check whether it seems that a single "-v" was given, and react 
+	 * to that; perhaps we should resurrect the global opt_verbose variable, 
+	 * and check what's the best verbosity default is in each worker. */
+	if (opt__get_int(OPT__VERBOSE) == VERBOSITY_DEFAULT_v)
+		opt__set_int( OPT__VERBOSE, PRIO_CMDLINE, 
+				opt__get_int(OPT__VERBOSE) | VERBOSITY_COPYFROM);
+
 	/* do not update the entries; print info based on *known* data. */
-	only_check_status=1;
 
 	status=waa__read_or_build_tree(root, argc, normalized, argv, NULL, 1);
 	if (status == -ENOENT)
@@ -113,8 +124,6 @@ int info__work(struct estat *root, int argc, char *argv[])
 		goto ex;
 	}
 	STOPIF( status, "Cannot get tree information");
-
-	only_check_status=0;
 
 ex:
 	return status;

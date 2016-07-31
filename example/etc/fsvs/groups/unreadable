@@ -1,0 +1,17 @@
+# This is an example for a FSVS group definition file.
+# See fsvs(1) for more details.
+#
+# This file is used for unreadable files, ie. files without the others-read 
+# bit set.
+# There are two main choices for them:
+#  - ignore them
+#  - or keep them versioned, but encrypted.
+ 
+
+# As long as the "ignore" line is present, the entries will be ignored.
+ignore
+
+# If you want to encrypt the data, you have to change the example key-ID to 
+# the one you want to use.
+auto-prop   fsvs:commit-pipe   gpg -er root 0x12345678
+

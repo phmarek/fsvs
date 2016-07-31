@@ -11,6 +11,13 @@ then
 	mkdir device
 	mv device-2 device/device-node
 
+	chown 1.1 empty-file
+
+	# We don't know whether there's sudo, su or something else possible.
+	# lchown() isn't available on the cli, so use perl.
+	mkdir -m 777 all_open
+	perl -e '$(=$)="5 5"; $<=$>=1; symlink(shift(), shift()) || die $!' device all_open/KK
+
 	rm reclink
 	touch reclink
 

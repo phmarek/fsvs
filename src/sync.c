@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -23,18 +23,18 @@
  * fsvs sync-repos [-r rev] [working copy base]
  * \endcode
  * 
- * This command loads the file list from the repository.
+ * This command loads the file list afresh from the repository. \n
  * A following commit will send all differences and make the repository data
  * identical to the local.
  * 
- * This is normally not needed; the use cases are
+ * This is normally not needed; the only use cases are
  * - debugging and
- * - recovering from data loss in \ref o_waa "$FSVS_WAA".
+ * - recovering from data loss in the \ref o_waa "$FSVS_WAA" area.
  * 
- * It is (currently) important if you want to backup two similar 
- * machines. Then you can commit one machine into a subdirectory of your 
- * repository, make a copy of that directory for another machine, and
- * sync this other directory on the other machine.
+ * It might be of use if you want to backup two similar machines. Then you 
+ * could commit one machine into a subdirectory of your repository, make a 
+ * copy of that directory for another machine, and
+ * \c sync this other directory on the other machine.
  *
  * A commit then will transfer only _changed_ files; so if the two machines 
  * share 2GB of binaries (\c /usr , \c /bin , \c /lib , ...) then 
@@ -42,8 +42,8 @@
  * time they will deviate (as both committing machines know 
  * nothing of the other path with identical files).
  * 
- * This kind of backup could be substituted by several levels 
- * of repository paths, which get "overlayed" in a defined priority.
+ * This kind of backup could be substituted by two or more levels of 
+ * repository paths, which get \e overlaid in a defined priority.
  * So the base directory, which all machines derive from, will be committed 
  * from one machine, and it's no longer necessary for all machines to send 
  * identical files into the repository.
@@ -53,10 +53,10 @@
  * problems are bound to occur.
  *
  *
- * \note There's an issue in subversion, to collapse identical files in the
- * repository into a single storage. That would ease the simple backup 
- * example, in that there's not so much storage needed over time; but the 
- * network transfers would still be much more than needed.
+ * \note There's issue 2286 in subversion which describes sharing
+ * identical files in the repository in unrelated paths. By using this 
+ * relaxes the storage needs; but the network transfers would still be much 
+ * larger than with the overlaid paths.
  *
  * */
 
@@ -112,10 +112,11 @@ int sync___recurse(struct estat *cur_dir,
 	void *kval;
 	apr_hash_index_t *hi;
 	svn_dirent_t *val;
-	char *url;
+	char *url, *path_utf8;
 	struct svn_string_t *decoder;
 	struct estat *sts;
 	svn_stringbuf_t *entry_text;
+	char *link_local;
 
 
 	status=0;
@@ -127,12 +128,13 @@ int sync___recurse(struct estat *cur_dir,
 
 	STOPIF( ops__build_path( &path, cur_dir), NULL);
 	DEBUGP("list of %s", path);
+	STOPIF( hlp__local2utf8(path, &path_utf8, -1), NULL);
 
 	STOPIF_SVNERR( svn_ra_get_dir2,
 			(current_url->session, 
 			 &dirents, NULL, NULL,
 			 /* Use "" for the root, and cut the "./" for everything else. */
-			 (cur_dir->parent) ? path + 2 : "", 
+			 (cur_dir->parent) ? path_utf8 + 2 : "", 
 			 current_url->current_rev,
 			 SVN_DIRENT_HAS_PROPS | SVN_DIRENT_HAS_PROPS | 
 			 SVN_DIRENT_KIND | SVN_DIRENT_SIZE,
@@ -154,9 +156,6 @@ int sync___recurse(struct estat *cur_dir,
 			/* File or special entry. */
 			sts->st.size=val->size;
 
-			DEBUGP("%s has mode %o (%s)", sts->name, sts->st.mode, 
-					st__type_string(sts->st.mode));
-
 			decoder= sts->user_prop ? 
 				apr_hash_get(sts->user_prop, 
 						propval_updatepipe, APR_HASH_KEY_STRING) : 
@@ -176,7 +175,7 @@ int sync___recurse(struct estat *cur_dir,
 			else
 			{
 				/* Now we're left with special devices and small, encoded files. */
-				STOPIF( url__full_url(sts, NULL, &url), NULL);
+				STOPIF( url__full_url(sts, &url), NULL);
 
 				/* get a fresh pool */
 				STOPIF( apr_pool_create_ex(&subsubpool, subpool, NULL, NULL), 
@@ -202,7 +201,13 @@ int sync___recurse(struct estat *cur_dir,
 				 * shares the space.
 				 * And for normal files the size is already correct. */
 				if (S_ISLNK(sts->st.mode))
-					sts->st.size-=strlen(link_spec);
+				{
+					/* Symlinks get their target translated to/from the locale, so 
+					 * they might have a different length. */
+					STOPIF( hlp__utf82local(entry_text->data+strlen(link_spec),
+								&link_local, -1), NULL);
+					sts->st.size = strlen(link_local);
+				}
 
 				if (subsubpool) apr_pool_destroy(subsubpool);
 			}
@@ -213,6 +218,8 @@ int sync___recurse(struct estat *cur_dir,
 				apr_pool_destroy(apr_hash_get(sts->user_prop, "", 0));
 				sts->user_prop=NULL;
 			}
+
+			DEBUGP_dump_estat(sts);
 		}
 
 		/* We have to loop even through obstructed directories - some
@@ -246,6 +253,12 @@ int sync__progress(struct estat *sts)
 
 	STOPIF( waa__delete_byext( path, WAA__FILE_MD5s_EXT, 1), NULL);
 	STOPIF( waa__delete_byext( path, WAA__PROP_EXT, 1), NULL);
+
+
+	/* We get the current type in sts->new_rev_mode_packed, but we need 
+	 * sts->st.mode set for writing. */
+	sts->st.mode = (sts->st.mode & ~S_IFMT) | 
+		PACKED_to_MODE_T(sts->new_rev_mode_packed);
 
 
 	STOPIF( st__rm_status(sts), NULL);
@@ -355,12 +368,13 @@ int sync__work(struct estat *root, int argc, char *argv[])
 	strings=NULL;
 	while ( ! ( status=url__iterator(&rev) ) )
 	{
-		printf("sync-repos for %s rev\t%llu.\n",
-				current_url->url, (t_ull)rev);
+		if (opt__verbosity() > VERBOSITY_VERYQUIET)
+			printf("sync-repos for %s rev\t%llu.\n",
+					current_url->url, (t_ull)rev);
 
 		/* We have nothing ... */
 		current_url->current_rev=0;
-		STOPIF( cb__record_changes(root, rev, global_pool), NULL);
+		STOPIF( cb__record_changes(root, rev, current_url->pool), NULL);
 
 		/* set new revision */
 		current_url->current_rev=rev;

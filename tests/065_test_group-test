@@ -1,0 +1,96 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+logfile=$LOGDIR/065.group-test
+
+grp_dir=`$PATH2SPOOL $WC ^`/groups
+mkdir $grp_dir
+
+for a in 1 2 3 Ab CA void
+do
+	echo $a > $a
+	$BINq groups "group:$a,./**$a*"
+	echo "take" > $grp_dir/$a
+done
+
+$BINq delay
+# Make sure that the new entries are seen.
+touch .
+
+function Check
+{
+	pattern="$1"
+	count="$2"
+
+	echo "Testing '$pattern'."
+	$BINdflt group test "$pattern" > $logfile
+	if [[ `wc -l < $logfile` -ne "$count" ]]
+	then
+		cat $logfile
+		$ERROR "Wrong number of output lines - expected $count."
+	fi
+}
+
+Check './*A*' 2
+Check './?' 3
+
+echo "Non-existing groups should be ignored"
+Check 'group:doesntexist,./*d' 1
+
+
+# Now check full listings
+function CheckFull
+{
+	echo "Testing '$1', expect $2."
+	if [[ `grep "$1" $logfile | wc -l` -ne $2 ]]
+	then
+		$ERROR "Wrong number of lines."
+	fi
+}
+
+$INFO "Testing group lists."
+mkdir X
+touch X/1 X/3
+$BINdflt group test > $logfile
+CheckFull . 9
+CheckFull ^1 2
+CheckFull ^3 2
+CheckFull ^2 1
+CheckFull ^Ab 1
+CheckFull ^X 0
+CheckFull X 3
+
+$INFO "With -N"
+$BINdflt group test -N > $logfile
+CheckFull X 1
+CheckFull . 7
+
+$INFO "In subdir."
+cd X
+$BINdflt group test > $logfile
+CheckFull X 3
+CheckFull ^1 1
+# The directory itself isn't printed.
+CheckFull . 3
+
+cd $WC
+$INFO "Verbose output"
+$BINdflt group test -v > $logfile
+CheckFull . 9
+CheckFull group: 8
+CheckFull group:., 5
+CheckFull '^Ab[[:space:]]group:Ab,./..Ab.[[:space:]]./Ab$' 1
+CheckFull i 1
+
+$BINq ignore './**'
+$BINdflt group test -v > $logfile
+CheckFull group: 9
+CheckFull i 2
+
+$SUCCESS "group/ignore test ok."
+

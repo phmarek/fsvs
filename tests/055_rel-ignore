@@ -19,11 +19,11 @@ touch g1 gI
 
 function exp
 {
-  dumped="$1"
+  dumped="group:ignore,$1"
   cnt=$2
   cnt_I="$3"
 	shift 3
-	# Rest is patterns to load
+	# Rest are patterns to be loaded
 
   while [[ "$1" != "" ]]
 	do

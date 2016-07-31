@@ -21,12 +21,12 @@ mkdir dir-with-perms
 ln -s dir-with-perms symlink-to-empty-dir
 ln -s tree symlink-to-dir
 
-mkdir long_name_dir
+mkdir long_name_dir loc-utf8 loc-loc
 perl -e 'print pack("c",$_) for (33..125)' > long_name_dir/chars
 date > long_name_dir/28374fwlifuazwlgvkaj.sbg.awilgzq3a5zgh-aenr.kahw4tgeoa34zht2l3kj4zhwq34tgza.we24ltzkn351243tgwerg
 
-echo $STG_UTF8 > long_name_dir/$STG_LOC
-echo $STG_LOC > long_name_dir/$STG_UTF8
+echo $STG_UTF8 > loc-loc/$STG_LOC
+echo $STG_LOC > loc-utf8/$STG_UTF8
 
 # just a bit above 512kB
 filename=big_file
@@ -51,7 +51,7 @@ then
   cp -a /dev/null device
 	chmod 765 device
 	chown 1.2 device
-  cp -a /dev/ram0 block-device
+  cp -a `readlink -e /dev/cdrom*` block-device
   cp -a /dev/null device-2be-updated
 	chmod 123 device-2be-updated
 fi

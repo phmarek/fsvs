@@ -1,0 +1,238 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+logfile=$LOGDIR/061.groups
+grp_name=MightyTest
+grp_dir=`$PATH2SPOOL $WC ^`/groups
+grp_file=$grp_dir/$grp_name
+cntr=1000
+
+mkdir $grp_dir
+
+# We do the changes without waiting, so we need that for the new files to 
+# be found.
+export FSVS_CHANGE_CHECK=dir 
+# Don't report the changed root directory.
+export FSVS_FILTER=new 
+
+
+
+if $BINdflt group 'group:,./**'
+then
+	$ERROR "Empty group names are invalid."
+fi
+
+
+function SetGrpAndTest
+{
+	status=$1
+	output_lines=$2
+	shift
+	shift
+
+	cntr=`expr $cntr + 1`
+	perl -e 'map { print $_,"\n"; } @ARGV' "$@" > $grp_file
+	cur_file=file-$cntr
+	date > $cur_file
+
+	echo group:$grp_name,mode:0:0 | $BINq group load
+
+	sta=1
+	if $BINdflt st > $logfile 2>/dev/null
+	then sta=0 ; fi
+
+	if [[ "$status" != "$sta" ]]
+	then
+		cat $grp_file
+		$ERROR_NB "Wrong status $sta (exp. $status) for"
+		$ERROR "$@"
+	fi
+
+	if [[ `wc -l < $logfile` -ne "$output_lines" ]]
+	then
+		cat $logfile
+		cat $grp_file
+		$ERROR_NB "Expected $output_lines output for"
+		$ERROR "$@"
+	else
+		$SUCCESS "'$@' ok"
+	fi
+
+	rm $grp_file
+	true | $BINdflt group load > /dev/null
+	$BINq ci -m1 > /dev/null
+}
+
+SetGrpAndTest 1 0 "invalid"
+SetGrpAndTest 1 0 " auto-prop"
+SetGrpAndTest 1 0 " auto-prop aa"
+
+SetGrpAndTest 0 1 "# a comment"
+SetGrpAndTest 0 1 "# comment" " # a further comment" "  # still another"
+SetGrpAndTest 0 1 " auto-prop xxx test-prop"
+SetGrpAndTest 0 0 "ignore"
+SetGrpAndTest 0 0 " ignore     "
+SetGrpAndTest 0 1 " # ignore     "
+SetGrpAndTest 0 1 "take"
+SetGrpAndTest 0 1 "take" "auto-prop aa bb"
+
+SetGrpAndTest 1 0 "take" "# comment" "invalid"
+SetGrpAndTest 1 0 "take" "# comment" "ignore"
+
+
+
+# Test commit-pipe, too - this must be handled at commit time.
+$INFO "committing a property."
+file=hzuta
+pn="hAsdd:das_3:1"
+pd="äöüßµ§ property value"
+echo "group:$grp_name,./**" | $BINdflt group load
+cat > $grp_file <<EOT 
+auto-prop $pn $pd
+auto-prop fsvs:commit-pipe openssl enc -e -a
+auto-prop fsvs:update-pipe openssl enc -d -a
+EOT
+date > $file
+$BINdflt ci -m1 > $logfile
+
+$INFO "verify"
+got=`svn pg "$pn" "$REPURL/$file"`
+if [[ "$got" != "$pd" ]]
+then
+	echo "got '$got'"
+	$ERROR "Property not correctly committed?"
+else
+	$SUCCESS "Property via group committed."
+fi
+
+# Check whether the commit pipe is really used.
+$WC2_UP_ST_COMPARE
+
+
+# Check whether the property is stored (and used!) locally, too.
+$INFO "verify local use"
+export -n FSVS_FILTER
+echo $$ - another test > $file
+$BINdflt ci -m1 > $logfile
+$WC2_UP_ST_COMPARE
+
+
+$INFO "added file"
+file=Added
+date > $file
+$BINq add $file > $logfile
+$BINq ci -m1 $file >> $logfile 
+$WC2_UP_ST_COMPARE
+# Should be different - the repository data is in base64.
+if svn cat $REPURL/$file | diff -u - $file > $logfile
+then
+	$ERROR "Property not used on added entry."
+fi
+
+
+function TP
+{
+	$BINdflt prop-list -v "$1" > $logfile
+	if [[ `wc -l < $logfile` -ne $2 ]]
+	then
+		cat $logfile
+		$ERROR "Wrong number of properties"
+	fi
+	# The non-ASCII characters in the property value are shown as \xXX, so we 
+	# can't compare them directly.
+	if false # [[ `sort < $logfile` != "$pn:"*"fsvs:commit-pipe:cat"* ]]
+	then
+		$ERROR "Properties wrong."
+	fi
+}
+
+function S
+{
+	$BINq ps fsvs:commit-pipe cat $file > $logfile
+}
+
+function D
+{
+	$BINq pd fsvs:update-pipe $file >> $logfile
+}
+
+for entry in Set Del
+do
+	$INFO "propset and propdel; first $entry"
+
+	file=Prop-$entry
+	date > $file
+
+	# A new file has no properties; just the "no properties" line is printed.
+	TP $WC/$file 1
+	opt=""
+	if [[ "$entry" == "Set" ]] ; then 
+		S
+		TP $WC/$file 3
+		D
+	else
+		D
+		TP $WC/$file 2
+		S
+	fi
+	TP $WC/$file 2
+
+	$BINq ci -m1 $file >> $logfile 
+	TP $WC/$file 2
+
+	if ! svn cat $REPURL/$file | cmp - $file
+	then
+		$ERROR "Property not used on entry changed via prop-set and prop-del."
+	fi
+	$WC2_UP_ST_COMPARE
+
+	TP $WC2/$file 2
+done
+
+
+$INFO "Testing the difference between ignore and group."
+for g in "" "group:something,"
+do
+	for cmd in ignore group
+	do
+		st=1
+		if echo "$g./**" | $BINq $cmd load
+		then
+			st=0
+		fi
+
+		should=0
+		if [[ "$g" == "" && "$cmd" == "group" ]]
+		then
+			# FSVS 1.1.18 compatibility mode
+			should=0
+		fi
+
+		if [[ "$st" != "$should" ]]
+		then
+			$ERROR "Wrong status for '$cmd' '$g'."
+		fi
+		
+		# Test whether reading the group still works.
+		$BINq st
+	done
+done
+
+$SUCCESS "group/ignore difference ok."
+
+
+# Test that only alphanumeric group names are allowed
+for char in . - : _ \; / @
+do
+	if $BINq groups "group:G$char,./**" 2> $logfile
+	then
+		$ERROR "Group name 'G$char' shouldn't be allowed."
+	fi
+done
+
+$SUCCESS "Group name restrictions seem ok."

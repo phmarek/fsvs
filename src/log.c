@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2008 Philipp Marek.
+ * Copyright (C) 2007-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -16,11 +16,12 @@
  * \section log
  *
  * \code
- * fsvs log [-v] [-r rev1[:rev2]] [path]
+ * fsvs log [-v] [-r rev1[:rev2]] [-u name] [path]
  * \endcode
  * 
- * This command views the log information associated with the given 
- * \e path, or, if none, the highest priority URL.
+ * This command views the revision log information associated with the 
+ * given \e path at its topmost URL, or, if none is given, the highest 
+ * priority URL.
  *
  * The optional \e rev1 and \e rev2 can be used to restrict the 
  * revisions that are shown; if no values are given, the logs are given 
@@ -30,13 +31,16 @@
  * If you use the \ref glob_opt_verb "-v" -option, you get the files 
  * changed in each revision printed, too.
  *
- * There is an option controlling the output format; see \ref o_logoutput.
+ * There is an option controlling the output format; see the \ref 
+ * o_logoutput "log_output option".
+ *
+ * Optionally the name of an URL can be given after \c -u; then the log of 
+ * this URL, instead of the topmost one, is shown.
  *
  * TODOs: 
  * - \c --stop-on-copy
  * - Show revision for \b all URLs associated with a working copy?
  *   In which order?
- * - A URL-parameter, to specify the log URL. (Name)
  * */
 
 
@@ -67,6 +71,12 @@
 #define MAX_LOG_OUTPUT_LINE (1024)
 
 //svn_log_message_receiver_t log__receiver;
+
+static int log___path_prefix_len,
+					 log___path_skip,
+					 log___path_parm_len;
+static char *log___path_prefix,
+						*log___path_parm;
 
 
 int log___divider(FILE *output, char *color_after)
@@ -100,12 +110,15 @@ svn_error_t *log__receiver(void *baton,
 	int lines, len, cur, sol, i;
 	const char *ccp;
 	char *auth, *dat, *mess;
-	FILE *output=baton;
+	FILE *output=stdout;
 
   apr_hash_index_t *hi;
 	void const *name;
 	apr_ssize_t namelen;
 	char *local_name;
+	int fn_count;
+	char **filenames, *path_to_store;
+	static const char ps[]={PATH_SEPARATOR, 0};
 
 
 	DEBUGP("got log for %llu", (t_ull)revision);
@@ -141,6 +154,12 @@ svn_error_t *log__receiver(void *baton,
 	if (changed_paths)
 	{
 		STOPIF_CODE_EPIPE( fputs("Changed paths:\n", output), NULL);
+
+		/* Prepare for sorting. */
+		fn_count=apr_hash_count(changed_paths);
+		STOPIF( hlp__alloc( &filenames, sizeof(*filenames)*fn_count), NULL);
+
+		i=0;
 		hi=apr_hash_first(pool, changed_paths);
 		while (hi)
 		{
@@ -148,8 +167,47 @@ svn_error_t *log__receiver(void *baton,
 
 			STOPIF( hlp__utf82local( name, &local_name, namelen), NULL);
 
-			STOPIF_CODE_EPIPE( fprintf(output, "  %s\n", local_name), NULL);
+			BUG_ON(i>=fn_count,
+					"too many filenames in hash - count was %d", fn_count);
+
+			DEBUGP("got path %s", local_name);
+			if (strncmp(local_name, log___path_prefix, log___path_prefix_len) == 0)
+			{
+				path_to_store=local_name + log___path_prefix_len;
+				switch (*path_to_store)
+				{
+					case 0:
+						/* Hack to make the ++ right. */
+						path_to_store="x";
+
+					case PATH_SEPARATOR:
+						path_to_store++;
+						STOPIF( hlp__strmnalloc(1 + log___path_parm_len + 
+									strlen(path_to_store) + 1 + 3, 
+									filenames+i, 
+									log___path_parm, 
+									(log___path_parm_len>1 && *path_to_store &&
+									 log___path_parm[ log___path_parm_len-1 ] != PATH_SEPARATOR) ? 
+									ps : "",
+									path_to_store, NULL), NULL);
+
+						i++;
+				}
+			}
+
 			hi = apr_hash_next(hi);
+		}
+
+		BUG_ON(i>fn_count,
+				"Wrong number of filenames in hash - count was %d", fn_count);
+		fn_count=i;
+
+		qsort(filenames, fn_count, sizeof(*filenames),
+				hlp__compare_string_pointers);
+		for(i=0; i<fn_count; i++)
+		{
+			STOPIF_CODE_EPIPE( fprintf(output, "  %s\n", filenames[i]), NULL);
+			IF_FREE(filenames[i]);
 		}
 	}
 
@@ -227,7 +285,7 @@ int log__work(struct estat *root, int argc, char *argv[])
 	apr_array_header_t *paths;
 	int limit;
 	char **normalized;
-	FILE *output=stdout;
+	const char *base_url;
 
 
 	status_svn=NULL;
@@ -246,26 +304,47 @@ int log__work(struct estat *root, int argc, char *argv[])
 
 	if (argc)
 	{
+		STOPIF_CODE_ERR( argc>1, EINVAL,
+				"!The \"log\" command currently handles only a single path.");
 		STOPIF( ops__traverse(root, normalized[0], 0, 0, &sts), 
 				"!The entry \"%s\" cannot be found.", normalized[0]);
-		if (!sts->url)
-		{
-			STOPIF_CODE_ERR(urllist_count>1, EINVAL,
-					"!The given entry has no URL associated yet.");
-			DEBUGP("Taking default URL.");
-		}
 
-		current_url=sts->url;
+		log___path_parm_len=strlen(argv[0]);
+		STOPIF( hlp__strnalloc(log___path_parm_len+2, 
+					&log___path_parm, argv[0]), NULL);
 	}
 	else
 	{
+		log___path_parm_len=0;
+		log___path_parm="";
 		sts=root;
-		argc=1;
-		current_url=urllist[0];
 	}
 
+	current_url=NULL;
+	if (url__parm_list_used)
+	{
+		STOPIF_CODE_ERR(url__parm_list_used>1, EINVAL,
+				"!Only a single URL can be given.");
+		STOPIF( url__find_by_name(url__parm_list[0], &current_url), 
+				"!No URL with name \"%s\" found", url__parm_list[0]);
+	}
+	else
+	{
+		if (sts->url)
+			current_url=sts->url;
+		else
+		{
+			STOPIF_CODE_ERR(urllist_count>1, EINVAL,
+					"!The given entry has no URL associated yet.");
+		}
+	}
+
+	if (!current_url)
+		current_url=urllist[0];
+
+
 	DEBUGP("doing URL %s", current_url->url);
-	STOPIF( url__open_session(NULL), NULL);
+	STOPIF( url__open_session(NULL, NULL), NULL);
 
 
 	if (argc)
@@ -276,12 +355,33 @@ int log__work(struct estat *root, int argc, char *argv[])
 		*(char **)apr_array_push(paths) = path+2;
 	}
 	else
+	{
 		paths=NULL;
+		path=".";
+	}
 
-	DEBUGP("got %d: %s - %s", 
+	/* Calculate the comparision string. */
+	STOPIF_SVNERR( svn_ra_get_repos_root2,
+			(current_url->session, &base_url, global_pool));
+		/* |- current_url->url -|
+		 * |- repos root-|
+		 * http://base/url /trunk /relative/path/ cwd/entry...
+		 *                 |-- log_path_skip ---|
+		 *
+		 * sts->path_len would be wrong for the WC root.
+		 * */
+	log___path_prefix_len=current_url->urllen - strlen(base_url) + strlen(path)-1;
+	STOPIF( hlp__strmnalloc( log___path_prefix_len+1+5, 
+				&log___path_prefix,
+				current_url->url + strlen(base_url),
+				/* Include the "/", but not the ".". */
+				sts->parent ? path+1 : NULL, NULL), NULL);
+
+	DEBUGP("got %d: %s - %s; filter %s(%d, %d)", 
 			opt_target_revisions_given,
 			hlp__rev_to_string(opt_target_revision),
-			hlp__rev_to_string(opt_target_revision2));
+			hlp__rev_to_string(opt_target_revision2),
+			log___path_prefix, log___path_prefix_len, log___path_skip);
 
 
 	/* To take the difference (for -rX:Y) we need to know HEAD. */
@@ -313,19 +413,24 @@ int log__work(struct estat *root, int argc, char *argv[])
 
 	DEBUGP("log limit at %d", limit);
 
-	STOPIF_SVNERR( svn_ra_get_log,
-			(current_url->session,
-			 paths,
-			 opt_target_revision,
-			 opt_target_revision2,
-			 limit,
-			 opt_verbose>0,
-			 0, // TODO: stop-on-copy,
-			 log__receiver,
-			 output,
-			 global_pool) );
 
-	STOPIF( log___divider(output, ANSI__NORMAL), NULL);
+	status_svn=svn_ra_get_log(current_url->session, paths,
+			opt_target_revision, opt_target_revision2,
+			limit,
+			opt__is_verbose() > 0,
+			0, // TODO: stop-on-copy,
+			log__receiver, 
+			NULL, global_pool);
+
+	if (status_svn)
+	{
+		if (status_svn->apr_err == -EPIPE)
+			goto ex;
+		STOPIF_SVNERR( status_svn, );
+	}
+
+
+	STOPIF( log___divider(stdout, ANSI__NORMAL), NULL);
 
 ex:
 	STOP_HANDLE_SVNERR(status_svn);

@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2008 Philipp Marek.
+ * Copyright (C) 2007-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -45,11 +45,11 @@
  * \n Please mind that at most a single path is allowed; as soon as two 
  * non-URLs are found an error message is printed.
  *
- * If no directory is given, \c .  is used; this differs from the usual 
+ * If no directory is given, \c "." is used; this differs from the usual 
  * subversion usage, but might be better suited for usage as a recovery 
  * tool (where versioning \c / is common). Opinions welcome.
  *
- * The given \c path must exist, and \b should be empty -- \c fsvs will 
+ * The given \c path must exist, and \b should be empty -- FSVS will 
  * abort on conflicts, ie. if files that should be created already exist.
  * \n If there's a need to create that directory, please say so; patches 
  * for some parameter like \c -p are welcome.
@@ -109,8 +109,12 @@ int co__work(struct estat *root, int argc, char *argv[])
 		STOPIF_CODE_ERR( chdir(path)==-1, errno,
 				"!Cannot use the directory \"%s\";\nmaybe you meant to give an URL?", path);
 
+
 	root->arg=path ? path : ".";
-	opt_verbose++;
+
+	STOPIF( waa__save_cwd( &path, NULL, 0), NULL);
+	STOPIF( waa__create_working_copy(path), NULL);
+	free(path);
 
 	/* We don't use the loop above, because the user might give the same URL 
 	 * twice - and we'd overwrite the fetched files. */

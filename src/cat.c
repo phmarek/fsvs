@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2008 Philipp Marek.
+ * Copyright (C) 2008-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -35,9 +35,9 @@
  * fsvs cat [-r rev] path
  * \endcode
  *
- * Fetches a file with the specified revision or, if not given, BASE, from 
- * the repository, and outputs it to \c STDOUT.
- *
+ * Fetches a file repository, and outputs it to \c STDOUT.
+ * If no revision is specified, it defaults to BASE, ie. the current local 
+ * revision number of the entry.
  * */
 
 /** -.
@@ -69,7 +69,7 @@ int cat__work(struct estat *root, int argc, char *argv[])
 	STOPIF_CODE_ERR( !current_url, EINVAL,
 			"!For this entry no URL is known.");
 			
-	STOPIF( url__open_session(NULL), NULL);
+	STOPIF( url__open_session(NULL, NULL), NULL);
 	STOPIF_SVNERR( svn_stream_for_stdout,
 			(&output, global_pool));
 

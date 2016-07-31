@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2008 Philipp Marek.
+ * Copyright (C) 2007-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -34,7 +34,9 @@
 #include "hash_ops.h"
 #include "props.h"
 #include "update.h"
+#include "ignore.h"
 #include "est_ops.h"
+#include "add_unvers.h"
 #include "warnings.h"
 
 
@@ -58,11 +60,11 @@
  * fsvs prop-get PROPERTY-NAME PATH...
  * \endcode
  *
- * You get the data of the property printed to STDOUT.
+ * Prints the data of the given property to \c STDOUT.
  *
  * \note Be careful! This command will dump the property <b>as it is</b>,
  * ie. with any special characters! If there are escape sequences or binary 
- * data in the property, your terminal might get messed up!\n
+ * data in the property, your terminal might get messed up! \n
  * If you want a safe way to look at the properties, use prop-list with the 
  * \c -v parameter.
  */
@@ -73,7 +75,7 @@
  * \section prop-set
  *
  * \code
- * fsvs prop-set PROPERTY-NAME VALUE PATH...
+ * fsvs prop-set [-u URLNAME] PROPERTY-NAME VALUE PATH...
  * \endcode
  *
  * This command sets an arbitrary property value for the given path(s).
@@ -81,6 +83,10 @@
  * \note Some property prefixes are reserved; currently everything starting 
  * with <tt>svn:</tt> throws a (fatal) warning, and <tt>fsvs:</tt> is 
  * already used, too. See \ref s_p_n.
+ *
+ * If you're using a multi-URL setup, and the entry you'd like to work on 
+ * should be pinned to a specific URL, you can use the \c -u parameter; 
+ * this is like the \ref add "add" command, see there for more details.
  * 
  * */
 
@@ -92,10 +98,9 @@
  * fsvs prop-del PROPERTY-NAME PATH...
  * \endcode
  *
- * This command removes property value for the given path(s).
+ * This command removes a property for the given path(s).
  *
  * See also \ref prop-set.
- *
  *
  * */
 
@@ -107,12 +112,13 @@
  * fsvs prop-list [-v] PATH...
  * \endcode
  *
- * Lists the names of all properties for the given entry.
+ * Lists the names of all properties for the given entry. \n
  * With \c -v, the value is printed as well; special characters will be
- * translated, to not mess with your terminal.
+ * translated, as arbitrary binary sequences could interfere with your 
+ * terminal settings.
  *
- * If you need raw output, post a patch for \c --raw, or loop with \ref
- * prop-get.
+ * If you need raw output, post a patch for \c --raw, or write a loop with  
+ * \ref prop-get "prop-get".
  *
  * */
 
@@ -179,8 +185,8 @@
  * take their full space in the repository. (Although \c gpg compresses the 
  * files before encryption, so it won't be \b that bad.)
  *
- * You might be interested in \ref exp_env "exported
- * environment variables", too.
+ * You might be interested in
+ * \ref exp_env "exported environment variables", too.
  *
  * \note Another idea is to ignore files that are not readable by everyone; 
  * see \ref ign_mod "ignore pattern modifiers" for details.
@@ -295,7 +301,7 @@
 /** @{ */
 
 /** Modification time - \c svn:text-time. */
-char propname_mtime[]=SVN_PROP_TEXT_TIME,
+const char propname_mtime[]=SVN_PROP_TEXT_TIME,
 		 /** -. */
 		 propname_owner[]=SVN_PROP_OWNER,
 		 /** -. */
@@ -449,10 +455,13 @@ int prp__get(hash_t db, char *keycp, datum *value)
 /** -.
  * The meta-data of the entry is overwritten with the data coming from the 
  * repository; its \ref estat::remote_status is set.
+ * If \a props_db is not NULL, the still opened property database is 
+ * returned.
  * */
 int prp__set_from_aprhash(struct estat *sts, 
 		apr_hash_t *props, 
 		enum prp__set_from_aprhash_e flags,
+		hash_t *props_db,
 		apr_pool_t *pool)
 {
 	int status;
@@ -469,19 +478,41 @@ int prp__set_from_aprhash(struct estat *sts,
 	status=0;
 	count=0;
 
-	/* We always open the database file. If no user-specified properties are 
-	 * given, old properties are removed that way.
-	 * (Needed because we'd only know in cb__record_changes() that properties 
-	 * get removed; in revert we only have the new list.
+	/* The old behaviour was to always open the database file. If no 
+	 * user-specified properties are given, old properties were removed that 
+	 * way.
+	 * But gdbm has the problem that on gdbm_close() a fsync() is done - even 
+	 * if nothing was written; this means that for every updated file we 
+	 * create a new property database, write nothing in it, do a fsync(), 
+	 * close it, and delete it again - which costs some time.
+	 *
+	 * Debian bug #514704.
+	 *
+	 * (Removing of old properties is needed because we'd only know in 
+	 * cb__record_changes() that properties get removed; in revert we only 
+	 * have the new list.
 	 * TODO: Merge local and remote changes.) */
 	/* We remember the filename, so that empty hashes get removed on close.  
 	 * */
 	db=NULL;
+	hi=apr_hash_first(pool, props);
+
 	if (flags & STORE_IN_FS)
+	{
+		/* If we want to write the data to disk, but there is nothing to write 
+		 * (and the caller doesn't need the DB), just remove the file. See 
+		 * above.  */
+		if (!hi && !props_db)
+		{
+			STOPIF( prp__unlink_db_for_estat(sts), NULL);
+			goto ex;
+		}
+
 		STOPIF( prp__open_byestat(sts, 
 					GDBM_NEWDB | HASH_REMEMBER_FILENAME, &db), NULL);
+	}
 
-	for (hi = apr_hash_first(pool, props); hi; hi = apr_hash_next(hi)) 
+	for (; hi; hi = apr_hash_next(hi)) 
 	{
 		/* As the name/key is a (char*), we don't need its length. */
 		/* Is there a cleaner way than this (cast or compiler warning)??
@@ -515,7 +546,10 @@ int prp__set_from_aprhash(struct estat *sts,
 	}
 
 	DEBUGP("%d properties stored", count);
-	STOPIF( hsh__close(db, status), NULL);
+	if (props_db)
+		*props_db=db;
+	else
+		STOPIF( hsh__close(db, status), NULL);
 
 ex:
 	return status;
@@ -548,9 +582,11 @@ int prp__g_work(struct estat *root, int argc, char *argv[])
 
 	for(; *argv; argv++)
 	{
-		STOPIF( prp__open_byname( *normalized, GDBM_WRCREAT, &db), NULL);
+		db=NULL;
+		status=prp__open_byname( *normalized, GDBM_READER, &db);
+		if (!status)
+			status=prp__fetch(db, key, &value);
 
-		status=prp__fetch(db, key, &value);
 		if (status == ENOENT)
 		{
 			DEBUGP("No such property");
@@ -566,7 +602,8 @@ int prp__g_work(struct estat *root, int argc, char *argv[])
 			STOPIF_CODE_EPIPE( fputc('\n', output), NULL);
 		}
 
-		STOPIF( hsh__close(db, status), NULL);
+		if (db)
+			STOPIF( hsh__close(db, status), NULL);
 		db=NULL;
 	}
 
@@ -629,8 +666,8 @@ int prp__s_work(struct estat *root, int argc, char *argv[])
 
 	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
 
+	STOPIF( au__prepare_for_added(), NULL);
 
-	STOPIF( url__load_list(NULL, 0), NULL);
 	STOPIF( waa__input_tree(root, NULL, NULL), NULL);
 
 
@@ -638,16 +675,25 @@ int prp__s_work(struct estat *root, int argc, char *argv[])
 	{
 		STOPIF( ops__traverse(root, *normalized, 
 					OPS__CREATE | OPS__FAIL_NOT_LIST, RF_ADD, &sts), NULL);
-		STOPIF( prp__open_byestat( sts, GDBM_WRCREAT, &db), NULL);
 
 		if (sts->flags & RF_ISNEW)
 		{
+			/* Get group. */
+			STOPIF( ign__is_ignore(sts, &change), NULL);
+			STOPIF( ops__apply_group(sts, &db, NULL), NULL);
+
+			if (!sts->url)
+				sts->url=current_url;
+
 			STOPIF( hlp__lstat( *normalized, & sts->st),
 					"!'%s' can not be queried", *normalized);
 			/* Such entries must be set as added, if needed - else they wouldn't be 
 			 * seen as new.  */
 			sts->flags |= RF_ADD;
 		}
+		else
+			STOPIF( prp__open_byestat(sts, GDBM_WRCREAT, &db), NULL);
+
 
 		/* Check if modified. */
 		change=0;
@@ -786,7 +832,7 @@ int prp__l_work(struct estat *root, int argc, char *argv[])
 				 * This should not be printed. */
 				STOPIF( hlp__safe_print(output, key.dptr, key.dsize-1), NULL);
 
-				if (opt_verbose>0)
+				if (opt__is_verbose() > 0)
 				{
 					STOPIF_CODE_EPIPE( fputc('=',output), NULL);
 					STOPIF( hlp__safe_print(output, data.dptr, data.dsize-1), NULL);
@@ -819,3 +865,23 @@ ex:
 }
 
 
+/** -. */
+int prp__unlink_db_for_estat(struct estat *sts)
+{
+	int status;
+	char *cp, *eos, *path;
+
+	STOPIF( ops__build_path(&path, sts), NULL);
+
+	STOPIF( waa__get_waa_directory(path, &cp, &eos, NULL,
+				waa__get_gwd_flag(WAA__PROP_EXT)), NULL);
+	strcpy(eos, WAA__PROP_EXT);
+
+	status= unlink(cp) == -1 ? errno : 0;
+	if (status == ENOENT)
+		status=0;
+	else STOPIF(status, "deleting properties of %s (%s)", path, cp);
+
+ex:
+	return status;
+}

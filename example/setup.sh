@@ -41,6 +41,8 @@ else
 # Create local filelist, to make "fsvs ps" work.
 	fsvs checkout file://$location/trunk/etc 
 
+	conf_path=`fsvs info . | grep Conf-Path | cut -f2 -d:`
+
   fsvs ignore '/etc/**.dpkg-old' '/etc/**.dpkg-new' '/etc/**.dpkg-dist' '/etc/**.dpkg-bak'
   fsvs ignore '/etc/**.bak' '/etc/**.old' '/etc/**~' '/**.swp'
 # easy to remake, no big deal (?)
@@ -65,8 +67,8 @@ else
 #  fsvs ignore './shadow' './gshadow'
   fsvs ps fsvs:commit-pipe /var/lib/fsvs-versioning/scripts/shadow-clean.pl shadow gshadow 
 
-# Ignore entries that are not world-readable.
-	fsvs ignore 'm:4:0'
+# Match entries that are not world-readable.
+	fsvs group 'group:unreadable,m:4:0'
 
 # Lock-files are not needed, are they?
   fsvs ignore './**.lock' './**.LOCK'

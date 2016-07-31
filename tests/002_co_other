@@ -11,3 +11,5 @@ $BINq up
 cd $WC2
 
 $WC2_UP_ST_COMPARE
+
+$BINq sync

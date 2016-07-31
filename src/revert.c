@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2008 Philipp Marek.
+ * Copyright (C) 2006-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include <subversion-1/svn_delta.h>
 #include <subversion-1/svn_ra.h>
@@ -43,24 +44,25 @@
  * 
  * This command undoes local modifications:
  * - An entry that is marked to be unversioned gets this flag removed.
- * - For a already versioned entry (existing in the repository), the local 
+ * - For a already versioned entry (existing in the repository) the local 
  *   entry is replaced with its repository version, and its status and 
  *   flags are cleared.
- * - An entry that is a copy destination, but modified, gets reverted to 
- *   the copy source data.
- * - An unmodified direct copy destination entry, and other uncommitted 
- *   entries with special flags (manually added, or defined as copied), are 
- *   changed back to <i>"N"</i>ew -- the copy definition and the special 
- *   status is removed. \n
- *   Please note that on implicitly copied entries (entries that are marked 
- *   as copied because some parent directory is the base of a copy) \b 
- *   cannot be un-copied; they can only be reverted to their original 
- *   (copied-from) data, or removed.
+ * - An entry that is a \b modified copy destination gets reverted to the 
+ *   copy source data.
+ * - Manually added entries are changed back to <i>"N"</i>ew.\b
+ *
+ * Please note that implicitly copied entries, ie. entries that are marked 
+ * as copied because some parent directory is the base of a copy, <b>can 
+ * not</b> be un-copied; they can only be reverted to their original 
+ * (copied-from) data, or removed.
+ *
+ * If you want to undo a \c copy operation, please see the \ref uncopy 
+ * "uncopy" command.
  *
  * See also \ref howto_entry_statii.
  * 
- * If a directory is given on the command line <b>all known entries in this 
- * directory</b> are reverted to the old state; this behaviour can be 
+ * If a directory is given on the command line <b>all versioned entries in 
+ * this directory</b> are reverted to the old state; this behaviour can be 
  * modified with \ref glob_opt_rec "-R/-N", or see below.
  *
  * The reverted entries are printed, along with the status they had \b 
@@ -69,45 +71,52 @@
  *
  * If a revision is given, the entries' data is taken from this revision; 
  * furthermore, the \b new status of that entry is shown.
- * \note Please note that mixed revision working copies are not possible; 
- * the \e BASE revision is not changed, and a simple \c revert without a 
- * revision arguments gives you that.
+ *
+ * \note Please note that mixed revision working copies are not (yet) 
+ * possible; the \e BASE revision is not changed, and a simple \c revert 
+ * without a revision arguments gives you that. \n
+ * By giving a revision parameter you can just choose to get the text from 
+ * a different revision.
  *
  *
  * \subsection rev_cmp_up Difference to update
- * If you find that something doesn't work as it should, you can revert 
- * entries until you are satisfied, and directly \ref commit "commit" the 
- * new state. 
+ * If something doesn't work as it should in the installation you can 
+ * revert entries until you are satisfied, and directly \ref commit 
+ * "commit" the new state. 
  * 
  * In contrast, if you \ref update "update" to an older version, you 
- * - cannot choose single entries (no mixed revision working copies),
- * - and you cannot commit the old version with changes, as later changes 
- *   will create conflicts in the repository.
+ * - cannot choose single entries (no mixed revision working copies yet),
+ * - and you cannot commit the old version with changes, as the "skipped" 
+ *   (later) changes will create conflicts in the repository.
  *
  *
  * \subsection rev_del Currently only known entries are handled.
+ * 
  * If you need a switch (like \c --delete in \c rsync(1) ) to remove 
  * unknown (new, not yet versioned) entries, to get the directory in  the 
- * exact state it is in the repository, say so.  
+ * exact state it is in the repository, please tell the <tt>dev\@</tt> 
+ * mailing list.  
  *
  * \todo Another limitation is that just-deleted just-committed entries 
  * cannot be fetched via \c revert, as FSVS no longer knows about them. \n
  * TODO: If a revision is given, take a look there, and ignore the local 
- * data?
+ * data? \n
+ * As a workaround you could use the \ref cat "cat" and/or \ref checkout 
+ * "checkout" commands to fetch repository-only data.
  *
  *
- * \subsection rev_p If a path is specified whose parent is missing, \c 
- * fsvs complains.
+ * \subsection rev_p Removed directory structures
+ *
+ * If a path is specified whose parent is missing, \c fsvs complains. \n
  * We plan to provide a switch (probably \c -p), which would create (a 
  * sparse) tree up to this entry.
  *
  *
  * \subsection rev_rec Recursive behaviour
  * When the user specifies a non-directory entry (file, device, symlink), 
- * this entry is reverted to the old state.  This is the easy case.
+ * this entry is reverted to the old state.
  *
- * If the user specifies a directory entry, see this table for the 
- * restoration results:
+ * If the user specifies a directory entry, these definitions should apply:
  * <table>
  * <tr><th>command line switch<th>result
  * <tr><td>\c -N <td>  this directory only (meta-data),
@@ -115,10 +124,11 @@
  * <tr><td>\c -R <td>  this directory, and the complete tree below.
  * </table>
  *
+ *
  * \subsection rev_copied Working with copied entries
  * If an entry is marked as copied from another entry (and not committed!), 
  * a \c revert will fetch the original copyfrom source. To undo the copy 
- * setting use the \ref uncp command.
+ * setting use the \ref uncopy "uncopy" command.
  *
  * */
 
@@ -163,7 +173,12 @@ static svn_revnum_t last_rev;
  *
  * The user-specified properties can be returned in \a props.
  *
- * */
+ * As this just returns the data in a stream, the files' type mostly 
+ * doesn't matter; it just may not be a directory, because we'd get an 
+ * error from subversion.
+ *
+ * \a loc_url must be given in the current locale; it will be converted to 
+ * UTF8 before being sent to the subversion libraries. */
 int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 		const char *decoder,
 		svn_stream_t *output,
@@ -209,6 +224,7 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	}
 
 	STOPIF( hlp__local2utf8(loc_url, &utf8_url, -1), NULL);
+	DEBUGP("Got utf8=%s", utf8_url);
 
 
 	/* Symlinks have a MD5, too ... so just do that here. */
@@ -259,7 +275,7 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	{
 		STOPIF_SVNERR_TEXT( svn_ra_get_file,
 				(current_url->session,
-				 loc_url, revision,
+				 utf8_url, revision,
 				 NULL,
 				 &revision, &properties,
 				 pool),
@@ -289,7 +305,7 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 
 	STOPIF_SVNERR_TEXT( svn_ra_get_file,
 			(current_url->session,
-			 loc_url, revision,
+			 utf8_url, revision,
 			 output,
 			 &revision, &properties,
 			 pool),
@@ -306,7 +322,7 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	{
 		output_sts->repos_rev = revision;
 		STOPIF( prp__set_from_aprhash( output_sts, properties, 
-					ONLY_KEEP_USERDEF, pool), NULL);
+					ONLY_KEEP_USERDEF, NULL, pool), NULL);
 	}
 
 	if (props)
@@ -322,6 +338,9 @@ ex:
  * Mostly the same as \c rev__get_text_to_stream(), but returning a 
  * (temporary) \a filename based on \a filename_base, if this is not \c 
  * NULL.
+ *
+ * The entries' file type isn't taken into account; the file may have the 
+ * data <tt>"symlink XXX"</tt>, etc.
  *
  * If \a filename_base is \c NULL, the file will be put in a real temporary 
  * location.
@@ -358,7 +377,7 @@ ex:
 
 /** -.
  *
- * Does no validation of input - might fill entire memory.  */
+ * Does no validation of input - might fill entire memory. */
 int rev__get_text_into_buffer(char *loc_url, svn_revnum_t revision,
 		const char *decoder,
 		svn_stringbuf_t **output,
@@ -459,7 +478,7 @@ int rev__install_file(struct estat *sts, svn_revnum_t revision,
 
 	if (sts->url)
 	{
-		STOPIF( hlp__local2utf8( filename+2, &url, -1), NULL);
+		url=filename+2;
 		rev_to_take=sts->repos_rev;
 		current_url=sts->url;
 	}
@@ -467,7 +486,6 @@ int rev__install_file(struct estat *sts, svn_revnum_t revision,
 	{
 		STOPIF( cm__get_source( sts, filename, &url, &rev_to_take, 0), NULL);
 		STOPIF( url__find( url, &current_url), NULL);
-		STOPIF( hlp__local2utf8( url, &url, -1), NULL);
 	}
 	else
 		BUG("cannot get file %s", filename);
@@ -486,7 +504,7 @@ int rev__install_file(struct estat *sts, svn_revnum_t revision,
 	}
 
 
-	STOPIF( url__open_session(NULL), NULL);
+	STOPIF( url__open_session(NULL, NULL), NULL);
 
 	/* We don't give an estat for meta-data parsing, because we have to loop 
 	 * through the property list anyway - for storing locally. */
@@ -503,9 +521,19 @@ int rev__install_file(struct estat *sts, svn_revnum_t revision,
 		STOPIF( up__handle_special(sts, filename_tmp, 
 					special_data, subpool), NULL);
 	}
+	else
+	{
+		/* If it's not special, it must be an ordinary file. */
+		/* This is a kind of default value, the mode is set to the repository 
+		 * value in up__set_meta_data(). */
+		sts->st.mode = (sts->st.mode & ~S_IFMT) | S_IFREG;
+		sts->local_mode_packed=sts->new_rev_mode_packed=
+			MODE_T_to_PACKED(sts->st.mode);
+	}
 
 
-	STOPIF( prp__set_from_aprhash(sts, props, STORE_IN_FS, subpool), NULL);
+	STOPIF( prp__set_from_aprhash(sts, props, STORE_IN_FS, 
+				NULL, subpool), NULL);
 
 
 	/* We write all meta-data. If we got no values from the repository, we just
@@ -681,7 +709,7 @@ int rev__get_props(struct estat *sts,
 			 NULL,
 			 &props,
 			 pool) );
-	STOPIF( prp__set_from_aprhash(sts, props, STORE_IN_FS, pool), NULL);
+	STOPIF( prp__set_from_aprhash(sts, props, STORE_IN_FS, NULL, pool), NULL);
 
 ex:
 	return status;
@@ -798,7 +826,7 @@ int rev___revert_to_base(struct estat *sts,
 		 * Has to be given directly on the command line, but could have happened 
 		 * via a wildcard - so don't stop working.
 		 * Can't do anything about it. */
-		printf("Cannot revert unknown entry %s.", path);
+		printf("Cannot revert unknown entry \"%s\".\n", path);
 		status=0;
 		goto ex;
 	}
@@ -830,7 +858,8 @@ int rev___revert_to_base(struct estat *sts,
 
 		if (sts->parent && (!number_reverted || last_rev != wanted))
 		{
-			printf("Reverting to revision %s:\n", hlp__rev_to_string(wanted));
+			if (opt__verbosity() > VERBOSITY_VERYQUIET)
+				printf("Reverting to revision %s:\n", hlp__rev_to_string(wanted));
 			last_rev=wanted;
 		}
 		number_reverted++;
@@ -838,6 +867,11 @@ int rev___revert_to_base(struct estat *sts,
 
 		/* see below */
 		copy=*sts;
+
+		DEBUGP("l_st=%s, r_st=%s, old=%p", 
+				st__status_string_fromint(sts->entry_status), 
+				st__status_string_fromint(sts->remote_status), 
+				sts->old);
 
 		/* Parent directories might just have been created. */
 		if (!S_ISDIR(sts->st.mode))
@@ -857,9 +891,18 @@ int rev___revert_to_base(struct estat *sts,
 		}
 		else
 		{
+#if 0
+			if (sts->entry_status & FS_NEW)
+				conflict();
+#endif
 			if (sts->entry_status & FS_REMOVED)
 			{
+//				sts->st.mode ist 040755 (file); old ist NULL.
 				status = (mkdir(path, sts->st.mode & 07777) == -1) ? errno : 0;
+				if (status == EEXIST)
+				{
+				DEBUGP("old=%p", sts->old);
+				}
 				DEBUGP("mkdir(%s) says %d", path, status);
 				STOPIF(status, "Cannot create directory '%s'", path);
 				*dir_change_flag |= REVERT_MTIME;
@@ -975,30 +1018,6 @@ ex:
 }
 
 
-/** Copy local changeflags estat::entry_status to estat::remote_status.
- *
- * This makes rev__do_changed() undo the local changes.
- *
- * Directories above need the FS_CHILD_CHANGED flag; if we'd change the 
- * filter to run through all entries we'd do too many (ignoring the list 
- * given on the command line).
- * At least we'd be in the right order - because every sub-entry gets done 
- * before the parents. */
-int rev___copy_changeflags(struct estat *sts)
-{
-	int status;
-
-	sts->remote_status=sts->entry_status;
-	sts->entry_status=0;
-	ops__mark_parent_cc(sts, remote_status);
-
-	STOPIF( st__progress(sts), NULL);
-
-ex:
-	return status;
-}
-
-
 /** -.
  * Loads the stored tree (without updating), looks for the wanted entries,
  * and restores them from the repository. */
@@ -1042,9 +1061,8 @@ int rev__work(struct estat *root, int argc, char *argv[])
 	 * was never committed, so we don't know what HEAD is. */
 	/* Maybe the user could still try with some revision number and we simply
 	 * check for the existence of the given path there? */
-	only_check_status=1;
 	status=waa__read_or_build_tree(root, argc, normalized, argv, NULL, 1);
-	if (status == ENOENT)
+	if (status == -ENOENT)
 		STOPIF(status,
 				"!We know nothing about previous or current versions, as this tree\n"
 				"was never checked in.\n"
@@ -1055,6 +1073,7 @@ int rev__work(struct estat *root, int argc, char *argv[])
 		STOPIF(status, NULL);
 
 	STOPIF( st__progress_uninit(), NULL);
+
 
 	if (opt_target_revisions_given)
 	{
@@ -1079,7 +1098,6 @@ int rev__work(struct estat *root, int argc, char *argv[])
 		STOPIF( rev___local_revert(root, global_pool), NULL);
 	}
 
-	only_check_status=0;
 	
 	/* If this was a revert with destination revision, we might have changed 
 	 * the entire hierarchy - replaced directories with files, etc.
@@ -1106,7 +1124,10 @@ ex:
 }
 
 
-/** Convenience function to reduce indenting. */
+/** Takes the \c sts->remote_status, and does the changes mentioned there.
+ * Depending on \c sts->entry_status a conflict might be set.
+ *
+ * Convenience function to reduce indenting.  */
 int rev___undo_change(struct estat *sts, 
 		enum rev___dir_change_flag_e *dir_change_flag,
 		apr_pool_t *pool)
@@ -1123,10 +1144,7 @@ int rev___undo_change(struct estat *sts,
 
 
 	STOPIF( ops__build_path( &fn, sts), NULL);
-	DEBUGP("%s has changed: mode=0%o, r=%X(%s), l=%X(%s)", 
-			fn, sts->st.mode, 
-			sts->remote_status, st__status_string_fromint(sts->remote_status),
-			sts->entry_status, st__status_string(sts));
+	DEBUGP_dump_estat(sts);
 
 	/* If we remove an entry, the entry_count gets decremented; 
 	 * we have to repeat the loop *for the same index*. */
@@ -1171,13 +1189,11 @@ int rev___undo_change(struct estat *sts,
 	/* An entry can be given as removed, and in the same step be created
 	 * again - possibly as another type. */
 
-	/* If the entry wasn't replaced, but only removed, there's no 
-	 * sts->old. */
+	/* If the entry wasn't replaced, but only removed, there's no sts->old. 
+	 * */
 	removed=sts->old ? sts->old : sts;
 	if (removed->remote_status & FS_REMOVED)
 	{
-		DEBUGP("old entry removed");
-
 		/* Is the entry already removed? */
 		/* If there's a typechange involved, the old entry has been 
 		 * renamed, and so doesn't exist in the filesystem anymore. */
@@ -1185,7 +1201,7 @@ int rev___undo_change(struct estat *sts,
 				!unique_name_mine)
 		{
 			/* Find type. Small race condition - it might be removed now. */
-			if (S_ISDIR(removed->st.mode))
+			if (TEST_PACKED(S_ISDIR, removed->old_rev_mode_packed))
 			{
 				STOPIF( up__rmdir(removed, sts->url), NULL);
 			}
@@ -1195,6 +1211,16 @@ int rev___undo_change(struct estat *sts,
 
 		*dir_change_flag|=REVERT_MTIME;
 	}
+
+
+	/* Is there some kind of garbage that has to be removed? */
+	if (TEST_PACKED(S_ISGARBAGE, sts->local_mode_packed))
+	{
+		DEBUGP("cleaning garbage");
+		STOPIF_CODE_ERR( unlink(fn) == -1, errno,
+				"Cannot remove garbage entry %s", fn);
+	}
+
 
 
 	/* If we change something in this directory, we have to re-sort the 

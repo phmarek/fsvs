@@ -8,8 +8,8 @@ cd $WC
 
 function CheckSyntax
 {
-# verify that the byte numbers are ascending, continually (?), and
-# that the MD5s are correct
+# verify that the byte numbers are ascending, hole-free, and that the MD5s 
+# are correct
   perl -e '
 	  use Digest::MD5 qw(md5_hex);
 
@@ -47,14 +47,17 @@ fi
 sparse_md5s=`$PATH2SPOOL $sparse md5s`
 test -f $sparse_md5s && rm $sparse_md5s
 
-# There was a performance problem with bytes of many zero bytes (but not 
+# There was a performance problem with files of many zero bytes (but not 
 # starting with them) ... every zero byte got its own manber-block or some 
 # such.
 ( echo Test1 ; dd if=/dev/zero bs=1024k count=1 ; echo Test2 ) > many_0
 # TODO: do sparse files on update, and test for it.
 
+# make sure that VM usage stays sane.
+ulimit -v 200000
+
 seq 1 199999 > $filename
-dd if=/dev/null of=$sparse bs=1024 count=1 seek=4096 2> /dev/null
+dd if=/dev/null of=$sparse bs=1024 count=1 seek=256k 2> /dev/null
 echo "     ci1"
 $BINq ci -m "big files"
 ci_md5=`$PATH2SPOOL $filename md5s`
@@ -83,7 +86,12 @@ fi
 
 # update other wc
 $WC2_UP_ST_COMPARE
-up_md5=`$PATH2SPOOL $WC2/$filename md5s`
+up_md5=`$PATH2SPOOL $WC2/$filename md5s "" $WC2`
+
+if [[ ! -f $up_md5 ]]
+then
+  $ERROR "PATH2SPOOL wrong - got $up_md5"
+fi
 
 if cmp $ci_md5 $up_md5
 then

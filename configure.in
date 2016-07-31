@@ -55,6 +55,29 @@ AC_ARG_WITH(svninc,
 			INCDIRS="$INCDIRS $withval"
 		])
 
+AC_ARG_WITH(waa_md5,
+		AC_HELP_STRING([--with-waa_md5=NUMBER],
+			[Specifies how many hex characters of the MD5 of the working copy root
+			 should be used to address the data in the WAA.
+			 This may be increased if you have a lot of different working 
+			 copies on a single machine.
+			 The default is 0; useful values are 0, and from 6 to 32.]),
+		[
+		 # The shell gives an error on numeric comparision with a non-numeric 
+		 # value.
+		 # We allow from 3 characters on, although it might not make much 
+		 # sense.
+		 WAA_WC_MD5_CHARS=`perl -e '$_=0+shift; print $_+0 if $_==0 || ($_>3 && $_<=16)' "$withval"`
+		 if [[ "$WAA_WC_MD5_CHARS" = "" ]]
+		 then
+			 AC_MSG_ERROR([[The given value for --with-waa_md5 is invalid.]])
+		 fi
+		], [ WAA_WC_MD5_CHARS=0 ])
+AC_DEFINE_UNQUOTED(WAA_WC_MD5_CHARS, $WAA_WC_MD5_CHARS,
+			 [Number of bytes for WAA addressing is $WAA_WC_MD5_CHARS.])
+AC_SUBST(WAA_WC_MD5_CHARS)
+
+
 CFLAGS="$CFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64"
 for dir in $INCDIRS
 do
@@ -93,6 +116,25 @@ AC_SUBST(LDFLAGS)
 
 AC_MSG_NOTICE(["LDFLAGS=$LDFLAGS"])
 
+
+EXTRALIBS=""
+if [[ `uname -s` = "SunOS" ]]
+then
+	# Solaris 10, thanks Peter.
+	EXTRALIBS="-lsocket -lnsl -laprutil-1 -lapr-1"
+fi
+if [[ `uname -s` = "Darwin" ]]
+then
+	# OSX 10.6 - thanks, Florian.
+	EXTRALIBS="-laprutil-1 -lapr-1 -liconv"
+	have_fmemopen=no
+fi
+
+
+AC_DEFINE_UNQUOTED(EXTRALIBS, [$EXTRALIBS])
+AC_SUBST(EXTRALIBS)
+
+
 ##################################### Checks
 # Checks for libraries.
 AC_CHECK_LIB([pcre], [pcre_compile],
@@ -128,6 +170,26 @@ if test x$have_valgrind = xyes ; then
 else
   AC_MSG_NOTICE([No compatible valgrind version.])
 fi
+
+
+# Check whether S_IFMT is dense, ie. a single block of binary ones.
+# If it isn't, the bitcount wouldn't tell the needed bits to represent the 
+# data.
+# If S_IFMT is dense, the increment results in a single carry bit.
+# Checked via changing /usr/include/bits/stat.h.
+AC_RUN_IFELSE([
+  #include "src/preproc.h"
+  int main(int argc, char *args[])
+  {
+	  if (_BITCOUNT( (S_IFMT >> MODE_T_SHIFT_BITS) + 1) == 1)
+	  return 0;
+  else
+	  return 1;
+  }
+  ],
+  [AC_MSG_NOTICE([No compatible valgrind version.])],
+  [AC_MSG_FAILURE([You have a sparse S_IFMT. Please tell the dev@ mailing list.])])
+
 
 AC_CHECK_HEADERS([linux/kdev_t.h])
 
@@ -168,6 +230,23 @@ if test x$have_o_directory = xyes ; then
 fi
 AC_SUBST(HAVE_O_DIRECTORY)
 
+if test x$have_fmemopen = x
+then
+	AC_LINK_IFELSE(
+		[AC_LANG_PROGRAM(
+			[[ #include <stdio.h> ]], 
+			[[ int main(int argc, char *args[])
+			{ return fmemopen(args[0], 2, args[1]) == NULL; }	  ]] )],
+			[have_fmemopen=yes], [have_fmemopen=no])
+fi
+if test x$have_fmemopen = xyes
+then
+	AC_DEFINE(HAVE_FMEMOPEN, 1, [fmemopen() found])
+else
+	AC_MSG_WARN([fmemopen() not found. debug_buffer option not available.])
+fi
+AC_SUBST(HAVE_FMEMOPEN)
+
 
 if locale -a > /dev/null 2>&1
 then
@@ -200,7 +279,7 @@ AC_ARG_ENABLE(release,
 	[])
 AC_SUBST(ENABLE_RELEASE)
 
-if [[ "$ENABLE_RELEASE$ENABLE_DEBUG" == "11" ]]
+if [[ "$ENABLE_RELEASE$ENABLE_DEBUG" = "11" ]]
 then
 	AC_MSG_ERROR([[--enable-debug and --enable-release are incompatibel.
 	Use one or the other.]])
@@ -224,7 +303,7 @@ AC_DEFINE([HAS_FASTCALL])
 AC_SUBST(HAS_FASTCALL)
 
 # Only i386 (32bit) has fastcall.
-if [[ `uname -m` == i?86 ]]
+if [[ `uname -m` = i?86 ]]
 then
 	HAS_FASTCALL=1
 fi
@@ -232,7 +311,7 @@ fi
 AC_TYPE_UINT32_T
 AC_SUBST(HAVE_UINT32_T)
 # See config.h for an explanation.
-if [[ "$ac_cv_c_uint32_t" == "yes" ]]
+if [[ "$ac_cv_c_uint32_t" = "yes" ]]
 then
 	ac_cv_c_uint32_t=uint32_t
 fi
@@ -240,7 +319,7 @@ AC_DEFINE_UNQUOTED(AC_CV_C_UINT32_T, [$ac_cv_c_uint32_t])
 
 AC_TYPE_UINT64_T
 AC_SUBST(HAVE_UINT64_T)
-if [[ "$ac_cv_c_uint64_t" == "yes" ]]
+if [[ "$ac_cv_c_uint64_t" = "yes" ]]
 then
 	ac_cv_c_uint64_t=uint64_t
 fi
@@ -256,8 +335,7 @@ AC_FUNC_MMAP
 AC_FUNC_REALLOC
 AC_TYPE_SIGNAL
 AC_FUNC_VPRINTF
-AC_CHECK_FUNCS([fchdir getcwd gettimeofday memmove memset mkdir munmap rmdir strchr strdup strerror strrchr strtoul strtoull alphasort dirfd])
-
+AC_CHECK_FUNCS([fchdir getcwd gettimeofday memmove memset mkdir munmap rmdir strchr strdup strerror strrchr strtoul strtoull alphasort dirfd lchown lutimes strsep])
 
 # AC_CACHE_SAVE
 
@@ -267,7 +345,7 @@ AC_OUTPUT
 # Cause a recompile
 touch src/config.h
 
-if [[ "$ac_cv_header_linux_kdev_t_h" == "no" ]]
+if [ [ "$ac_cv_header_linux_kdev_t_h" = "no" -a "x$ENABLE_DEV_FAKE" = "x" ] ]
 then
 	AC_MSG_WARN([
   * MAJOR(), MINOR() and MAKEDEV() definitions not found.

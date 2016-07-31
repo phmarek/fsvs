@@ -37,7 +37,7 @@ rev_new=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "`
 
 
 # Now create the merge conflict compare file.
-if diff3 -m -L ./$target.mine -L ./$target.r$rev_old -L ./$target.r$rev_new will_conflict common_ancestor repository > merged_conflict
+if diff3 -m -L $target.mine -L $target.r$rev_old -L $target.r$rev_new will_conflict common_ancestor repository > merged_conflict
 then
 	$ERROR "merge doesn't gives a conflict?"
 fi

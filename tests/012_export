@@ -12,7 +12,7 @@ then
   rm -r $EXPDIR
 fi
 
-dir_path=`$PATH2SPOOL $WC2 dir`
+dir_path=`$PATH2SPOOL $EXPDIR dir`
 if [[ -f $dir_path ]]
 then
   rm $dir_path
@@ -27,7 +27,7 @@ then
   $ERROR "$dir_path was made"
 fi
 
-$COMPAREWITH $EXPDIR
+$COMPAREWITH $WC
 
 cd ..
 rm -rf $EXPDIR
@@ -37,5 +37,6 @@ cd $EXPDIR
 $BINq export -r 3 $REPURL
 $BINq up -r 3 $WC
 
-$COMPAREWITH $EXPDIR
+$COMPAREWITH $WC
 
+$SUCCESS "export works."

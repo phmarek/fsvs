@@ -190,7 +190,6 @@ int res__work(struct estat *root, int argc, char *argv[])
 	status=0;
 	/* Don't recurse. */
 	opt_recursive=-1;
-	only_check_status=1;
 
 	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
 	if (argc == 0) ac__Usage_this();

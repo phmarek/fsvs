@@ -1,0 +1,105 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+# Make some bases
+BASES="1 2 3"
+mkdir $BASES
+$BINq ci -m "base dirs"
+URLS=""
+for b in $BASES
+do
+	(
+		cd $b 
+		mkdir -p dir-$b/sub/subsub
+		echo $RANDOM > dir-$b/sub/a_file
+		( echo :$b: ; seq 1 $b ) > file
+		echo $RANDOM > file-$b
+	)
+
+	# Make some revisions
+	for r in `seq 0 $b`
+	do
+		$BINq ci -m "base $b"
+	done
+
+	URLS="$URLS\\n prio:$b,name:u$b,$REPURL/$b"
+done
+
+cd $WC2
+echo -e "$URLS" | $BINq urls load
+
+rm -rf $WC
+mkdir -p $WC
+
+cd $WC
+echo -e "$URLS" | $BINq urls load
+
+$BINq sync
+$BINq revert -R -R .
+$WC2_UP_ST_COMPARE
+
+if grep :1: file
+then
+	$SUCCESS "Correct URL priorities"
+else
+	cat file
+	$ERROR "URL 1 should be topmost"
+fi
+
+# Now "remove" the URLs, one by one.
+for b in $BASES
+do
+	$INFO "removing u$b"
+	# This is a stronger test than doing an update "-u...@0", because the 
+	# to-be-removed state must be remembered.
+	# The other kind is tested below.
+	$BINdflt urls N:u$b,target:0
+	$BINdflt up
+
+	if $BINdflt urls dump | grep name:u$b
+	then
+		$BINdflt urls dump
+		$ERROR "URL u$b not automatically removed"
+	else
+		$SUCCESS "URL u$b automatically removed"
+	fi
+
+	if [[ -e dir-$b || -e file-$b ]]
+	then
+		$ERROR "WC data not cleaned up?"
+	fi
+
+	# This returns an error, because the common file gets removed after the 
+	# first update to rev 0. Will be fixed with mixed-WC operation.
+	if grep :$b: file
+	then
+		cat file
+		$ERROR "file has wrong data"
+	fi
+
+	if [[ -e file ]]
+	then
+		$INFO "file still exists."
+	fi
+
+
+	$SUCCESS "URL u$b cleaned up."
+done
+
+echo -e "$URLS" | $BINq urls load
+$BINq up
+if [[ ! -e dir-2 ]]
+then
+	$ERROR "Not correctly updated"
+fi
+$BINq up -u u2@0
+if [[ -e dir-2 ]]
+then
+	$ERROR "Not correctly removed on update"
+fi
+

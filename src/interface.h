@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -43,16 +43,19 @@
 #define DEFAULT_WAA_PATH "/var/spool/fsvs"
 /** The default CONF path. */
 #define DEFAULT_CONF_PATH "/etc/fsvs"
-/** The default config directory (for authentication data),
+/** The default subversion config directory (eg for authentication data),
  * relative to $FSVS_CONF. */
-#define DEFAULT_CONFIGDIR_SUB "/auth"
+#define DEFAULT_CONFIGDIR_SUB "/svn"
+/** The directory below $CONF/$WC and $CONF for the grouping definitions.  
+ * */
+#define CONFIGDIR_GROUP "groups"
 
 /** \name List of environment variables used for a chroot jail.
  * Note that these are not \c \#ifdef - marked, as we'd like to use 
  * off-the-shelf binaries from newer distributions without modifications!  
  * */
 /** @{ */
-/** The file descriptor number where \c fsvs can find the "original", 
+/** The file descriptor number where FSVS can find the "original", 
  * "normal" root directory. */
 #define CHROOTER_ROOT_ENV "FSVS_CHROOT_ROOT"
 /** Which libraries should be preloaded? Space-separated list. */
@@ -131,8 +134,21 @@
 /** @} */
 
 
-/** @} */
+#ifdef HAVE_LCHOWN
+#define CHOWN_FUNC lchown
+#define CHOWN_BOOL 1
+#else
+#define CHOWN_FUNC chown
+#define CHOWN_BOOL 0
+#endif
 
+#ifdef HAVE_LUTIMES
+#define UTIMES_FUNC lutimes
+#define UTIMES_BOOL 1
+#else
+#define UTIMES_FUNC utimes
+#define UTIMES_BOOL 0
+#endif
 
 #endif
 

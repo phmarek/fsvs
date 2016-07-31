@@ -31,7 +31,7 @@ function Check
 	# doesn't work if it gets expanded from a variable into a pattern.
 	# So we have to use the conditional.
 	# There must be exactly one line.
-	if perl -e '$tag=shift; $pat=shift; $pat=quotemeta($1) if $pat =~ /^=(.*)/; @fnd=grep(m#^\t$tag:\s+$pat#, <STDIN>); exit 0+(@fnd != 1);' "$tag" "$data" < $logfile
+	if perl -e '$tag=shift; $pat=shift; $pat=quotemeta($1) if $pat =~ /^=(.*)/; @fnd=grep(m#^\s+$tag:\s+$pat#, <STDIN>); exit 0+(@fnd != 1);' "$tag" "$data" < $logfile
 	then
 	  # Used to be $SUCCESS, but that's a lot of green
 #    echo "found $tag: $data"
@@ -89,9 +89,9 @@ copyfile=$copydir/$copydirs/$copyfn
 mkdir -p $copydir/$copydirs
 touch $copyfile
 $BINdflt cp $filename $copyfile
-$BINdflt info -v $copyfile > $logfile
+$BINdflt info -o verbose=copyfrom $copyfile > $logfile
 Check "Copyfrom" "=rev. $rev of $REPURL/$filename"
-$SUCCESS "info prints the expected data for copied files."
+$SUCCESS "info prints the expected data for copied files 1."
 
 
 $BINq ci -m 1 > $logfile
@@ -99,9 +99,9 @@ rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "`
 dir2=qwerhg
 cp -a $copydir $dir2
 $BINdflt cp $copydir $dir2
-$BINdflt info -v $dir2/$copydirs/$copyfn > $logfile
+$BINdflt info -o verbose=copyfrom $dir2/$copydirs/$copyfn > $logfile
 Check "Copyfrom" "=rev. $rev of $REPURL/$copydir/$copydirs/$copyfn"
-$SUCCESS "info prints the expected data for copied files."
+$SUCCESS "info prints the expected data for copied files 2."
 
 
 # set ts=2 sw=2

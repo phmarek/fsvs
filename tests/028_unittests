@@ -29,6 +29,6 @@ do
 	$INFO "Reduced to $p"
 done # > $log 2>&1
 
-$SUCCESS "Unit tests successfull."
+$SUCCESS "Unit tests successful."
 
 # vi: textwidth=0 formatoptions=

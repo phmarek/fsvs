@@ -1,0 +1,63 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+# Test whether non-chosen directories don't get their meta-data changed, 
+# unless they're new (and need some meta-data in the repository).
+
+# The format as it should be in the repository.
+DATE=2008-07-06T05:04:03.000000Z
+# touch or date don't understand the ISO format.
+touchDATE="2008-07-06 05:04:03UTC"
+
+
+# Test 1: new directory
+mkdir -p a/new/dir
+date > a/new/dir/with_a_file
+touch -d "$touchDATE" a a/new a/new/dir
+echo "Set $DATE"
+
+$BINq ci -m1 a/new/dir/with_a_file
+
+# Check a timestamp
+ts=`svn pg -r HEAD svn:text-time "$REPURL/a/new"`
+echo "Got $ts"
+if [[ "$ts" == "$DATE" ]]
+then
+	$SUCCESS "Correct timestamp for new directories."
+else
+	$ERROR_NB "Wrong timestamp for new directories:"
+	$ERROR "Got '$ts', expected '$DATE'."
+fi
+
+# Now the meta-data should be in the repository, so that WC2 gets 
+# identical.
+$WC2_UP_ST_COMPARE
+
+
+
+# Test 2: existing directory
+# We change the mtime (so that it would be committed), but look whether 
+# it's correct afterwards.
+date >> a/new/dir/with_a_file
+echo now > a/new/dir/with_another_file
+touch a a/new a/new/dir
+$BINq ci -m1 a/new/dir/with_*
+
+# The directories shouldn't be changed, so we can't compare the WCs.
+# We check the timestamps instead.
+for entry in a a/new a/new/dir
+do
+	ts=`svn pg -r HEAD svn:text-time "$REPURL/$entry"`
+	echo "Got $ts ($entry)"
+	if [[ "$ts" != "$DATE" ]]
+	then
+		$ERROR_NB "Wrong timestamp for existing directory $entry:"
+		$ERROR "Got '$ts', expected '$DATE'."
+	fi
+done
+
+$SUCCESS "Existing directories unchanged."

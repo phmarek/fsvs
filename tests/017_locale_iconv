@@ -15,17 +15,20 @@ function testfunc
 	touch file-$filename
 	ln -s file-$filename link-$filename
 	ln -s bad-$filename badlink-$filename
-	$BINdflt ci -m "locale ci $filename"
-	$WC2_UP_ST_COMPARE
+	# These must be the bytes c3 b6, which is an &ouml;
+	mkdir -p dir-$filename/dir-ö/f-$filename
+	echo $filename | od -Ax -tc -tx1 > $log
+	$BINdflt ci -m "locale ci $filename" >> $log
+	$WC2_UP_ST_COMPARE > /dev/null
 
 # "svn ls" gives characters > \x80 as eg. "?\228".
 # With --xml we get the raw string, but *always* in UTF-8 ... so try both ways.
-	svn ls --xml $REPURL/ > $log.1
-	svn ls $REPURL/ > $log.2
-	if [[ `grep -F "$filename" < $log.1 | wc -l` -eq 3 ||
-	      `grep -F "$filename" < $log.2 | wc -l` -eq 3 ]]
+	svn ls -R --xml $REPURL/ > $log.1
+	svn ls -R $REPURL/ > $log.2
+	if [[ `grep -F "$filename" < $log.1 | wc -l` -eq 6 ||
+	      `grep -F "$filename" < $log.2 | wc -l` -eq 6 ]]
 	then
-		echo "Ok, found all 3 entries."
+		echo "Ok, found all entries."
 	else
 		$ERROR_NB "Expected filename:"
 	  echo $filename | od -Ax -tx1 -tc
@@ -33,10 +36,27 @@ function testfunc
 	fi
 
 # TODO: test whether the entries are correct in the other locale.
+	if [[ "$other" != "" ]]
+	then
+		# Remove all entries
+		$BINq up -r1 $WC2 > /dev/null
+		# Checkout
+		LC_ALL=$other $BINq up $WC2  > /dev/null
+		if $BINdflt st $WC2 | grep .
+		then
+			$ERROR "Didn't expect any output after update"
+		fi
+		LC_ALL=$other $BINq sync $WC2 > /dev/null
+		if $BINdflt st $WC2 | grep .
+		then
+			$ERROR "Didn't expect any output after sync"
+		fi
+	fi
 
-	rm *
-	$BINq ci -m "locale ci $filename cleanup"
-	$WC2_UP_ST_COMPARE
+	echo "Cleaning up"
+	rm -rf *
+	$BINdflt ci -m "locale ci $filename cleanup" > $log
+	LC_ALL=$other $WC2_UP_ST_COMPARE > $log
 }
 
 
@@ -76,11 +96,13 @@ if [[ "$utf8_locale" != "" ]]
 then
 	$INFO "testing utf8 locale $utf8_locale"
 	export LC_ALL=$utf8_locale
-	# The bytes here must be \xc2\xa9; in utf8 that's 3 horizontal lines.
+	export other=$loc_locale
+	# The bytes here must be c3 a4; in utf8 that's an &auml;
 	# Use a hex editor.
-	testfunc ©
+	testfunc ä
 	testfunc $STG_UTF8
-	testfunc $STG_LOC
+	# This sequence of bytes in $STG_LOC is in latin1 or something similar, which 
+	# is not a valid UTF-8 sequence, so we can't use that.
 	$SUCCESS "utf8 locale"
 fi
 
@@ -89,9 +111,12 @@ if [[ "$loc_locale" != "" ]]
 then
 	$INFO "testing non-utf8 locale $loc_locale"
 	export LC_ALL=$loc_locale
+	export other=$utf8_locale
 	# The bytes here must be \xc2\x61, that is an invalid UTF8-sequence.
 	# Use a hex editor.
 	testfunc �a
+	# In non-UTF8 locales all byte sequences are valid - they have no 
+	# interdependencies.
 	testfunc $STG_UTF8
 	testfunc $STG_LOC
 	$SUCCESS "non-utf8 locale"

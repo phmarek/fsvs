@@ -5,11 +5,14 @@ $PREPARE_CLEAN > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
+logfile=$LOGDIR/024.urls
+
+
 # clean up
 echo "" | $BINq urls load
 
 prio=15
-for p in http https svn svn+ssh file
+for p in http https svn svn+ssh file svn+some_other_tunnel svn+1
 do
 	$BINq urls N:$p,prio:$prio,T:$prio,$p://$p/some/path
 	# Do pseudo-random
@@ -23,6 +26,14 @@ then
 else
   $SUCCESS "Invalid protocols are rejected"
 fi
+
+if $BINq urls svn+:///void 2> /dev/null
+then
+  $ERROR "'svn+' is wrong, but got accepted"
+else
+  $SUCCESS "'svn+' rejected"
+fi
+
 
 
 # Having a invalid sequence
@@ -95,4 +106,108 @@ else
 	$SUCCESS "Duplicate names rejected"
 fi
 
+
+# Test error for non-WC directories
+mkdir Xt
+cd Xt
+if $BINdflt urls dump > $logfile 2>&1
+then
+	cat $logfile
+	$ERROR "No error for non-WC-directories"
+else
+	if grep $(pwd) $logfile
+	then
+		$SUCCESS "Error message with path printed"
+	else
+		cat $logfile
+		$ERROR "No or wrong error message"
+	fi
+fi
+
+
+# Test keeping the internal numbers
+U1=name:1,file:///r/1
+U2=name:2,file:///r/2
+U3=name:3,file:///r/3
+echo -e "$U1\n$U2\n$U3\n" | $BINdflt urls load
+$BINdflt urls dump "%u %I\\n" | sort > f-1
+echo -e "$U2\n$U3\n$U1\n" | $BINdflt urls load
+$BINdflt urls dump "%u %I\\n" | sort > f-2
+echo -e "$U3\n$U2\n$U1\n" | $BINdflt urls load
+$BINdflt urls dump "%u %I\\n" | sort > f-3
+md5sum f-?
+if [[ `md5sum f-? | cut -f1 -d" " | sort -u | wc -l` -eq	1 ]]
+then
+	$SUCCESS "Internal URL numbers are kept."
+else
+	$ERROR "Internal URL numbers lost."
+fi
+
+for a in s sv svn svn: svn:/ svn://
+do
+	if $BINq urls $a
+	then
+		$ERROR "invalid URL $a accepted"
+	fi
+done
+$SUCCESS "Cut-off URLs not taken."
+if $BINq urls svn://x/t
+then
+	$SUCCESS "Valid URL taken."
+else
+	$ERROR "Valid URL not taken."
+fi
+
+
+# Test changes.
+function CU
+{
+	dump="$1"
+	exp="$2"
+	decl="$3"
+	if [[ `$BINdflt urls dump "$dump"` == $exp ]]
+	then
+		$SUCCESS "$decl"
+	else
+		$ERROR_NB "expected '$exp', got:"
+		$BINdflt urls dump "$dump"
+		echo
+		$ERROR "$decl"
+	fi
+}
+
+( echo name:n1,prio:8,target:3,http://localhost/nothing ;
+	echo prio:4,name:n2,file:///hopeless ) | $BINq urls load
+
+CU "%n-%p-%t:" 'n2-4-HEAD:n1-8-3:' "Loading with reversed priority"
+
+$BINdflt urls N:n1,prio:3
+CU "%n-%p:" 'n1-3:n2-4:' "Reversing priority"
+
+$BINdflt urls N:n3,http://localhost/nothing
+CU "%n-%p:" 'n3-3:n2-4:' "Changing name"
+
+$BINdflt urls target:87,http://localhost/nothing
+CU "%n-%t:" 'n3-87:n2-HEAD:' "Changing the target revision"
+
+
+cd $WC1
+echo "$REPURL" | $BINq urls load
+$BINq ci -m1
+$WC2_UP_ST_COMPARE
+
+# Check that nothing below FSVS_CONF gets changed for update/commit - not 
+# even the timestamps.
+mkdir -p aaa b/c/d b/k
+date | tee aaa/2 5g3 b/gg b/c/d/5 > $RANDOM
+find $FSVS_CONF -ls | sort > $logfile
+$BINq ci -m2
+$WC2_UP_ST_COMPARE
+find $FSVS_CONF -ls | sort > $logfile.2
+if diff -u $logfile $logfile.2
+then
+	$SUCCESS "FSVS_CONF not changed on commit/update."
+else
+	$ERROR "FSVS_CONF changed"
+fi
 

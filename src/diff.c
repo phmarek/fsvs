@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2008 Philipp Marek.
+ * Copyright (C) 2006-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <poll.h>
+#include <alloca.h>
 #include <time.h>
 #include <fcntl.h>
 
@@ -56,17 +57,20 @@
  * 
  * If you don't give the revision arguments, you get a diff of the base 
  * revision in the repository (the last commit) against your current local file.
- * With one revision, you diff this repository version against you local file.
- * With both revisions given, the difference between these repository versions
- * is calculated.
+ * With one revision, you diff this repository version against your local 
+ * file. With both revisions given, the difference between these repository 
+ * versions is calculated.
  * 
  * You'll need the \c diff program, as the files are simply passed as 
  * parameters to it.
  * 
  * The default is to do non-recursive diffs; so <tt>fsvs diff .</tt> will 
- * output the changes in all files <b>in the current directory</b>.
+ * output the changes in all files <b>in the current directory</b> and 
+ * below.
  *
- * The output for non-files is not defined.
+ * The output for special files is the diff of the internal subversion 
+ * storage, which includes the type of the special file, but no newline at 
+ * the end of the line (which \c diff complains about).
  *
  * For entries marked as copy the diff against the (clean) source entry is 
  * printed.
@@ -74,9 +78,9 @@
  * Please see also \ref o_diff and \ref o_colordiff. 
  *
  * \todo Two revisions diff is buggy in that it (currently) always fetches 
- * the full tree from the repository; this is not only a performance 
- * degradation, but you'll see more changed entries than you want. This 
- * will be fixed.
+ * the full trees from the repository; this is not only a performance 
+ * degradation, but you'll see more changed entries than you want (like 
+ * changes A to B to A).  This will be fixed.
  * */
 
 
@@ -249,7 +253,7 @@ int df__do_diff(struct estat *sts,
 
 
 	/* We have to fetch a file and do the diff, so open a session. */
-	STOPIF( url__open_session(NULL), NULL);
+	STOPIF( url__open_session(NULL, NULL), NULL);
 
 	/* The function rev__get_file() overwrites the data in \c *sts with 
 	 * the repository values - mtime, ctime, etc.
@@ -261,7 +265,7 @@ int df__do_diff(struct estat *sts,
 	sts_r2=*sts;
 	if (rev2 != 0)
 	{
-		STOPIF( url__full_url(sts, NULL, &other_url), NULL);
+		STOPIF( url__full_url(sts, &other_url), NULL);
 
 		STOPIF( url__canonical_rev(current_url, &rev2), NULL);
 		STOPIF( rev__get_text_to_tmpfile(other_url, rev2, DECODER_UNKNOWN,
@@ -325,10 +329,10 @@ int df__do_diff(struct estat *sts,
 		b1=malloc(len_s + 60 + 30);
 		b2=malloc(len_d + 60 + 30);
 
-		new_mtime_string=strdup(ctime(& sts_r2.st.mtim.tv_sec ));
-		STOPIF_ENOMEM(!new_mtime_string);
-		other_mtime_string=strdup(ctime(&sts->st.mtim.tv_sec ));
-		STOPIF_ENOMEM(!other_mtime_string);
+		STOPIF( hlp__strdup( &new_mtime_string, 
+					ctime(& sts_r2.st.mtim.tv_sec)), NULL);
+		STOPIF( hlp__strdup( &other_mtime_string, 
+					ctime(&sts->st.mtim.tv_sec)), NULL);
 
 		sprintf(b1, "%s  \tRev. %llu  \t(%-24.24s)", 
 				disp_source, (t_ull) rev1, other_mtime_string);
@@ -354,7 +358,7 @@ int df__do_diff(struct estat *sts,
 				"Diff header");
 
 
-		if (opt_verbose>0) // TODO: && !symlink ...)
+		if (opt__is_verbose() > 0) // TODO: && !symlink ...)
 		{
 			STOPIF(	df___print_meta( "Mode: 0%03o",
 						sts->st.mode & 07777,
@@ -462,7 +466,7 @@ int df___type_def_diff(struct estat *sts, svn_revnum_t rev,
 
 	status=0;
 	special_stg=NULL;
-	switch (sts->updated_mode & S_IFMT)
+	switch (sts->st.mode & S_IFMT)
 	{
 		case S_IFREG:
 			STOPIF( df__do_diff(sts, rev, 0, NULL), NULL);
@@ -470,6 +474,7 @@ int df___type_def_diff(struct estat *sts, svn_revnum_t rev,
 
 		case S_IFCHR:
 		case S_IFBLK:
+		case S_IFANYSPECIAL:
 			special_stg=ops__dev_to_filedata(sts);
 
 			/* Fallthrough, ignore first statement. */
@@ -517,7 +522,7 @@ int df___direct_diff(struct estat *sts)
 	STOPIF( ops__build_path( &fn, sts), NULL);
 
 	status=0;
-	if (!S_ISDIR(sts->updated_mode))
+	if (!S_ISDIR(sts->st.mode))
 	{
 		DEBUGP("doing %s", fn);
 
@@ -540,7 +545,7 @@ int df___direct_diff(struct estat *sts)
 			}
 			else
 			{
-				if (opt_verbose>0)
+				if (opt__is_verbose() > 0)
 					STOPIF_CODE_EPIPE( printf("Only in local filesystem: %s\n", 
 								fn), NULL);
 				goto ex;
@@ -551,7 +556,7 @@ int df___direct_diff(struct estat *sts)
 		if (sts->entry_status || opt_target_revisions_given)
 		{
 			DEBUGP("doing diff rev1=%llu", (t_ull)rev1);
-			if (S_ISDIR(sts->updated_mode))
+			if (S_ISDIR(sts->st.mode))
 			{
 				/* TODO: meta-data diff? */
 			}
@@ -726,12 +731,11 @@ int df___diff_wc_remote(struct estat *entry, apr_pool_t *pool)
 
 	removed = 
 		( ((entry->remote_status & FS_REPLACED) == FS_REMOVED) ? 1 : 0 ) |
+		( ((entry->remote_status & FS_REPLACED) == FS_NEW) ? 2 : 0 ) |
 		( ((entry->entry_status  & FS_REPLACED) == FS_REMOVED) ? 2 : 0 );
 
 	STOPIF( ops__build_path(&fn, entry), NULL);
-	DEBUGP("%s: removed=%X loc=%s rem=%s", fn, removed,
-			st__status_string_fromint(entry->entry_status),
-			st__status_string_fromint(entry->remote_status));
+	DEBUGP_dump_estat(entry);
 
 	/* TODO: option to print the whole lot of removed and "new" lines for 
 	 * files existing only at one point? */
@@ -752,13 +756,27 @@ int df___diff_wc_remote(struct estat *entry, apr_pool_t *pool)
 			break;
 
 		case 0:
-			/* Exists on both; do recursive diff. */
+			/* Exists on both; show (recursive) differences. */
 
-			if (entry->entry_status || entry->remote_status)
+			if ((entry->local_mode_packed != entry->new_rev_mode_packed))
 			{
+				/* Another type, so a diff doesn't make much sense, does it? */
+				STOPIF_CODE_EPIPE( printf("Type changed from local %s to %s: %s\n", 
+							st__type_string(PACKED_to_MODE_T(entry->local_mode_packed)),
+							st__type_string(PACKED_to_MODE_T(entry->new_rev_mode_packed)),
+							fn), NULL);
+				/* Should we print some message that sub-entries are available? 
+				if (opt__is_verbose() > 0)
+				{
+					
+				} */
+			}
+			else if (entry->entry_status || entry->remote_status)
+			{
+				/* Local changes, or changes to repository. */
 				special_stg=NULL;
 
-				if (S_ISDIR(entry->updated_mode))
+				if (S_ISDIR(entry->st.mode))
 				{
 					/* TODO: meta-data diff? */
 					if (entry->entry_count)
@@ -921,7 +939,8 @@ int df__work(struct estat *root, int argc, char *argv[])
 			/* Fetch local changes ... */
 			action->local_callback=st__progress;
 			action->local_uninit=st__progress_uninit;
-			STOPIF( waa__read_or_build_tree(root, argc, normalized, argv, NULL, 1), NULL);
+			STOPIF( waa__read_or_build_tree(root, argc, normalized, argv, 
+						NULL, 1), NULL);
 			//			Has to set FS_CHILD_CHANGED somewhere
 
 			/* Fetch remote changes ... */

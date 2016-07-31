@@ -23,9 +23,9 @@ int dir__enumerator(struct estat *this,
 		int by_name) ;
 
 /** Sorts the entries of the directory \a sts by name into the
- * ->by_name array, which is reallocated and NULL-terminated. */
+ * estat::by_name array, which is reallocated and NULL-terminated. */
 int dir__sortbyname(struct estat *sts);
-/** Sorts the existing ->by_inode array afresh, by device/inode. */
+/** Sorts the existing estat::by_inode array afresh, by device/inode. */
 int dir__sortbyinode(struct estat *sts);
 
 int dir___f_sort_by_inode(struct estat **a, struct estat **b);

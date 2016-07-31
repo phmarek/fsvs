@@ -1,0 +1,53 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+
+logfile=$LOGDIR/068.symlinks
+
+
+mkdir dirA dirB
+
+date > dirA/entryA
+echo A > dirA/file
+
+date > dirB/entryB
+echo BB > dirB/file
+
+for dest in A B
+do
+	$INFO "Destination of links now $dest"
+	ln -s dir$dest sl
+	ln -s $WC/dir$dest sllong
+
+	$BINq ci -m1
+
+	echo $RANDOM >> dir$dest/entry$dest
+	$BINdflt st
+	for lnk in sl sllong
+	do
+		$INFO "going by link $lnk"
+		for p in "" "/." "/././////." "/*" "/entry$dest" "////entry$dest"
+		do
+			$BINdflt st $lnk/$p > $logfile
+			if [[ `wc -l < $logfile` -ne 1 ]]
+			then
+				cat $logfile
+				$ERROR "Wrong number of lines, wanted exactly one line."
+			fi
+			if grep "/entry$dest"'$' $logfile
+			then
+				$SUCCESS "Correct result in $lnk/$p"
+			else
+				cat $logfile
+				$ERROR "Wrong result for $lnk/$p"
+			fi
+		done
+	done
+
+	rm sl sllong
+done

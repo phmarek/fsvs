@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -12,6 +12,7 @@
 
 #include "global.h"
 #include "waa.h"
+#include "props.h"
 #include "options.h"
 
 /** \file
@@ -30,7 +31,7 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new);
 /** @{ */
 /** Find an entry in the \a dir by \a bname. */
 int ops__find_entry_byname(struct estat *dir, 
-		const char *name, 
+		char *name, 
 		struct estat **sts, int ignored_too);
 /** Find an entry in \a dir by the inode. */
 int ops__find_entry_byinode(struct estat *dir, 
@@ -93,7 +94,7 @@ int ops__link_to_string(struct estat *sts, char *filename,
 		char **erg);
 
 /** Returns the filename. */
-const char *ops__get_filename(const char *path);
+char *ops__get_filename(char *path);
 
 /** Copies the data of a single struct estat. */
 void ops__copy_single_entry(struct estat *src, struct estat *dest);
@@ -105,10 +106,27 @@ int ops__traverse(struct estat *parent, char *relative_path,
 
 /** Set the \ref estat::do_userselected and \ref estat::do_this_entry 
  * attributes depending on \ref opt_recursive and the parent's bits. */
-int ops__set_todo_bits(struct estat *sts);
+void ops__set_todo_bits(struct estat *sts);
 /** Determines whether child entries of this entry should be done, based on 
  * the recursive settings and \a dir's todo-bits. */
 int ops__are_children_interesting(struct estat *dir);
+
+/** Applies the defined group to the entry \a sts. */
+int ops__apply_group(struct estat *sts, hash_t *props, 
+		apr_pool_t *pool);
+
+/** Creates a copy of \a sts, and keeps it referenced by \c sts->old.
+ * */
+int ops__make_shadow_entry(struct estat *sts, int flags);
+#define SHADOWED_BY_REMOTE (1)
+#define SHADOWED_BY_LOCAL (2)
+
+
+#ifdef ENABLE_RELEASE
+static inline void DEBUGP_dump_estat(struct estat *sts UNUSED) { }
+#else
+void DEBUGP_dump_estat(struct estat *sts);
+#endif
 
 inline static int ops__allowed_by_filter(struct estat *sts)
 {
@@ -173,5 +191,18 @@ do {                                                    \
 } while (0)
 
 
-#endif
+/** Do we want this entry written in the entry list? */
+static inline int ops__should_entry_be_written_in_list(struct estat *sts)
+{
+	if (sts->to_be_ignored) return 0;
+	if (sts->flags & RF_DONT_WRITE) return 0;
+	return 1;
+}
 
+static inline int ops__has_children(struct estat *sts)
+{
+	return S_ISDIR(sts->st.mode) && sts->entry_count;
+}
+
+
+#endif

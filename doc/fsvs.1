@@ -1,13 +1,17 @@
-.TH "FSVS - fast versioning tool" 1 "29 Oct 2008" "Version trunk:2782" "fsvs" \" -*- nroff -*-
+.TH "FSVS - fast versioning tool" 1 "11 Mar 2010" "Version trunk:2424" "fsvs" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-FSVS - fast versioning tool
+Commands and command line parameters \- 
+.PP
+fsvs is a client for subversion repositories; it is designed for fast versioning of big directory trees.  
+fsvs is a client for subversion repositories; it is designed for fast versioning of big directory trees. 
+
 .SH "SYNOPSIS"
 .PP
 \fCfsvs command [options] [args]\fP
 .PP
-The following commands are understood by \fCfsvs:\fP 
+The following commands are understood by FSVS:
 .SH "Local configuration and information:"
 .PP
 .IP "\fB\fBurls\fP\fP" 1c
@@ -21,7 +25,7 @@ The following commands are understood by \fCfsvs:\fP
 .IP "\fB\fBdiff\fP\fP" 1c
 \fCGet differences between files (local and remote)\fP 
 .IP "\fB\fBcopyfrom-detect\fP\fP" 1c
-\fCAsk \fCfsvs\fP about probably copied/moved/renamed entries; see \fBcp\fP\fP 
+\fCAsk FSVS about probably copied/moved/renamed entries; see \fBcp\fP\fP 
 .PP
 .SH "Defining which entries to take:"
 .PP
@@ -32,7 +36,7 @@ The following commands are understood by \fCfsvs:\fP
 .IP "\fB\fBadd\fP\fP" 1c
 \fCAdd entries that would be ignored\fP 
 .IP "\fB\fBcp\fP, \fBmv\fP\fP" 1c
-\fCTell \fCfsvs\fP that entries were copied\fP 
+\fCTell FSVS that entries were copied\fP 
 .PP
 .SH "Commands working with the repository:"
 .PP
@@ -79,15 +83,15 @@ The following commands are understood by \fCfsvs:\fP
 Multi-url-operations are relatively new; there might be rough edges.
 .RE
 .PP
-The \fBreturn code\fP is \fC0\fP for success, or \fC2\fP for an error. \fC1\fP is returned if the option \fBStopping status reports as soon as changes are found\fP is used, and changes are found; see also \fBFiltering entries\fP.\fP
+The \fBreturn code\fP is \fC0\fP for success, or \fC2\fP for an error. \fC1\fP is returned if the option \fBChecking for changes in a script\fP is used, and changes are found; see also \fBFiltering entries\fP.\fP
 .PP
 .SH "Universal options"
 .PP
 .SS "-V -- show version"
-\fC \fC-V\fP makes \fCfsvs\fP print the version and a copyright notice, and exit.\fP
+\fC \fC-V\fP makes FSVS print the version and a copyright notice, and exit.\fP
 .PP
 .SS "-d and -D -- debugging"
-\fC If \fCfsvs\fP was compiled using \fC--enable-debug\fP you can enable printing of debug messages (to \fCSTDOUT\fP) with \fC-d\fP. Per default all messages are printed; if you're only interested in a subset, you can use \fC-D\fP \fIstart-of-function-name\fP. 
+\fC If FSVS was compiled using \fC--enable-debug\fP you can enable printing of debug messages (to \fCSTDOUT\fP) with \fC-d\fP. Per default all messages are printed; if you're only interested in a subset, you can use \fC-D\fP \fIstart-of-function-name\fP. 
 .PP
 .nf
       fsvs -d -D waa_ status
@@ -96,45 +100,29 @@ The \fBreturn code\fP is \fC0\fP for success, or \fC2\fP for an error. \fC1\fP i
 .PP
  would call the \fIstatus\fP action, printing all debug messages of all WAA functions - \fCwaa__init\fP, \fCwaa__open\fP, etc.\fP
 .PP
-\fC Furthermore you can specify the debug output destination with the option \fCdebug_output\fP. This can be a simple filename (which gets truncated), or, if it starts with a \fC\fP|, a command that the output gets piped into.\fP
-.PP
-\fC If the destination cannot be opened (or none is given), debug output goes to \fCSTDOUT\fP.\fP
-.PP
-\fC 
-.PP
-\fBNote:\fP
-.RS 4
-That string is taken only once - at the first debug output line. So you have to use the correct order of parameters: \fC-o debug_output=... -d\fP.
-.RE
-.PP
-An example: writing the last 200 lines of debug output into a file. 
-.PP
-.nf
-   fsvs -o debug_output='| tail -200 > /tmp/debug.log' -d ....
-
-.fi
-.PP
-\fP
+\fC For more details on the other debugging options \fBdebug_output\fP and \fBdebug_buffer\fP please see the options list.\fP
 .PP
 .SS "-N, -R -- recursion"
-\fC The \fC-N\fP and \fC-R\fP switches in effect just decrement/increment a counter; the behavious is chosen depending on that. So \fC-N -N -N -R -R\fP is equivalent to \fC-N\fP.\fP
+\fC The \fC-N\fP and \fC-R\fP switches in effect just decrement/increment a counter; the behaviour is chosen depending on that. So a command line of \fC-N -N -N -R -R\fP is equivalent to \fC-3 +2 = -1\fP, this results in \fC-N\fP.\fP
 .PP
 .SS "-q, -v -- verbose/quiet"
-\fC Like the options for recursive behaviour (\fC-R\fP and \fC-N\fP) \fC-v\fP and \fC-q\fP just inc/decrement a counter. The higher the value, the more verbose. 
-.br
- Currently only the values \fC-1\fP (quiet), \fC0\fP (normal), and \fC+1\fP (verbose) are used.\fP
+\fC \fC-v\fC/\fC-q\fC set/clear verbosity flags, and so give more/less output.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC Please see \fBthe verbose option\fP for more details.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "-C -- checksum"
-\fC \fC-C\fP chooses to use more change detection checks; please see \fBthe change_check option\fP for more details.\fP
+\fC\fC\fC\fC\fC \fC-C\fP chooses to use more change detection checks; please see \fBthe change_check option\fP for more details.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "-f -- filter entries"
-\fC This parameter allows to do a bit of filtering of entries, or, for some operations, modification of the work done on given entries.\fP
+\fC\fC\fC\fC\fC This parameter allows to do a bit of filtering of entries, or, for some operations, modification of the work done on given entries.\fP\fP\fP\fP\fP
 .PP
-\fC It requires a specification at the end, which can be any combination of \fCany\fP, \fCtext\fP, \fCnew\fP, \fCdeleted\fP (or \fCremoved\fP), \fCmeta\fP, \fCmtime\fP, \fCgroup\fP, \fCmode\fP, \fCchanged\fP or \fCowner\fP.\fP
+\fC\fC\fC\fC\fC It requires a specification at the end, which can be any combination of \fCany\fP, \fCtext\fP, \fCnew\fP, \fCdeleted\fP (or \fCremoved\fP), \fCmeta\fP, \fCmtime\fP, \fCgroup\fP, \fCmode\fP, \fCchanged\fP or \fCowner\fP; \fCdefault\fP or \fCdef\fP use the default value.\fP\fP\fP\fP\fP
 .PP
-\fC By giving eg. the value \fCtext\fP, with a \fBstatus\fP action only entries that are new or changed are shown; with \fCmtime\fP,group only entries whose group or modification time has changed are printed.\fP
+\fC\fC\fC\fC\fC By giving eg. the value \fCtext\fP, with a \fBstatus\fP action only entries that are new or changed are shown; with \fCmtime\fP,group only entries whose group or modification time has changed are printed.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
@@ -143,14 +131,15 @@ Please see \fBChange detection\fP for some more information.
 If an entry gets replaced with an entry of a different type (eg. a directory gets replaced by a file), that counts as \fCdeleted\fP \fBand\fP \fCnew\fP.
 .RE
 .PP
-If you use \fC-v\fP, it's used as a \fCany\fP internally.\fP
+If you use \fC-v\fP, it's used as a \fCany\fP internally.\fP\fP\fP\fP\fP
 .PP
-\fC If you use the string \fCnone\fP, it resets the bitmask to \fBno\fP entries shown; then you can built a new mask. So \fCowner\fP,none,any,none,delete would show deleted entries. If the value after all commandline parsing is \fCnone\fP, it is reset to the default.\fP
+\fC\fC\fC\fC\fC If you use the string \fCnone\fP, it resets the bitmask to \fBno\fP entries shown; then you can built a new mask. So \fCowner\fP,none,any,none,delete would show deleted entries. If the value after all commandline parsing is \fCnone\fP, it is reset to the default.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "-W warning=action -- set warnings"
-\fC Here you can define the behaviour for certain situations that should not normally happen, but which you might encounter.\fP
+\fC\fC\fC\fC\fC Here you can define the behaviour for certain situations that should not normally happen, but which you might encounter.\fP\fP\fP\fP\fP
 .PP
-\fC The general format here is \fIspecification\fP = \fIaction\fP, where \fIspecification\fP is a string matching the start of at least one of the defined situations, and \fIaction\fP is one of these:
+\fC\fC\fC\fC\fC The general format here is \fIspecification\fP = \fIaction\fP, where \fIspecification\fP is a string matching the start of at least one of the defined situations, and \fIaction\fP is one of these:
 .IP "\(bu" 2
 \fIonce\fP to print only a single warning,
 .IP "\(bu" 2
@@ -162,13 +151,13 @@ If you use \fC-v\fP, it's used as a \fCany\fP internally.\fP
 .IP "\(bu" 2
 \fIcount\fP to just count the number of occurrences.
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC If \fIspecification\fP matches more than one situation, all of them are set; eg. for \fImeta=ignore\fP all of \fImeta-mtime\fP, \fImeta-user\fP etc. are ignored.\fP
+\fC\fC\fC\fC\fC If \fIspecification\fP matches more than one situation, all of them are set; eg. for \fImeta=ignore\fP all of \fImeta-mtime\fP, \fImeta-user\fP etc. are ignored.\fP\fP\fP\fP\fP
 .PP
-\fC If at least a single warning that is \fBnot\fP ignored is encountered during the program run, a list of warnings along with the number of messages it would have printed with the setting \fIalways\fP is displayed, to inform the user of possible problems.\fP
+\fC\fC\fC\fC\fC If at least a single warning that is \fBnot\fP ignored is encountered during the program run, a list of warnings along with the number of messages it would have printed with the setting \fIalways\fP is displayed, to inform the user of possible problems.\fP\fP\fP\fP\fP
 .PP
-\fC The following situations can be handled with this: \fImeta-mtime\fP, \fImeta-user\fP, \fImeta-group\fP, \fImeta-umask\fP These warnings are issued if a meta-data property that was fetched from the repository couldn't be parsed. This can only happen if some other program or a user changes properties on entries.
+\fC\fC\fC\fC\fC The following situations can be handled with this: \fImeta-mtime\fP, \fImeta-user\fP, \fImeta-group\fP, \fImeta-umask\fP These warnings are issued if a meta-data property that was fetched from the repository couldn't be parsed. This can only happen if some other program or a user changes properties on entries.
 .br
  In this case you can use \fC-Wmeta=always\fP or \fC-Wmeta=count\fP, until the repository is clean again.
 .PP
@@ -176,73 +165,80 @@ If you use \fC-v\fP, it's used as a \fCany\fP internally.\fP
 .PP
 \fIcharset-invalid\fP If the function \fCnl_langinfo(3)\fP couldn't return the name of the current character encoding, a default of UTF-8 is used. You might need that for a minimal system installation, eg. on recovery.
 .PP
-\fIchmod-eperm\fP, \fIchown-eperm\fP If you update a working copy as normal user, and get to update a file which has another owner but you may modify, you'll get errors because neither the user, group, nor mode can be set.
+\fIchmod-eperm\fP, \fIchown-eperm\fP If you update a working copy as normal user, and get to update a file which has another owner but which you may modify, you'll get errors because neither the user, group, nor mode can be set. 
+.br
+ This way you can make the errors non-fatal.
 .PP
 \fIchmod-other\fP, \fIchown-other\fP If you get another error than \fCEPERM\fP in the situation above, you might find these useful.
 .PP
-\fIoverlayed-entries\fP This is not yet used.
-.PP
-\fImixed-rev-wc\fP If you specify some revision number on a \fBrevert\fP, it will complain that mixed-revision working copies are not allowed. By using this specification you cannot enable mixed-revision working copies, of course, but you can avoid getting told every time.
+\fImixed-rev-wc\fP If you specify some revision number on a \fBrevert\fP, it will complain that mixed-revision working copies are not allowed. 
+.br
+ While you cannot enable mixed-revision working copies (I'm working on that) you can avoid being told every time.
 .PP
 \fIpropname-reserved\fP It is normally not allowed to set a property with the \fBprop-set\fP action with a name matching some reserved prefixes.
 .PP
- \fIignpat-wcbase\fP This warning is issued if an \fBabsolute ignore \fP pattern' does not match the working copy base directory.
+ \fIignpat-wcbase\fP This warning is issued if an \fBabsolute ignore \fP pattern' does not match the working copy base directory. \\n
+ See \\ref ignpat_shell_abs 'absolute shell patterns" for more details.
 .PP
-\fIdiff-status\fP GNU diff has defined that it returns an exit code 2 in case of an error; sadly it returns that also for binary files, so that a simply \fCfsvs diff some-binary-file text-file\fP would abort without printing the diff for the second file. So the exit status of diff is per default ignored, but can be used by setting this option to eg. \fIstop\fP.
+\fIdiff-status\fP GNU diff has defined that it returns an exit code 2 in case of an error; sadly it returns that also for binary files, so that a simply \fCfsvs diff some-binary-file text-file\fP would abort without printing the diff for the second file. 
+.br
+ Because of this FSVS currently ignores the exit status of diff per default, but this can be changed by setting this option to eg. \fIstop\fP.
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Also an environment variable \fCFSVS_WARNINGS\fP is used and parsed; it is simply a whitespace-separated list of option specifications.\fP
+\fC\fC\fC\fC\fC Also an environment variable FSVS_WARNINGS is used and parsed; it is simply a whitespace-separated list of option specifications.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "-u URLname[@revision[:revision]] -- select URLs"
-\fC Some commands can be reduced to a subset of defined URLs; the \fBupdate\fP command is a example.\fP
+\fC\fC\fC\fC\fC Some commands can be reduced to a subset of defined URLs; the \fBupdate\fP command is a example.\fP\fP\fP\fP\fP
 .PP
-\fC If you have more than a single URL in use for your working copy, \fCupdate\fP normally updates \fBall\fP entries from \fBall\fP URLs. By using this parameter you can tell FSVS to update only the specified URLs.\fP
+\fC\fC\fC\fC\fC If you have more than a single URL in use for your working copy, \fCupdate\fP normally updates \fBall\fP entries from \fBall\fP URLs. By using this parameter you can tell FSVS to update only the specified URLs.\fP\fP\fP\fP\fP
 .PP
-\fC The parameter can be used repeatedly; the value can have multiple URLs, separated by whitespace or one of \fC',;'\fP.\fP
+\fC\fC\fC\fC\fC The parameter can be used repeatedly; the value can have multiple URLs, separated by whitespace or one of \fC',;'\fP.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
    fsvs up -u base_install,boot@32 -u gcc
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This would get \fCHEAD\fP of \fCbase_install\fP and \fCgcc\fP, and set the target revision of the \fCboot\fP URL at 32.\fP
+\fC\fC\fC\fC\fC This would get \fCHEAD\fP of \fCbase_install\fP and \fCgcc\fP, and set the target revision of the \fCboot\fP URL \fBfor this command\fP at 32.\fP\fP\fP\fP\fP
 .PP
-\fC 
-.PP
-\fBNote:\fP
-.RS 4
-The second revision specification will be used for eg. the \fBdiff\fP command; but this is not yet implemented.
-.RE
-.PP
-\fP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "-o [name[=value]] -- other options"
-\fC This is used for setting some seldom used option, for which default can be set in a configuration file (to be implemented, currently only command-line).\fP
+\fC\fC\fC\fC\fC This is used for setting some seldom used option, for which default can be set in a configuration file (to be implemented, currently only command-line).\fP\fP\fP\fP\fP
 .PP
-\fC For a list of these please see \fBFurther options for FSVS.\fP.\fP
+\fC\fC\fC\fC\fC For a list of these please see \fBFurther options for FSVS.\fP.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
+.SH "Signals"
+.PP
+\fC\fC\fC\fC\fC If you have a running FSVS, and you want to change its verbosity, you can send the process either \fCSIGUSR1\fP (to make it more verbose) or \fCSIGUSR2\fP (more quiet).\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "add"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
- fsvs add PATH [PATH...]
+ fsvs add [-u URLNAME] PATH [PATH...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC With this command you can explicitly define entries to be versioned, even if they have a matching ignore pattern. They will be sent to the repository on the next commit, just like other new entries, and will therefore be reported as \fINew\fP .\fP
+\fC\fC\fC\fC\fC With this command you can explicitly define entries to be versioned, even if they have a matching ignore pattern. They will be sent to the repository on the next commit, just like other new entries, and will therefore be reported as \fINew\fP .\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC The \fC-u\fP option can be used if you're have more than one URL defined for this working copy and want to have the entries pinned to the this URL.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "Example"
-\fC Say, you're versioning your home directory, and gave an ignore pattern of \fC./.*\fP to ignore all \fC.*\fP entries in your home-directory. Now you want \fC.bashrc\fP, \fC.ssh/config\fP, and your complete \fC.kde3-tree\fP saved, just like other data.\fP
+\fC\fC\fC\fC\fC Say, you're versioning your home directory, and gave an ignore pattern of \fC./.*\fP to ignore all \fC.*\fP entries in your home-directory. Now you want \fC.bashrc\fP, \fC.ssh/config\fP, and your complete \fC.kde3-tree\fP saved, just like other data.\fP\fP\fP\fP\fP
 .PP
-\fC So you tell fsvs to not ignore these entries: 
+\fC\fC\fC\fC\fC So you tell fsvs to not ignore these entries: 
 .PP
 .nf
     fsvs add .bashrc .ssh/config .kde3
@@ -252,83 +248,81 @@ The second revision specification will be used for eg. the \fBdiff\fP command; b
  Now the entries below \fC.kde3\fP would match your earlier \fC./.*\fP pattern (as a match at the beginning is sufficient), so you have to insert a negative ignore pattern (a \fItake\fP pattern): 
 .PP
 .nf
-    fsvs ignore --insert t./.kde3
+    fsvs ignore prepend t./.kde3
 
 .fi
 .PP
- Now a \fCfsvs st\fP would show your entries as \fINew\fP , and the next commit will send them to the repository.\fP
+ Now a \fCfsvs st\fP would show your entries as \fINew\fP , and the next commit will send them to the repository.\fP\fP\fP\fP\fP
 .PP
-\fC 
-.PP
-\fBNote:\fP
-.RS 4
-This loads the wc data, writes the given paths with some flags to it, and saves the wc data again.
-.RE
-.PP
-\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "unversion"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs unversion PATH [PATH...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command flags the given paths locally as removed. On the next commit they will be deleted in the repository, and the local information of them will be removed, but not the entries themselves. So they will show up as \fINew\fP again, and you get another chance at ignoring them.\fP
+\fC\fC\fC\fC\fC This command flags the given paths locally as removed. On the next commit they will be deleted in the repository, and the local information of them will be removed, but not the entries themselves. So they will show up as \fINew\fP again, and you get another chance at ignoring them.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "Example"
-\fC Say, you're versioning your home directory, and found that you no longer want \fC.bash_history\fP and \fC.sh_history\fP versioned. So you do 
+\fC\fC\fC\fC\fC Say, you're versioning your home directory, and found that you no longer want \fC.bash_history\fP and \fC.sh_history\fP versioned. So you do 
 .PP
 .nf
     fsvs unversion .bash_history .sh_history
 
 .fi
 .PP
- and these files will be reported as \fCd\fP (will be deleted, but only in the repository).\fP
+ and these files will be reported as \fCd\fP (will be deleted, but only in the repository).\fP\fP\fP\fP\fP
 .PP
-\fC Then you do a 
+\fC\fC\fC\fC\fC Then you do a 
 .PP
 .nf
     fsvs commit
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Now fsvs would report these files as \fCNew\fP , as it does no longer know anything about them; but that can be cured by 
+\fC\fC\fC\fC\fC Now fsvs would report these files as \fCNew\fP , as it does no longer know anything about them; but that can be cured by 
 .PP
 .nf
     fsvs ignore './.*sh_history'
 
 .fi
 .PP
- Now these two files won't be shown as \fINew\fP , either.\fP
+ Now these two files won't be shown as \fINew\fP , either.\fP\fP\fP\fP\fP
 .PP
-\fC The example also shows why the given paths are not just entered as separate ignore patterns - they are just single cases of a (probably) much broader pattern.\fP
+\fC\fC\fC\fC\fC The example also shows why the given paths are not just entered as separate ignore patterns - they are just single cases of a (probably) much broader pattern.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
 If you didn't use some kind of escaping for the pattern, the shell would expand it to the actual filenames, which is (normally) not what you want.
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .SH "_build_new_list"
 .PP
-\fC This is used mainly for debugging. It traverses the filesystem and build a new entries file. In production it should not be used - as the revision of the entries is unknown, we can only use 0 - and loose information this way!\fP
+\fC\fC\fC\fC\fC This is used mainly for debugging. It traverses the filesystem and builds a new entries file. In production it should not be used; as neither URLs nor the revision of the entries is known, information is lost by calling this function!\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC Look at \fBsync-repos\fP.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "delay"
 .PP
-\fC This command delays execution until the time has passed at least to the next second after writing the \fBdir\fP and \fBurls\fP files. So, where previously the \fBdelay\fP option was used, this can be substituted by the given command followed by the \fCdelay\fP command.\fP
+\fC\fC\fC\fC\fC This command delays execution until time has passed at least to the next second after writing the data files used by FSVS (\fBdir\fP and \fBurls\fP).\fP\fP\fP\fP\fP
 .PP
-\fC The advantage is over the \fBWaiting for a time change after working copy operations\fP option is, that read-only commands can be used in the meantime.\fP
+\fC\fC\fC\fC\fC This command is for use in scripts; where previously the \fBdelay\fP option was used, this can be substituted by the given command followed by the \fCdelay\fP command.\fP\fP\fP\fP\fP
 .PP
-\fC An example: 
+\fC\fC\fC\fC\fC The advantage against the \fBdelay\fP option is that read-only commands can be used in the meantime.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC An example: 
 .PP
 .nf
    fsvs commit /etc/X11 -m 'Backup of X11'
@@ -338,78 +332,84 @@ If you didn't use some kind of escaping for the pattern, the shell would expand 
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC In the testing framework it is used to save a bit of time; in normal operation, where \fCfsvs\fP commands are not so tightly packed, it is normally preferable to use the \fBdelay\fP option.\fP
+\fC\fC\fC\fC\fC The optional path can point to any path in the WC.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC In the testing framework it is used to save a bit of time; in normal operation, where FSVS commands are not so tightly packed, it is normally preferable to use the \fBdelay\fP option.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "cat"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs cat [-r rev] path
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Fetches a file with the specified revision or, if not given, BASE, from the repository, and outputs it to \fCSTDOUT\fP.\fP
+\fC\fC\fC\fC\fC Fetches a file repository, and outputs it to \fCSTDOUT\fP. If no revision is specified, it defaults to BASE, ie. the current local revision number of the entry.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "checkout"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs checkout [path] URL [URLs...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Sets one or more URLs for the current working directory (or the directory \fCpath\fP), and does an \fBcheckout\fP of these URLs.\fP
+\fC\fC\fC\fC\fC Sets one or more URLs for the current working directory (or the directory \fCpath\fP), and does an \fBcheckout\fP of these URLs.\fP\fP\fP\fP\fP
 .PP
-\fC Example: 
+\fC\fC\fC\fC\fC Example: 
 .PP
 .nf
  fsvs checkout . http://svn/repos/installation/machine-1/trunk
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC The distinction whether a directory is given or not is done based on the result of URL-parsing -- if it looks like an URL, it is used as an URL. 
+\fC\fC\fC\fC\fC The distinction whether a directory is given or not is done based on the result of URL-parsing -- if it looks like an URL, it is used as an URL. 
 .br
- Please mind that at most a single path is allowed; as soon as two non-URLs are found an error message is printed.\fP
+ Please mind that at most a single path is allowed; as soon as two non-URLs are found an error message is printed.\fP\fP\fP\fP\fP
 .PP
-\fC If no directory is given, \fC\fP. is used; this differs from the usual subversion usage, but might be better suited for usage as a recovery tool (where versioning \fC/\fP is common). Opinions welcome.\fP
+\fC\fC\fC\fC\fC If no directory is given, \fC'.'\fP is used; this differs from the usual subversion usage, but might be better suited for usage as a recovery tool (where versioning \fC/\fP is common). Opinions welcome.\fP\fP\fP\fP\fP
 .PP
-\fC The given \fCpath\fP must exist, and \fBshould\fP be empty -- \fCfsvs\fP will abort on conflicts, ie. if files that should be created already exist. 
+\fC\fC\fC\fC\fC The given \fCpath\fP must exist, and \fBshould\fP be empty -- FSVS will abort on conflicts, ie. if files that should be created already exist. 
 .br
- If there's a need to create that directory, please say so; patches for some parameter like \fC-p\fP are welcome.\fP
+ If there's a need to create that directory, please say so; patches for some parameter like \fC-p\fP are welcome.\fP\fP\fP\fP\fP
 .PP
-\fC For a format definition of the URLs please see the chapter \fBFormat of URLs\fP and the \fBurls\fP and \fBupdate\fP commands.\fP
+\fC\fC\fC\fC\fC For a format definition of the URLs please see the chapter \fBFormat of URLs\fP and the \fBurls\fP and \fBupdate\fP commands.\fP\fP\fP\fP\fP
 .PP
-\fC Furthermore you might be interested in \fBUsing an alternate root directory\fP and \fBRecovery for a non-booting system\fP.\fP
+\fC\fC\fC\fC\fC Furthermore you might be interested in \fBUsing an alternate root directory\fP and \fBRecovery for a non-booting system\fP.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "commit"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs commit [-m 'message'|-F filename] [-v] [-C [-C]] [PATH [PATH ...]]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Commits the current state into the repository. It is possible to commit only parts of a working copy into the repository.\fP
+\fC\fC\fC\fC\fC Commits (parts of) the current state of the working copy into the repository.\fP\fP\fP\fP\fP
 .PP
-\fC  Your working copy is \fC/etc\fP , and you've set it up and committed already. Now you've changed \fC/etc/hosts\fP , and \fC/etc/inittab\fP . Since these are non-related changes, you'd like them to be in separate commits.\fP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
+.SS "Example"
+\fC\fC\fC\fC\fC The working copy is \fC/etc\fP , and it is set up and committed already. 
+.br
+ Then \fC/etc/hosts\fP and \fC/etc/inittab\fP got modified. Since these are non-related changes, you'd like them to be in separate commits.\fP\fP\fP\fP\fP
 .PP
-\fC So you simply run these commands: 
+\fC\fC\fC\fC\fC So you simply run these commands: 
 .PP
 .nf
  fsvs commit -m 'Added some host' /etc/hosts
@@ -417,15 +417,18 @@ If you didn't use some kind of escaping for the pattern, the shell would expand 
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC If you're currently in \fC/etc\fP , you can even drop the \fC/etc/\fP in front, and just use the filenames.\fP
+\fC\fC\fC\fC\fC If the current directory is \fC/etc\fP you could even drop the \fC/etc/\fP in front, and use just the filenames.\fP\fP\fP\fP\fP
 .PP
-\fC Please see \fBstatus\fP for explanations on \fC-v\fP and \fC-C\fP . For advanced backup usage see also \fBFSVS_PROP_COMMIT_PIPE\fP.\fP
+\fC\fC\fC\fC\fC Please see \fBstatus\fP for explanations on \fC-v\fP and \fC-C\fP . 
+.br
+ For advanced backup usage see also \fBthe \fP commit-pipe property".\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SH "cp"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs cp [-r rev] SRC DEST
@@ -434,32 +437,32 @@ If you didn't use some kind of escaping for the pattern, the shell would expand 
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC The \fCcopy\fP command marks \fCDEST\fP as a copy of \fCSRC\fP at revision \fCrev\fP, so that on the next commit of \fCDEST\fP the corresponding source path is sent as copy source.\fP
+\fC\fC\fC\fC\fC The \fCcopy\fP command marks \fCDEST\fP as a copy of \fCSRC\fP at revision \fCrev\fP, so that on the next commit of \fCDEST\fP the corresponding source path is sent as copy source.\fP\fP\fP\fP\fP
 .PP
-\fC The default value for \fCrev\fP is \fCBASE\fP, ie. the revision the \fCSRC\fP (locally) is at.\fP
+\fC\fC\fC\fC\fC The default value for \fCrev\fP is \fCBASE\fP, ie. the revision the \fCSRC\fP (locally) is at.\fP\fP\fP\fP\fP
 .PP
-\fC Please note that this command works \fBalways\fP on a directory \fBstructure\fP - if you say to copy a directory, the \fBwhole\fP structure is marked as copy. That means that if some entries below the copy are missing, they are reported as removed from the copy on the next commit. 
+\fC\fC\fC\fC\fC Please note that this command works \fBalways\fP on a directory \fBstructure\fP - if you say to copy a directory, the \fBwhole\fP structure is marked as copy. That means that if some entries below the copy are missing, they are reported as removed from the copy on the next commit. 
 .br
- (Of course it is possible to mark files as copied, too; non-recursive copies are not possible.)\fP
+ (Of course it is possible to mark files as copied, too; non-recursive copies are not possible, but can be emulated by having parts of the destination tree removed.)\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
-Or TODO: There will be differences in the exact usage - \fCcopy\fP will try to run the \fCcp\fP command, whereas \fCcopied\fP will just remember the relation.
+TODO: There will be differences in the exact usage - \fCcopy\fP will try to run the \fCcp\fP command, whereas \fCcopied\fP will just remember the relation.
 .RE
 .PP
-If this command are used without parameters, the currently defined relations are printed; please keep in mind that the \fBkey\fP is the destination name, ie. the 2nd line of each pair!\fP
+If this command are used without parameters, the currently defined relations are printed; please keep in mind that the \fBkey\fP is the destination name, ie. the 2nd line of each pair!\fP\fP\fP\fP\fP
 .PP
-\fC The input format for \fCload\fP is newline-separated - first a \fCSRC\fP line, followed by a \fCDEST\fP line, then an line with just a dot (\fC'.'\fP) as delimiter. If you've got filenames with newlines or other special characters, you have to give the paths as arguments.\fP
+\fC\fC\fC\fC\fC The input format for \fCload\fP is newline-separated - first a \fCSRC\fP line, followed by a \fCDEST\fP line, then an line with just a dot (\fC'.'\fP) as delimiter. If you've got filenames with newlines or other special characters, you have to give the paths as arguments.\fP\fP\fP\fP\fP
 .PP
-\fC Internally the paths are stored relative to the working copy base directory, and they're printed that way, too.\fP
+\fC\fC\fC\fC\fC Internally the paths are stored relative to the working copy base directory, and they're printed that way, too.\fP\fP\fP\fP\fP
 .PP
-\fC Later definitions are \fBappended\fP to the internal database; to undo mistakes, use the \fBrevert\fP action.\fP
+\fC\fC\fC\fC\fC Later definitions are \fBappended\fP to the internal database; to undo mistakes, use the \fBuncopy\fP action.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
@@ -468,13 +471,13 @@ If this command are used without parameters, the currently defined relations are
 As subversion currently treats a rename as copy+delete, the \fBmv\fP command is an alias to \fBcp\fP.
 .RE
 .PP
-If you have a need to give the filenames \fCdump\fP or \fCload\fP as first parameter for copyfrom relations, give some path, too, as in \fC./dump\fP.\fP
+If you have a need to give the filenames \fCdump\fP or \fCload\fP as first parameter for copyfrom relations, give some path, too, as in \fC'./dump'\fP.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
-The source is internally stored as URL with revision number, because else an operation like 
+The source is internally stored as URL with revision number, so that operations like these 
 .PP
 .nf
    $ fsvs cp a b
@@ -484,34 +487,36 @@ The source is internally stored as URL with revision number, because else an ope
 
 .fi
 .PP
- would fail - FSVS would send the wrong (too recent!) revision number as source, and so the local filelist would get inconsistent with the repository. 
+ work - FSVS sends the old (too recent!) revision number as source, and so the local filelist stays consistent with the repository. 
 .br
- But it is not implementd to give an URL as copyfrom source directly - we'd have to fetch a list (and possibly the data!) from the repository.
+ But it is not implemented (yet) to give an URL as copyfrom source directly - we'd have to fetch a list of entries (and possibly the data!) from the repository.
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "copyfrom-detect"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs copyfrom-detect [paths...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command tells \fCfsvs\fP to look through the new entries, and see whether it can find some that seem to be copied from others already known. 
+\fC\fC\fC\fC\fC This command tells FSVS to look through the new entries, and see whether it can find some that seem to be copied from others already known. 
 .br
- It will output a list with source and destination path and why it could match.\fP
+ It will output a list with source and destination path and why it could match.\fP\fP\fP\fP\fP
 .PP
-\fC This is just for information purposes and doesn't change any FSVS state, \fIunless some option/parameter is set. (TODO)\fP\fP
+\fC\fC\fC\fC\fC This is just for information purposes and doesn't change any FSVS state, (TODO: unless some option/parameter is set).\fP\fP\fP\fP\fP
 .PP
-\fC The list format is \fBon purpose\fP incompatible with the \fCload\fP syntax, as the best match normally has to be taken manually.\fP
+\fC\fC\fC\fC\fC The list format is \fBon purpose\fP incompatible with the \fCload\fP syntax, as the best match normally has to be taken manually.\fP\fP\fP\fP\fP
 .PP
-\fC  If \fBverbose\fP is used, an additional value giving the percentage of matching blocks, and the count of possibly copied entries is printed.\fP
+\fC\fC\fC\fC\fC  If \fBverbose\fP is used, an additional value giving the percentage of matching blocks, and the count of possibly copied entries is printed.\fP\fP\fP\fP\fP
 .PP
-\fC Example: 
+\fC\fC\fC\fC\fC Example: 
 .PP
 .nf
    $ fsvs copyfrom-list -v
@@ -531,9 +536,9 @@ The source is internally stored as URL with revision number, because else an ope
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC The abbreviations are: \fImd5\fP The \fBMD5\fP of the new file is identical to that of one or more already committed files; there is no percentage.
+\fC\fC\fC\fC\fC The abbreviations are: \fImd5\fP The \fBMD5\fP of the new file is identical to that of one or more already committed files; there is no percentage.
 .PP
 \fIinode\fP The \fBdevice/inode\fP number is identical to the given known entry; this could mean that the old entry has been renamed or hardlinked. \fBNote:\fP Not all filesystems have persistent inode numbers (eg. NFS) - so depending on your filesystems this might not be a good indicator!
 .PP
@@ -545,36 +550,36 @@ The source is internally stored as URL with revision number, because else an ope
 .br
  The percentage is (number_of_common_entries)/(files_in_dir1 + files_in_dir2 - number_of_common_entries).
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
-Only \fBmd5\fP, \fBname\fP and \fBinode\fP matching currently done.
+\fBmanber\fP matching is not implemented yet.
 .PP
-If too many possible matches are found, not all may be printed; only the indicator \fC...\fP is shown at the end.
+If too many possible matches for an entry are found, not all are printed; only an indicator \fC...\fP is shown at the end.
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .SH "uncp"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs uncopy DEST [DEST ...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC The \fCuncopy\fP command removes a \fCcopyfrom\fP mark from the destination entry. This will make the entry unknown again, and reported as \fCNew\fP on the next invocations.\fP
+\fC\fC\fC\fC\fC The \fCuncopy\fP command removes a \fCcopyfrom\fP mark from the destination entry. This will make the entry unknown again, and reported as \fCNew\fP on the next invocations.\fP\fP\fP\fP\fP
 .PP
-\fC Only the base of a copy can be un-copied; if a directory structure was copied, and the given entry is just implicitly copied, this command will give you an error.\fP
+\fC\fC\fC\fC\fC Only the base of a copy can be un-copied; if a directory structure was copied, and the given entry is just implicitly copied, this command will return an error.\fP\fP\fP\fP\fP
 .PP
-\fC This is not folded in \fBrevert\fP, because it's not clear whether \fCrevert\fP should restore the original copyfrom data or remove the copy attribute; by using a special command this is no longer ambiguous.\fP
+\fC\fC\fC\fC\fC This is not folded in \fBrevert\fP, because it's not clear whether \fCrevert\fP on copied, changed entries should restore the original copyfrom data or remove the copy attribute; by using another command this is no longer ambiguous.\fP\fP\fP\fP\fP
 .PP
-\fC Example: 
+\fC\fC\fC\fC\fC Example: 
 .PP
 .nf
    $ fsvs copy SourceFile DestFile
@@ -583,88 +588,102 @@ If too many possible matches are found, not all may be printed; only the indicat
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "diff"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs diff [-v] [-r rev[:rev2]] [-R] PATH [PATH...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command gives you diffs between local and repository files.\fP
+\fC\fC\fC\fC\fC This command gives you diffs between local and repository files.\fP\fP\fP\fP\fP
 .PP
-\fC With \fC-v\fP the meta-data is additionally printed, and changes shown.\fP
+\fC\fC\fC\fC\fC With \fC-v\fP the meta-data is additionally printed, and changes shown.\fP\fP\fP\fP\fP
 .PP
-\fC If you don't give the revision arguments, you get a diff of the base revision in the repository (the last commit) against your current local file. With one revision, you diff this repository version against you local file. With both revisions given, the difference between these repository versions is calculated.\fP
+\fC\fC\fC\fC\fC If you don't give the revision arguments, you get a diff of the base revision in the repository (the last commit) against your current local file. With one revision, you diff this repository version against your local file. With both revisions given, the difference between these repository versions is calculated.\fP\fP\fP\fP\fP
 .PP
-\fC You'll need the \fCdiff\fP program, as the files are simply passed as parameters to it.\fP
+\fC\fC\fC\fC\fC You'll need the \fCdiff\fP program, as the files are simply passed as parameters to it.\fP\fP\fP\fP\fP
 .PP
-\fC The default is to do non-recursive diffs; so \fCfsvs diff .\fP will output the changes in all files \fBin the current directory\fP.\fP
+\fC\fC\fC\fC\fC The default is to do non-recursive diffs; so \fCfsvs diff .\fP will output the changes in all files \fBin the current directory\fP and below.\fP\fP\fP\fP\fP
 .PP
-\fC The output for non-files is not defined.\fP
+\fC\fC\fC\fC\fC The output for special files is the diff of the internal subversion storage, which includes the type of the special file, but no newline at the end of the line (which \fCdiff\fP complains about).\fP\fP\fP\fP\fP
 .PP
-\fC For entries marked as copy the diff against the (clean) source entry is printed.\fP
+\fC\fC\fC\fC\fC For entries marked as copy the diff against the (clean) source entry is printed.\fP\fP\fP\fP\fP
 .PP
-\fC Please see also \fBOptions relating to the 'diff' action\fP and \fBUsing colordiff\fP.\fP
+\fC\fC\fC\fC\fC Please see also \fBOptions relating to the 'diff' action\fP and \fBUsing colordiff\fP.\fP\fP\fP\fP\fP
 .PP
-\fC  \fP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "export"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs export REPOS_URL [-r rev]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC If you want to export a directory from your repository \fBwithout\fP having to have an WAA-area, you can use this command. This restores all meta-data - owner, group, access mask and modification time. Its primary use is for data recovery.\fP
+\fC\fC\fC\fC\fC If you want to export a directory from your repository \fBwithout\fP storing any FSVS-related data you can use this command.\fP\fP\fP\fP\fP
 .PP
-\fC The data gets written (in the correct directory structure) below the current working directory; if entries already exist, the export will stop, so this should be an empty directory.\fP
+\fC\fC\fC\fC\fC This restores all meta-data - owner, group, access mask and modification time; its primary use is for data recovery.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC The data gets written (in the correct directory structure) below the current working directory; if entries already exist, the export will stop, so this should be an empty directory.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "help"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  help [command]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command shows general or specific \fBhelp\fP (for the given command). A similar function is available by using \fC-h\fP or \fC-\fP? after a command.\fP
+\fC\fC\fC\fC\fC This command shows general or specific \fBhelp\fP (for the given command). A similar function is available by using \fC-h\fP or \fC-\fP? after a command.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
-.SH "ignore"
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
+.SH "groups"
 .PP
-\fC 
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC 
 .PP
 .nf
- fsvs ignore dump|load
+ fsvs groups dump|load
+ fsvs groups [prepend|append|at=n] group-definition [group-def ...]
  fsvs ignore [prepend|append|at=n] pattern [pattern ...]
+ fsvs groups test [-v|-q] [pattern ...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command adds patterns to the end of the ignore list, or, with \fIprepend\fP , puts them at the beginning of the list. With \fCat=x\fP the patterns are inserted at the position \fCx\fP , counting from 0.\fP
+\fC\fC\fC\fC\fC This command adds patterns to the end of the pattern list, or, with \fCprepend\fP, puts them at the beginning of the list. With \fCat=x\fP the patterns are inserted at the position \fCx\fP , counting from 0.\fP\fP\fP\fP\fP
 .PP
-\fC \fCfsvs dump\fP prints the patterns to \fCSTDOUT\fP . If there are special characters like \fCCR\fP or \fCLF\fP embedded in the pattern \fBwithout encoding\fP (like \fC\\r\fP or \fC\\n\fP), the output will be garbled.\fP
+\fC\fC\fC\fC\fC The difference between \fCgroups\fP and \fCignore\fP is that \fCgroups\fP \fBrequires\fP a group name, whereas the latter just assumes the default group \fCignore\fP.\fP\fP\fP\fP\fP
 .PP
-\fC The patterns may include \fC*\fP and \fC\fP? as wildcards in one directory level, or \fC**\fP for arbitrary strings.\fP
+\fC\fC\fC\fC\fC For the specification please see the related \fBdocumentation\fP .\fP\fP\fP\fP\fP
 .PP
-\fC These patterns are only matched against new files; entries that are already versioned are not invalidated. If the given path matches a new directory, entries below aren't found, either; but if this directory or entries below are already versioned, the pattern doesn't work, as the match is restricted to the directory.\fP
+\fC\fC\fC\fC\fC \fCfsvs dump\fP prints the patterns to \fCSTDOUT\fP . If there are special characters like \fCCR\fP or \fCLF\fP embedded in the pattern \fBwithout encoding\fP (like \fC\\r\fP or \fC\\n\fP), the output will be garbled.\fP\fP\fP\fP\fP
 .PP
-\fC So: 
+\fC\fC\fC\fC\fC The patterns may include \fC*\fP and \fC\fP? as wildcards in one directory level, or \fC**\fP for arbitrary strings.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC These patterns are only matched against new (not yet known) files; entries that are already versioned are not invalidated. 
+.br
+ If the given path matches a new directory, entries below aren't found, either; but if this directory or entries below are already versioned, the pattern doesn't work, as the match is restricted to the directory.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC So: 
 .PP
 .nf
      fsvs ignore ./tmp
@@ -678,40 +697,64 @@ If too many possible matches are found, not all may be printed; only the indicat
 
 .fi
 .PP
- as that takes the directory itself (which might be needed after restore as a mount point), but ignore \fBall\fP entries below.\fP
+ as that takes the directory itself (which might be needed after restore as a mount point anyway), but ignore \fBall\fP entries below. 
+.br
+ Currently this has the drawback that mtime changes will be reported and committed; this is not the case if the whole directory is ignored.\fP\fP\fP\fP\fP
 .PP
-\fC Other special variants are available, see the documentation \fBUsing ignore patterns\fP .\fP
-.PP
-\fC Examples: 
+\fC\fC\fC\fC\fC Examples: 
 .PP
 .nf
-     fsvs ignore ./proc
-     fsvs ignore ./dev/pts
+     fsvs group group:unreadable,mode:4:0
+     fsvs group 'group:secrets,/etc/*shadow'
+
+     fsvs ignore /proc
+     fsvs ignore /dev/pts
      fsvs ignore './var/log/*-*'
      fsvs ignore './**~'
      fsvs ignore './**/*.bak'
-     fsvs ignore prepend 't./**.txt'
-     fsvs ignore append 't./**.svg'
+     fsvs ignore prepend 'take,./**.txt'
+     fsvs ignore append 'take,./**.svg'
      fsvs ignore at=1 './**.tmp'
-     fsvs ignore dump
-     fsvs ignore dump -v
+
+     fsvs group dump
+     fsvs group dump -v
+
      echo './**.doc' | fsvs ignore load
+     # Replaces the whole list
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
 Please take care that your wildcard patterns are not expanded by the shell!
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
+.SS "Testing patterns"
+\fC\fC\fC\fC\fC To see more easily what different patterns do you can use the \fCtest\fP subcommand. The following combinations are available:
+.PD 0
+
+.IP "\(bu" 2
+\fCfsvs groups test \fIpattern\fP\fP  Tests \fBonly\fP the given pattern against all new entries in your working copy, and prints the matching paths. The pattern is not stored in the pattern list. 
+.IP "\(bu" 2
+\fCfsvs groups test\fP
+.br
+ Uses the already defined patterns on the new entries, and prints the group name, a tab, and the path.
+.br
+ With \fC-v\fP you can see the matching pattern in the middle column, too. 
+.PP
+\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC By using \fC-q\fP you can avoid getting the whole list; this makes sense if you use the \fBgroup_stats\fP option at the same time.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "rign"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs rel-ignore [prepend|append|at=n] path-spec [path-spec ...]
@@ -719,13 +762,13 @@ Please take care that your wildcard patterns are not expanded by the shell!
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC If you use more than a single working copy for the same data, it will be stored in different paths - and that makes absolute ignore patterns infeasible. But relative ignore patterns are anchored at the beginning of the WC root - which is a bit tiring if you're deep in your WC hierarchy and want to ignore some files.\fP
+\fC\fC\fC\fC\fC If you keep the same repository data at more than one working copy on the same machine, it will be stored in different paths - and that makes absolute ignore patterns infeasible. But relative ignore patterns are anchored at the beginning of the WC root - which is a bit tiring to type if you're deep in your WC hierarchy and want to ignore some files.\fP\fP\fP\fP\fP
 .PP
-\fC To make that easier you can use the \fCrel-ignore\fP (abbreviated as \fCri\fP) command; this converts all given path-specifications (that may include wildcards as per the shell pattern specification above) to WC-relative values before storing them.\fP
+\fC\fC\fC\fC\fC To make that easier you can use the \fCrel-ignore\fP (abbreviated as \fCri\fP) command; this converts all given path-specifications (which may include wildcards as per the shell pattern specification above) to WC-relative values before storing them.\fP\fP\fP\fP\fP
 .PP
-\fC Example for \fC/etc\fP as working copy root: 
+\fC\fC\fC\fC\fC Example for \fC/etc\fP as working copy root: 
 .PP
 .nf
         fsvs rel-ignore '/etc/X11/xorg.conf.*'
@@ -735,34 +778,36 @@ Please take care that your wildcard patterns are not expanded by the shell!
 
 .fi
 .PP
- Both commands would store the pattern './X11/xorg.conf.*'.\fP
+ Both commands would store the pattern './X11/xorg.conf.*'.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
 This works only for \fBshell patterns\fP.
 .RE
 .PP
-For more details about ignoring files please see the \fBignore\fP command and \fBUsing ignore patterns\fP.\fP
+For more details about ignoring files please see the \fBignore\fP command and \fBSpecification of groups and patterns\fP.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "info"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs info [-R [-R]] [PATH...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Use this command to show information regarding one or more entries in your working copy. Currently you must be at the working copy root; but that will change. You can use \fC-v\fP to obtain slightly more information.\fP
+\fC\fC\fC\fC\fC Use this command to show information regarding one or more entries in your working copy. 
+.br
+ You can use \fC-v\fP to obtain slightly more information.\fP\fP\fP\fP\fP
 .PP
-\fC This may sometimes be helpful for locating bugs, or to obtain the URL and revision a working copy is currently at.\fP
+\fC\fC\fC\fC\fC This may sometimes be helpful for locating bugs, or to obtain the URL and revision a working copy is currently at.\fP\fP\fP\fP\fP
 .PP
-\fC Example: 
+\fC\fC\fC\fC\fC Example: 
 .PP
 .nf
      $ fsvs info
@@ -782,265 +827,282 @@ For more details about ignoring files please see the \fBignore\fP command and \f
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC The default is to print information about the given entry only. With a single \fC-R\fP you'll get this data about \fBall\fP entries of a given directory; with a second \fC-R\fP you'll get the whole (sub-)tree.\fP
+\fC\fC\fC\fC\fC The default is to print information about the given entry only. With a single \fC-R\fP you'll get this data about \fBall\fP entries of a given directory; with another \fC-R\fP you'll get the whole (sub-)tree.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "log"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
- fsvs log [-v] [-r rev1[:rev2]] [path]
+ fsvs log [-v] [-r rev1[:rev2]] [-u name] [path]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command views the log information associated with the given \fIpath\fP, or, if none, the highest priority URL.\fP
+\fC\fC\fC\fC\fC This command views the revision log information associated with the given \fIpath\fP at its topmost URL, or, if none is given, the highest priority URL.\fP\fP\fP\fP\fP
 .PP
-\fC The optional \fIrev1\fP and \fIrev2\fP can be used to restrict the revisions that are shown; if no values are given, the logs are given starting from \fCHEAD\fP downwards, and then a limit on the number of revisions is applied (but see the \fBlimit\fP option).\fP
+\fC\fC\fC\fC\fC The optional \fIrev1\fP and \fIrev2\fP can be used to restrict the revisions that are shown; if no values are given, the logs are given starting from \fCHEAD\fP downwards, and then a limit on the number of revisions is applied (but see the \fBlimit\fP option).\fP\fP\fP\fP\fP
 .PP
-\fC If you use the \fB-v\fP -option, you get the files changed in each revision printed, too.\fP
+\fC\fC\fC\fC\fC If you use the \fB-v\fP -option, you get the files changed in each revision printed, too.\fP\fP\fP\fP\fP
 .PP
-\fC There is an option controlling the output format; see \fB'fsvs log' output format\fP.\fP
+\fC\fC\fC\fC\fC There is an option controlling the output format; see the \fBlog_output option\fP.\fP\fP\fP\fP\fP
 .PP
-\fC TODOs:
+\fC\fC\fC\fC\fC Optionally the name of an URL can be given after \fC-u\fP; then the log of this URL, instead of the topmost one, is shown.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC TODOs:
 .IP "\(bu" 2
 \fC--stop-on-copy\fP 
 .IP "\(bu" 2
 Show revision for \fBall\fP URLs associated with a working copy? In which order?
-.IP "\(bu" 2
-A URL-parameter, to specify the log URL. (Name)
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "prop-get"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs prop-get PROPERTY-NAME PATH...
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC You get the data of the property printed to STDOUT.\fP
+\fC\fC\fC\fC\fC Prints the data of the given property to \fCSTDOUT\fP.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
-Be careful! This command will dump the property \fBas it is\fP, ie. with any special characters! If there are escape sequences or binary data in the property, your terminal might get messed up!
+Be careful! This command will dump the property \fBas it is\fP, ie. with any special characters! If there are escape sequences or binary data in the property, your terminal might get messed up! 
 .br
  If you want a safe way to look at the properties, use prop-list with the \fC-v\fP parameter.
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .SH "prop-set"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
- fsvs prop-set PROPERTY-NAME VALUE PATH...
+ fsvs prop-set [-u URLNAME] PROPERTY-NAME VALUE PATH...
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command sets an arbitrary property value for the given path(s).\fP
+\fC\fC\fC\fC\fC This command sets an arbitrary property value for the given path(s).\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
 Some property prefixes are reserved; currently everything starting with \fCsvn:\fP throws a (fatal) warning, and \fCfsvs:\fP is already used, too. See \fBSpecial property names\fP.
 .RE
 .PP
-\fP
+If you're using a multi-URL setup, and the entry you'd like to work on should be pinned to a specific URL, you can use the \fC-u\fP parameter; this is like the \fBadd\fP command, see there for more details.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "prop-del"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs prop-del PROPERTY-NAME PATH...
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command removes property value for the given path(s).\fP
+\fC\fC\fC\fC\fC This command removes a property for the given path(s).\fP\fP\fP\fP\fP
 .PP
-\fC See also \fBprop-set\fP.\fP
+\fC\fC\fC\fC\fC See also \fBprop-set\fP.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "prop-list"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs prop-list [-v] PATH...
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Lists the names of all properties for the given entry. With \fC-v\fP, the value is printed as well; special characters will be translated, to not mess with your terminal.\fP
+\fC\fC\fC\fC\fC Lists the names of all properties for the given entry. 
+.br
+ With \fC-v\fP, the value is printed as well; special characters will be translated, as arbitrary binary sequences could interfere with your terminal settings.\fP\fP\fP\fP\fP
 .PP
-\fC If you need raw output, post a patch for \fC--raw\fP, or loop with \fBprop-get\fP.\fP
+\fC\fC\fC\fC\fC If you need raw output, post a patch for \fC--raw\fP, or write a loop with \fBprop-get\fP.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "remote-status"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs remote-status PATH [-r rev]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command looks into the repository and tells you which files would get changed on an \fBupdate\fP - it's a dry-run for \fBupdate\fP .\fP
+\fC\fC\fC\fC\fC This command looks into the repository and tells you which files would get changed on an \fBupdate\fP - it's a dry-run for \fBupdate\fP .\fP\fP\fP\fP\fP
 .PP
-\fC Per default it compares to \fCHEAD\fP, but you can choose another revision with the \fC-r\fP parameter.\fP
+\fC\fC\fC\fC\fC Per default it compares to \fCHEAD\fP, but you can choose another revision with the \fC-r\fP parameter.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC Please see the \fBupdate\fP documentation for details regarding multi-URL usage.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "resolve"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs resolve PATH [PATH...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC When FSVS tries to update local files which have been changed, a conflict might occur. (For various ways of handling these please see the \fBconflict\fP option.)\fP
+\fC\fC\fC\fC\fC When FSVS tries to update local files which have been changed, a conflict might occur. (For various ways of handling these please see the \fBconflict\fP option.)\fP\fP\fP\fP\fP
 .PP
-\fC This command lets you mark such conflicts as resolved.\fP
+\fC\fC\fC\fC\fC This command lets you mark such conflicts as resolved.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "revert"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs revert [-rRev] [-R] PATH [PATH...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command undoes local modifications:
+\fC\fC\fC\fC\fC This command undoes local modifications:
 .IP "\(bu" 2
 An entry that is marked to be unversioned gets this flag removed.
 .IP "\(bu" 2
-For a already versioned entry (existing in the repository), the local entry is replaced with its repository version, and its status and flags are cleared.
+For a already versioned entry (existing in the repository) the local entry is replaced with its repository version, and its status and flags are cleared.
 .IP "\(bu" 2
-An entry that is a copy destination, but modified, gets reverted to the copy source data.
+An entry that is a \fBmodified\fP copy destination gets reverted to the copy source data.
 .IP "\(bu" 2
-An unmodified direct copy destination entry, and other uncommitted entries with special flags (manually added, or defined as copied), are changed back to \fI'N'\fPew -- the copy definition and the special status is removed. 
-.br
- Please note that on implicitly copied entries (entries that are marked as copied because some parent directory is the base of a copy) \fBcannot\fP be un-copied; they can only be reverted to their original (copied-from) data, or removed.
+Manually added entries are changed back to \fI'N'\fPew.\fB\fP 
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC See also \fBHOWTO: Understand the entries' statii\fP.\fP
+\fC\fC\fC\fC\fC Please note that implicitly copied entries, ie. entries that are marked as copied because some parent directory is the base of a copy, \fBcan not\fP be un-copied; they can only be reverted to their original (copied-from) data, or removed.\fP\fP\fP\fP\fP
 .PP
-\fC If a directory is given on the command line \fBall known entries in this directory\fP are reverted to the old state; this behaviour can be modified with \fB-R/-N\fP, or see below.\fP
+\fC\fC\fC\fC\fC If you want to undo a \fCcopy\fP operation, please see the \fBuncopy\fP command.\fP\fP\fP\fP\fP
 .PP
-\fC The reverted entries are printed, along with the status they had \fBbefore\fP the revert (because the new status is per definition \fIunchanged\fP).\fP
+\fC\fC\fC\fC\fC See also \fBHOWTO: Understand the entries' statii\fP.\fP\fP\fP\fP\fP
 .PP
-\fC If a revision is given, the entries' data is taken from this revision; furthermore, the \fBnew\fP status of that entry is shown. 
+\fC\fC\fC\fC\fC If a directory is given on the command line \fBall versioned entries in this directory\fP are reverted to the old state; this behaviour can be modified with \fB-R/-N\fP, or see below.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC The reverted entries are printed, along with the status they had \fBbefore\fP the revert (because the new status is per definition \fIunchanged\fP).\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC If a revision is given, the entries' data is taken from this revision; furthermore, the \fBnew\fP status of that entry is shown.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
-Please note that mixed revision working copies are not possible; the \fIBASE\fP revision is not changed, and a simple \fCrevert\fP without a revision arguments gives you that.
+Please note that mixed revision working copies are not (yet) possible; the \fIBASE\fP revision is not changed, and a simple \fCrevert\fP without a revision arguments gives you that. 
+.br
+ By giving a revision parameter you can just choose to get the text from a different revision.
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .SS "Difference to update"
-\fC If you find that something doesn't work as it should, you can revert entries until you are satisfied, and directly \fBcommit\fP the new state.\fP
+\fC\fC\fC\fC\fC If something doesn't work as it should in the installation you can revert entries until you are satisfied, and directly \fBcommit\fP the new state.\fP\fP\fP\fP\fP
 .PP
-\fC In contrast, if you \fBupdate\fP to an older version, you
+\fC\fC\fC\fC\fC In contrast, if you \fBupdate\fP to an older version, you
 .IP "\(bu" 2
-cannot choose single entries (no mixed revision working copies),
+cannot choose single entries (no mixed revision working copies yet),
 .IP "\(bu" 2
-and you cannot commit the old version with changes, as later changes will create conflicts in the repository.
+and you cannot commit the old version with changes, as the 'skipped' (later) changes will create conflicts in the repository.
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "Currently only known entries are handled."
-\fC If you need a switch (like \fC--delete\fP in \fCrsync(1)\fP ) to remove unknown (new, not yet versioned) entries, to get the directory in the exact state it is in the repository, say so.\fP
+\fC\fC\fC\fC\fC If you need a switch (like \fC--delete\fP in \fCrsync(1)\fP ) to remove unknown (new, not yet versioned) entries, to get the directory in the exact state it is in the repository, please tell the \fCdev@\fP mailing list.\fP\fP\fP\fP\fP
 .PP
-\fC  \fP
-.SS "If a path is specified whose parent is missing, \\c"
-\fC fsvs complains. We plan to provide a switch (probably \fC-p\fP), which would create (a sparse) tree up to this entry.\fP
+\fC\fC\fC\fC\fC  \fP\fP\fP\fP\fP
+.SS "Removed directory structures"
+\fC\fC\fC\fC\fC If a path is specified whose parent is missing, \fCfsvs\fP complains. 
+.br
+ We plan to provide a switch (probably \fC-p\fP), which would create (a sparse) tree up to this entry.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "Recursive behaviour"
-\fC When the user specifies a non-directory entry (file, device, symlink), this entry is reverted to the old state. This is the easy case.\fP
+\fC\fC\fC\fC\fC When the user specifies a non-directory entry (file, device, symlink), this entry is reverted to the old state.\fP\fP\fP\fP\fP
 .PP
-\fC If the user specifies a directory entry, see this table for the restoration results: command line switchresult \fC-N\fP this directory only (meta-data), none this directory, and direct children of the directory, \fC-R\fP this directory, and the complete tree below. \fP
+\fC\fC\fC\fC\fC If the user specifies a directory entry, these definitions should apply: command line switchresult \fC-N\fP this directory only (meta-data), none this directory, and direct children of the directory, \fC-R\fP this directory, and the complete tree below. \fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "Working with copied entries"
-\fC If an entry is marked as copied from another entry (and not committed!), a \fCrevert\fP will fetch the original copyfrom source. To undo the copy setting use the \fBuncp\fP command.\fP
+\fC\fC\fC\fC\fC If an entry is marked as copied from another entry (and not committed!), a \fCrevert\fP will fetch the original copyfrom source. To undo the copy setting use the \fBuncopy\fP command.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "status"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
- fsvs status [-C [-C]] [-v] [PATHs...]
+ fsvs status [-C [-C]] [-v] [-f filter] [PATHs...]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command shows the entries that have changed since the last commit.\fP
+\fC\fC\fC\fC\fC This command shows the entries that have been changed locally since the last commit.\fP\fP\fP\fP\fP
 .PP
-\fC The output is formatted as follows:
+\fC\fC\fC\fC\fC The most important output formats are:
 .IP "\(bu" 2
-A status columns of four (or, with \fC-v\fP , five) characters. There are either flags or a '.' printed, so that it's easily parsed by scripts -- the number of columns is only changed by \fB-q, -v -- verbose/quiet\fP.
+A status columns of four (or, with \fC-v\fP , six) characters. There are either flags or a '.' printed, so that it's easily parsed by scripts -- the number of columns is only changed by \fB-q, -v -- verbose/quiet\fP.
 .IP "\(bu" 2
 The size of the entry, in bytes, or \fC'dir'\fP for a directory, or \fC'dev'\fP for a device.
 .IP "\(bu" 2
-The path and name of the entry, formatted by the option \fBDisplaying paths\fP.
+The path and name of the entry, formatted by the \fBpath\fP option.
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC The status column can show the following flags:
-.IP "\(bu" 2
-Normally only changed entries are printed; with -v all are printed. The command line option \fC-v\fP additionally causes the \fC'm'\fP -flag to be split into two, see below.
+\fC\fC\fC\fC\fC Normally only changed entries are printed; with \fC-v\fP all are printed, but see the \fBfilter\fP option for more details.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC The status column can show the following flags:
 .IP "\(bu" 2
 \fC 'D'\fP and \fC'N'\fP are used for \fIdeleted\fP and \fInew\fP entries.
 .IP "\(bu" 2
 \fC 'd'\fP and \fC'n'\fP are used for entries which are to be unversioned or added on the next commit; the characters were chosen as \fIlittle delete\fP (only in the repository, not removed locally) and \fIlittle new\fP (although \fBignored\fP). See \fBadd\fP and \fBunversion\fP. 
 .br
- If such an entry does not exist, it is marked with an \fC'!'\fP -- because it has been manually marked, and for both types removing the entry makes no sense.
+ If such an entry does not exist, it is marked with an \fC'!'\fP in the last column -- because it has been manually marked, and so the removal is unexpected.
 .IP "\(bu" 2
 A changed type (character device to symlink, file to directory etc.) is given as \fC'R'\fP (replaced), ie. as removed and newly added.
 .IP "\(bu" 2
  If the entry has been modified, the change is shown as \fC'C'\fP. 
 .br
- If the modification or status change timestamps (mtime, ctime) are changed, but the size is still the same, the entry is marked as possibly changed (a question mark \fC'\fP?' is printed) - but see \fBchange detection\fP for details.
+ If the modification or status change timestamps (mtime, ctime) are changed, but the size is still the same, the entry is marked as possibly changed (a question mark \fC'\fP?' in the last column) - but see \fBchange detection\fP for details.
+.IP "\(bu" 2
+A \fC'x'\fP signifies a conflict.
 .IP "\(bu" 2
  The meta-data flag \fC'm'\fP shows meta-data changes like properties, modification timestamp and/or the rights (owner, group, mode); depending on the \fB-v/-q\fP command line parameters, it may be splitted into \fC'P'\fP (properties), \fC't'\fP (time) and \fC'p'\fP (permissions). 
 .br
  If \fC'P'\fP is shown for the non-verbose case, it means \fBonly\fP property changes, ie. the entries filesystem meta-data is unchanged.
 .IP "\(bu" 2
-A \fC'+'\fP is printed for files with a copy-from history; to see the URL of the copyfrom source, use \fC-v\fP twice.
-.IP "\(bu" 2
-A \fC'x'\fP signifies a conflict.
+A \fC'+'\fP is printed for files with a copy-from history; to see the URL of the copyfrom source, see the \fBverbose\fP option.
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Here's a table with the characters and their positions: 
+\fC\fC\fC\fC\fC Here's a table with the characters and their positions: 
 .PP
 .nf
 
@@ -1054,51 +1116,53 @@ A \fC'x'\fP signifies a conflict.
  * 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Furthermore please take a look at \fBStatus output coloring\fP.\fP
+\fC\fC\fC\fC\fC Furthermore please take a look at the \fBstat_color\fP option, and for more information about displayed data the \fBverbose\fP option.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "sync-repos"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs sync-repos [-r rev] [working copy base]
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command loads the file list from the repository. A following commit will send all differences and make the repository data identical to the local.\fP
+\fC\fC\fC\fC\fC This command loads the file list afresh from the repository. 
+.br
+ A following commit will send all differences and make the repository data identical to the local.\fP\fP\fP\fP\fP
 .PP
-\fC This is normally not needed; the use cases are
+\fC\fC\fC\fC\fC This is normally not needed; the only use cases are
 .IP "\(bu" 2
 debugging and
 .IP "\(bu" 2
-recovering from data loss in \fB$FSVS_WAA\fP.
+recovering from data loss in the \fB$FSVS_WAA\fP area.
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC It is (currently) important if you want to backup two similar machines. Then you can commit one machine into a subdirectory of your repository, make a copy of that directory for another machine, and sync this other directory on the other machine.\fP
+\fC\fC\fC\fC\fC It might be of use if you want to backup two similar machines. Then you could commit one machine into a subdirectory of your repository, make a copy of that directory for another machine, and \fCsync\fP this other directory on the other machine.\fP\fP\fP\fP\fP
 .PP
-\fC A commit then will transfer only _changed_ files; so if the two machines share 2GB of binaries (\fC/usr\fP , \fC/bin\fP , \fC/lib\fP , ...) then these 2GB are still shared in the repository, although over time they will deviate (as both committing machines know nothing of the other path with identical files).\fP
+\fC\fC\fC\fC\fC A commit then will transfer only _changed_ files; so if the two machines share 2GB of binaries (\fC/usr\fP , \fC/bin\fP , \fC/lib\fP , ...) then these 2GB are still shared in the repository, although over time they will deviate (as both committing machines know nothing of the other path with identical files).\fP\fP\fP\fP\fP
 .PP
-\fC This kind of backup could be substituted by several levels of repository paths, which get 'overlayed' in a defined priority. So the base directory, which all machines derive from, will be committed from one machine, and it's no longer necessary for all machines to send identical files into the repository.\fP
+\fC\fC\fC\fC\fC This kind of backup could be substituted by two or more levels of repository paths, which get \fIoverlaid\fP in a defined priority. So the base directory, which all machines derive from, will be committed from one machine, and it's no longer necessary for all machines to send identical files into the repository.\fP\fP\fP\fP\fP
 .PP
-\fC The revision argument should only ever be used for debugging; if you fetch a filelist for a revision, and then commit against later revisions, problems are bound to occur.\fP
+\fC\fC\fC\fC\fC The revision argument should only ever be used for debugging; if you fetch a filelist for a revision, and then commit against later revisions, problems are bound to occur.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
-There's an issue in subversion, to collapse identical files in the repository into a single storage. That would ease the simple backup example, in that there's not so much storage needed over time; but the network transfers would still be much more than needed.
+There's issue 2286 in subversion which describes sharing identical files in the repository in unrelated paths. By using this relaxes the storage needs; but the network transfers would still be much larger than with the overlaid paths.
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .SH "update"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs update [-r rev] [working copy base]
@@ -1106,16 +1170,35 @@ There's an issue in subversion, to collapse identical files in the repository in
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC This command does an update on all specified URLs for the current working copy, or, if none is given via \fB-u\fP, \fBall\fP URLs.\fP
+\fC\fC\fC\fC\fC This command does an update on the current working copy; per default for all defined URLs, but you can restrict that via \fB-u\fP.\fP\fP\fP\fP\fP
 .PP
-\fC It first reads all changes in the repositories, overlays them (so that only the highest-priority entries are used), and fetches all necessary changes.\fP
+\fC\fC\fC\fC\fC It first reads all filelist changes from the repositories, overlays them (so that only the highest-priority entries are used), and then fetches all necessary changes.\fP\fP\fP\fP\fP
 .PP
-\fC\fP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
+.SS "Updating to zero"
+\fC\fC\fC\fC\fC If you start an update with a target revision of zero, the entries belonging to that URL will be removed from your working copy, and the URL deleted from your URL list. 
+.br
+ This is a convenient way to replace an URL with another. 
+.br
+\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC 
+.PP
+\fBNote:\fP
+.RS 4
+As FSVS has no full mixed revision support yet, it doesn't know whether under the removed entry is a lower-priority one with the same path, which should get visible now. 
+.br
+ Directories get changed to the highest priority URL that has an entry below (which might be hidden!).
+.RE
+.PP
+Because of this you're advised to either use that only for completely distinct working copies, or do a \fBsync-repos\fP (and possibly one or more \fBrevert\fP calls) after the update.\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC\fP\fP\fP\fP\fP
 .SH "urls"
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 .nf
  fsvs urls URL [URLs...]
@@ -1124,39 +1207,39 @@ There's an issue in subversion, to collapse identical files in the repository in
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Initializes a working copy administrative area and connects \fCthe\fP current working directory to \fCREPOS_URL\fP. All commits and updates will be done to this directory and against the given URL.\fP
+\fC\fC\fC\fC\fC Initializes a working copy administrative area and connects \fCthe\fP current working directory to \fCREPOS_URL\fP. All commits and updates will be done to this directory and against the given URL.\fP\fP\fP\fP\fP
 .PP
-\fC Example: 
+\fC\fC\fC\fC\fC Example: 
 .PP
 .nf
  fsvs urls http://svn/repos/installation/machine-1/trunk
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC For a format definition of the URLs please see the chapter \fBFormat of URLs\fP.\fP
+\fC\fC\fC\fC\fC For a format definition of the URLs please see the chapter \fBFormat of URLs\fP.\fP\fP\fP\fP\fP
 .PP
-\fC 
+\fC\fC\fC\fC\fC 
 .PP
 \fBNote:\fP
 .RS 4
-If there are already URLs defined, and use that command later again, please note that as of 1.0.18 \fBthe older URLs are not overwritten\fP as before, but that the new URLs are \fBappended\fP to the given list! If you want to start afresh, use something like 
+If there are already URLs defined, and you use that command later again, please note that as of 1.0.18 \fBthe older URLs are not overwritten\fP as before, but that the new URLs are \fBappended\fP to the given list! If you want to start afresh, use something like 
 .PP
 .nf
- echo '' | fsvs urls load
+ true | fsvs urls load
 
 .fi
 .PP
 .RE
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .SS "Loading URLs"
-\fC You can load a list of URLs from \fCSTDIN\fP; use the \fCload\fP subcommand for that.\fP
+\fC\fC\fC\fC\fC You can load a list of URLs from \fCSTDIN\fP; use the \fCload\fP subcommand for that.\fP\fP\fP\fP\fP
 .PP
-\fC Example: 
+\fC\fC\fC\fC\fC Example: 
 .PP
 .nf
  ( echo 'N:local,prio:10,http://svn/repos/install/machine-1/trunk' ;
@@ -1165,16 +1248,24 @@ If there are already URLs defined, and use that command later again, please note
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC Empty lines are ignored.\fP
+\fC\fC\fC\fC\fC Empty lines are ignored.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
 .SS "Dumping the defined URLs"
-\fC To see which URLs are in use for the current WC, you can use \fCdump\fP.\fP
+\fC\fC\fC\fC\fC To see which URLs are in use for the current WC, you can use \fCdump\fP.\fP\fP\fP\fP\fP
 .PP
-\fC As an optional parameter you can give a format statement; \fCp\fP , \fCn\fP , \fCr\fP, \fCt\fP and \fCu\fP are substituted by the priority, name, current revision, target revision and URL. Note: That's not a real \fCprintf()-format\fP; only these and a few \fC\\\fP sequences are recognized.\fP
+\fC\fC\fC\fC\fC As an optional parameter you can give a format statement: \fCp\fP priority \fCn\fP name \fCr\fP current revision \fCt\fP target revision \fCR\fP readonly-flag \fCu\fP URL \fCI\fP internal number for this URL \fP\fP\fP\fP\fP
 .PP
-\fC Example: 
+\fC\fC\fC\fC\fC 
+.PP
+\fBNote:\fP
+.RS 4
+That's not a real \fCprintf()-format\fP; only these and a few \fC\\\fP sequences are recognized.
+.RE
+.PP
+Example: 
 .PP
 .nf
  fsvs urls dump '  %u %n:%p\\n'
@@ -1183,8 +1274,34 @@ If there are already URLs defined, and use that command later again, please note
 
 .fi
 .PP
-\fP
+\fP\fP\fP\fP\fP
 .PP
-\fC The default format is \fC'N:%n,P:%p,D:%t,%u\\\\n'\fP; for a more readable version you can use \fB-v\fP. \fP
+\fC\fC\fC\fC\fC The default format is \fC'name:%n,prio:%p,target:%t,ro:%r,%u\\\\n'\fP; for a more readable version you can use \fB-v\fP.\fP\fP\fP\fP\fP
 .PP
+\fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
+.SS "Loading URLs"
+\fC\fC\fC\fC\fC You can change the various parameters of the defined URLs like this: 
+.PP
+.nf
+ # Define an URL
+ fsvs urls name:url1,target:77,readonly:1,http://anything/...
+ # Change values
+ fsvs urls name:url1,target:HEAD
+ fsvs urls readonly:0,http://anything/...
+ fsvs urls name:url1,prio:88,target:32
 
+.fi
+.PP
+\fP\fP\fP\fP\fP
+.PP
+\fC\fC\fC\fC\fC 
+.PP
+\fBNote:\fP
+.RS 4
+FSVS as yet doesn't store the whole tree structures of all URLs. So if you change the priority of an URL, and re-mix the directory trees that way, you'll need a \fBsync-repos\fP and some \fBrevert\fP commands. I'd suggest to avoid this, until FSVS does handle that case better. 
+.RE
+.PP
+\fP\fP\fP\fP\fP
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for fsvs from the source code.

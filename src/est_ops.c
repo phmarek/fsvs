@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,6 +20,7 @@
 #include "cache.h"
 #include "actions.h"
 #include "est_ops.h"
+#include "ignore.h"
 #include "direnum.h"
 #include "warnings.h"
 #include "helper.h"
@@ -45,26 +46,17 @@ struct free_estat
 
 
 
-/* there are 2 formats, one for writing, one for reading. */
-const char 
-/** Formats for reading/writing entries in the \a dir files.
- * "mode ctime mtime repo_flags dev_descr MD5_should
- *   size repos_version url# dev# inode# parent_inode# entry_count
- *   uid gid '#'name\\0\\n"
- * Directories have an \c x instead of MD5_*.
- *
- * \note The \c # before the name is needed to know where filenames start.  
- * Since sscanf() skips over the whitespace (as wanted), we loose 
- * informations. */
-ops__dir_info_format_s[]="%llo %lx %lx %x %n%*s %n%*s "
-		"%lld %ld %u %lx %lld %lld %u "
-		"%u %u%n", 
-	ops__dir_info_format_p[]="%07llo %8x %8x %x %s %s "
-		"%lld %ld %u %lx %lld %lld %u "
-		"%u %u %s";
+/** Formats for writing entries in the \a dir files.
+ * <tt>mode ctime mtime repo_flags dev_descr MD5_should
+ *   size repos_version url# dev# inode# parent_line# entry_count
+ *   uid gid name\\0\\n</tt>
+ * Directories have an \c x instead of MD5_*. */
+const char ops__dir_info_format_p[]="%07llo %8x %8x %x %s %s "
+"%lld %ld %u %lx %lld %lld %u "
+"%u %u %s";
 #define WAA_MAX_DIR_INFO_CHARS (11+1+8+1+8+1+8+1+APR_MD5_DIGESTSIZE*2+1 \
-     +18+1+9+1+9+1+16+1+18+1+18+1+9+1+ \
-		 9+1+9+1+NAME_MAX+1+1)
+		+18+1+9+1+9+1+16+1+18+1+18+1+9+1+ \
+		9+1+9+1+NAME_MAX+1+1)
 
 
 /** -.
@@ -80,16 +72,17 @@ const char link_spec[]="link ",
 
 static struct free_estat *free_list = NULL;
 
- 
+
 
 /** -.
  * 
- * For a symlink \c info is returned as the path it points to; devices are 
- * fully decoded and return \c info==NULL. */
+ * \c info, if not \c NULL, gets the pointer to the first character after 
+ * the parsed text: For a symlink it is returned as the path it points to,
+ * devices are fully decoded and should a pointer to \c \\0. */
 int ops__string_to_dev(struct estat *sts, char *data, char **info)
 {
 	int maj, min;
-	int ft, mode;
+	int ft, mode, len;
 	char delimiter;
 	int status;
 
@@ -115,15 +108,16 @@ int ops__string_to_dev(struct estat *sts, char *data, char **info)
 		}
 		else mode=0;
 
-		if (info) *info=NULL;
 
-		ft=sscanf(data, "%c0x%X:0x%X", &delimiter, &maj, &min);
+		ft=sscanf(data, "%c0x%X:0x%X%n", &delimiter, &maj, &min, &len);
 
 		STOPIF_CODE_ERR(mode == 0 ||
 				ft != 3 || 
 				(delimiter != ':' && delimiter != ' '),
 				EINVAL,
 				"'%s' is not parseable as a special description", data);
+
+		if (info) *info=data+len;
 
 #ifdef DEVICE_NODES_DISABLED
 		DEVICE_NODES_DISABLED();
@@ -132,7 +126,8 @@ int ops__string_to_dev(struct estat *sts, char *data, char **info)
 #endif
 	}
 
-	sts->updated_mode=sts->st.mode= (sts->st.mode & ~S_IFMT) | mode;
+	sts->st.mode= (sts->st.mode & ~S_IFMT) | mode;
+	sts->local_mode_packed = MODE_T_to_PACKED(mode);
 
 ex:
 	return status;
@@ -180,9 +175,9 @@ char *ops___dev_to_string(struct estat *sts, char delimiter)
 {
 	static char buffer[64];
 
-/* I'm not fully sure about that. */
+	/* I'm not fully sure about that. */
 	BUG_ON(!(sts->remote_status & FS_NEW) && 
-			!(S_ISBLK(sts->updated_mode) || S_ISCHR(sts->updated_mode)),
+			!(S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode)),
 			"%s: mode is 0%o", sts->name, sts->st.mode);
 
 #ifdef DEVICE_NODES_DISABLED
@@ -285,9 +280,13 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 			else
 				/* The changed flag can be set or cleared by cs__compare_file().
 				 * We don't set it until we *know* the entry has changed. */
-			if ( (file_status & FS_META_MTIME) ||
-					old->ctim.tv_sec != new->ctim.tv_sec )
-				file_status |= FS_LIKELY;
+				/* If the entry is copied, the ctime *must* be different (unless 
+				 * it's a hardlink); here we assume that it's not changed, if the 
+				 * mtime is the same. */
+				if ((file_status & FS_META_MTIME) ||
+						(old->ctim.tv_sec != new->ctim.tv_sec && 
+						 !(sts->flags & RF___IS_COPY)) )
+					file_status |= FS_LIKELY;
 			break;
 
 		case S_IFDIR:
@@ -302,7 +301,7 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 
 		default:
 			BUG_ON(1);
-//		case FT_IGNORE:
+			//		case FT_IGNORE:
 			file_status=FS_NO_CHANGE;
 	}
 
@@ -332,54 +331,93 @@ ex:
 int ops__load_1entry(char **mem_pos, struct estat *sts, char **filename,
 		ino_t *parent_i)
 {
-	char *buffer;
-	int i, p, status;
+	char *buffer, *before;
+	int status;
 	ino_t parent_inode;
-	int pos_should, pos_dev;
-	t_ull par_ino, size, this_ino, mode;
-	t_ul dev;
-	unsigned internal_number;
+       unsigned internal_number, e_t;
+
 
 
 	status=0;
 	buffer=*mem_pos;
-	/* Now parse. Use temporary variables of defined size 
-	 * for some inputs. */
-	i=sscanf(buffer, ops__dir_info_format_s, 
-			&mode,
-			&(sts->st.ctim.tv_sec),
-			&(sts->st.mtim.tv_sec),
-			&(sts->flags),
-			&pos_dev, 
-			&pos_should, 
-			&size,
-			&(sts->repos_rev),
-			&internal_number,
-			&dev,
-			&this_ino,
-			&par_ino,
-			&(sts->entry_count),
-			&(sts->st.uid),
-			&(sts->st.gid),
-			&p);
-	parent_inode=par_ino;
-	sts->st.dev=dev;
-	sts->st.ino=this_ino;
-	sts->st.size=size;
-	sts->updated_mode=sts->st.mode=mode;
-	sts->old_rev = sts->repos_rev;
 
-	/* The %n are not counted on glibc.
-	 * "man sscanf" warns:
-	 *   "Probably it is wise not to make any assumptions on the effect of
-	 *    %n conversions on the return value."
-	 * We hope and try, maybe we'll need a autoconf/configure test. */
-	STOPIF_CODE_ERR( i!=13, EINVAL, 
-			"cannot parse entry line - %d tokens found", i);
+	/* Now parse. Use temporary variables of defined size for some inputs. */
+	/* The parsing is in a block, followed by the checks, so that the icache 
+	 * is happy. */
+	/* Hexadecimal allows more characters than octal, so we have to check 
+	 * whether something was done here.
+	 * Below we can try some conversions (for the same base) one after 
+	 * another, and only check the last - if a bad character is in the 
+	 * string, all of the last calls will fail, so we only need to check the 
+	 * last conversion in each per-base block.
+	 * We have to skip the initial whitespace; if there's eg " X" in the 
+	 * string, the space would be skipped, and the pointers different. */
+	before=hlp__skip_ws(buffer);
+	sts->st.mode = strtoul(before, &buffer, 8);
+	sts->old_rev_mode_packed = 
+		sts->new_rev_mode_packed = 
+		sts->local_mode_packed = MODE_T_to_PACKED(sts->st.mode);
+	if (before == buffer) goto inval;
+	/* And we know that we write a space; without this a later test would 
+	 * fail, and give some misleading error. */
+	if (*(buffer++) != ' ') goto inval;
 
 
-	/* Only the root entry has parent_inode==0; the others start 
-	 * counting with 1. */
+	/* Base 16. */
+	sts->st.ctim.tv_sec= strtoul(buffer, &buffer, 16);
+	sts->st.mtim.tv_sec= strtoul(buffer, &buffer, 16);
+	before=hlp__skip_ws(buffer);
+	sts->flags= strtoul(before, &buffer, 16);
+	if (before == buffer) goto inval;
+	if (*(buffer++) != ' ') goto inval;
+
+
+	/* Devices have major:minor stored */
+	buffer=hlp__skip_ws(buffer);
+	if (S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode))
+		STOPIF( ops__string_to_dev(sts, buffer, &buffer), NULL);
+	else
+		buffer=hlp__get_word(buffer, NULL);
+
+	/* All entries but directories have MD5 */
+	buffer=hlp__skip_ws(buffer);
+	if (!S_ISDIR(sts->st.mode))
+		STOPIF( cs__char2md5( buffer, &buffer, sts->md5),
+				"Parsing the md5 failed");
+	else
+		buffer=hlp__get_word(buffer, NULL);
+
+
+	/* Base 10. */
+	sts->st.size = strtoul(buffer, &buffer, 10); 
+	sts->old_rev = sts->repos_rev = strtoul(buffer, &buffer, 10); 
+	internal_number = strtoul(buffer, &buffer, 10); 
+	sts->st.dev = strtoul(buffer, &buffer, 16); 
+	sts->st.ino = strtoul(buffer, &buffer, 10); 
+	parent_inode= strtoul(buffer, &buffer, 10); 
+       e_t = strtoul(buffer, &buffer, 10);
+	sts->st.uid = strtoul(buffer, &buffer, 10); 
+	before=hlp__skip_ws(buffer);
+	sts->st.gid = strtoul(before, &buffer, 10); 
+	if (before == buffer) goto inval;
+
+
+       /* We need to parse, but would overwrite the shared md5 member. */
+       if (S_ISDIR(sts->st.mode))
+               sts->entry_count = e_t;
+       /* Only a directory may have children. We cannot test sts->entry_count,
+        * as this is already overwritten by the MD5. */
+       BUG_ON(e_t && !S_ISDIR(sts->st.mode));
+
+
+	/* Skip over exactly one space - else we'd loose information about 
+	 * filenames starting with whitespaces. */
+	if (*buffer != ' ') goto inval;
+	*filename=buffer+1;
+
+
+	/* Only the root entry has parent_inode==0; the others start counting 
+	 * with 1. */
 	if (parent_inode)
 	{
 		/* There may be entries without an URL associated - eg. entries which
@@ -396,26 +434,6 @@ int ops__load_1entry(char **mem_pos, struct estat *sts, char **filename,
 			NULL;
 	}
 
-	/* Only a directory may have children */
-	BUG_ON(sts->entry_count && !S_ISDIR(sts->st.mode));
-
-	/* Devices have major:minor stored */
-	if (S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode))
-		STOPIF( ops__string_to_dev(sts, buffer+pos_dev, NULL), NULL);
-	/* All entries but directories have MD5 */
-	if (!S_ISDIR(sts->st.mode))
-	{
-		STOPIF( cs__char2md5(buffer+pos_should, sts->md5),
-				"Parsing the md5 failed");
-	}
-
-
-	/* Skip over exactly one space - else we'd loose information about 
-	 * filenames starting with whitespaces. */
-	buffer += p;
-	BUG_ON(*buffer != ' ');
-	*filename=buffer+1;
-
 	if (parent_i) *parent_i=parent_inode;
 
 	/* Advance memory pointer past end of filename.
@@ -428,6 +446,36 @@ int ops__load_1entry(char **mem_pos, struct estat *sts, char **filename,
 
 ex:
 	return status;
+	/* Out of line */
+
+inval:
+	STOPIF( EINVAL, "Error parsing entry line \"%s\";\n"
+			"your entry list is corrupt, ask the users mailing list, please.", 
+			*mem_pos);
+	/* gcc warns about reaching the end of a non-void function - which can't 
+	 * really happen here, but to humor the compiler ... */
+	goto ex;
+}
+
+
+/** Returns the number of entries to write into the entry list.
+ * Must be called with a directory entry. */
+int ops___entries_to_write(struct estat *dir)
+{
+	struct estat **list;
+	int count;
+
+	count=0;
+	if (!dir->entry_count) return 0;
+	list=dir->by_inode;
+	while (*list)
+	{
+		if (ops__should_entry_be_written_in_list(*list)) 
+			count++;
+		list++;
+	}
+
+	return count;
 }
 
 
@@ -435,8 +483,8 @@ ex:
  * The parameter \a parent_ino is a(n integer) reference to the parent 
  * directory - the line number in which it was written.
  * The format is fixed (see \c ops__dir_info_format_p); the string includes 
- * a \c \\n at the end, and a \c \\0 for filename termination just before 
- * that.
+ * a \c \\0 for filename termination, and a \c \\n at the end.
+ * 
  * Any other characters that are allowed in a filename can be written - 
  * even control characters like \c \\n, \c \\r, \c \\f and so on.
  * */
@@ -473,6 +521,11 @@ int ops__save_1entry(struct estat *sts,
 	is_spec = S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode) ||
 		S_ISLNK(sts->st.mode);
 
+
+	if (sts->match_pattern)
+		STOPIF( ops__apply_group(sts, NULL, NULL), NULL);
+
+
 	if (sts->url)
 		intnum=sts->url->internal_number;
 	else
@@ -490,14 +543,16 @@ int ops__save_1entry(struct estat *sts,
 			(int)sts->st.mtim.tv_sec,
 			sts->flags & RF___SAVE_MASK,
 			( is_dev ? ops__dev_to_waa_string(sts) : "nd" ),
-			( is_dir ? "x" : cs__md52hex(sts->md5) ),
+			( is_dir ? "x" : cs__md5tohex_buffered(sts->md5) ),
 			(t_ull)sts->st.size,
 			sts->repos_rev == SET_REVNUM ? sts->url->current_rev : sts->repos_rev,
 			intnum,
 			(t_ul)sts->st.dev,
 			(t_ull)sts->st.ino,
 			(t_ull)parent_ino,
-			is_dir ? sts->entry_count : 0,
+			/* We have to make sure that the entry count in the parent is 
+			 * correct. */
+			is_dir ? ops___entries_to_write(sts) : 0,
 			sts->st.uid,
 			sts->st.gid,
 			sts->name
@@ -525,7 +580,7 @@ ex:
  *
  * If no \c PATH_SEPARATOR is found in the \a path, the \a path itself is 
  * returned. */
-inline const char *ops__get_filename(const char *path)
+char *ops__get_filename(char *path)
 {
 	char *cp;
 
@@ -542,7 +597,7 @@ inline const char *ops__get_filename(const char *path)
  *
  * If there's only a filename left (no \c / found), this returns \c NULL.  
  * */
-inline const char *ops___split_fnpart(const char *path)
+static inline const char *ops___split_fnpart(const char *path)
 {
 	char *cp;
 
@@ -567,7 +622,11 @@ int ops__build_path2(char *path, int max, struct estat *sts)
 {
 	int l,i;
 
-	l=strlen(sts->name);
+
+	/* The path lenghts have just been fixed by ops__calc_path_len(), so we 
+	 * can rely on that (minus the PATH_SEPARATOR).
+	 * If there's no parent, we're at ".". */
+	l=sts->parent ? sts->path_len - sts->parent->path_len - 1 : 1;
 	if (l+1 > max) return 0;
 
 	if (sts->parent)
@@ -582,7 +641,7 @@ int ops__build_path2(char *path, int max, struct estat *sts)
 		i=0;
 	}
 
-	strcpy(path+i, sts->name);
+	memcpy(path+i, sts->name, l);
 	path[i+l+0]=PATH_SEPARATOR;
 	path[i+l+1]=0;
 
@@ -641,9 +700,9 @@ int ops__build_path(char **value, struct estat *sts)
 	unsigned needed_space;
 	char *data;
 
-/* Please note that in struct \ref estat there's a bitfield, and its member 
- * \ref cache_index must take the full range plus an additional "out of 
- * range" value! */
+	/* Please note that in struct \ref estat there's a bitfield, and its member 
+	 * \ref cache_index must take the full range plus an additional "out of 
+	 * range" value! */
 	STOPIF( cch__new_cache(&cache, 48), NULL);
 
 	/* Look if it's cached. */
@@ -682,7 +741,7 @@ int ops__build_path(char **value, struct estat *sts)
 	status=0;
 
 ex:
-//	DEBUGP("status=%d; path=%s", status, cache->entries[cache->lru]->data);
+	//	DEBUGP("status=%d; path=%s", status, cache->entries[cache->lru]->data);
 	if (!status) *value=cache->entries[cache->lru]->data;
 	return status;
 }
@@ -704,9 +763,8 @@ int ops__new_entries(struct estat *dir,
 	/* By name is no longer valid. */
 	IF_FREE(dir->by_name);
 	/* Now insert the newly found entries in the dir list. */
-	dir->by_inode = realloc(dir->by_inode, 
-			(dir->entry_count+count+1) * sizeof(dir->by_inode[0]));
-	STOPIF_ENOMEM(!dir->by_inode);
+	STOPIF( hlp__realloc( &dir->by_inode, 
+				(dir->entry_count+count+1) * sizeof(dir->by_inode[0])), NULL);
 
 	memcpy(dir->by_inode+dir->entry_count,
 			new_entries, count*sizeof(dir->by_inode[0]));
@@ -726,13 +784,13 @@ ex:
  * This function doesn't return \c ENOENT, if no entry is found; \a *sts 
  * will just be \c NULL.
  * */
-int ops__find_entry_byname(struct estat *dir, const char *name, 
+int ops__find_entry_byname(struct estat *dir, char *name, 
 		struct estat **sts,
 		int ignored_too)
 {
 	int status;
 	struct estat **sts_p;
-	const char *filename;
+	char *filename;
 
 
 	status=0;
@@ -804,9 +862,8 @@ ex:
 
 
 /** Inline function to abstract a move. */
-inline void ops___move_array(struct estat **array, int index, int len)
+static inline void ops___move_array(struct estat **array, int index, int len)
 {
-	DEBUGP("moving index %d in [%d]", index, len);
 	/* From A B C D E F i H J K l  NULL
 	 * to   A B C D E F H J K l  NULL */
 	memmove( array+index, array+index+1,
@@ -872,8 +929,7 @@ int ops__allocate(int needed,
 		/* Allocate at least a certain block size. */
 		if (needed < 8192/sizeof(**where)) 
 			needed=8192/sizeof(**where);
-		*where=calloc(needed, sizeof(**where));
-		STOPIF_ENOMEM(!*where);
+		STOPIF( hlp__calloc( where, needed, sizeof(**where)), NULL);
 
 		if (needed > returned)
 		{
@@ -912,7 +968,7 @@ int ops__free_entry(struct estat **sts_p)
 	status=0;
 	if (sts->old)
 		STOPIF( ops__free_entry(& sts->old), NULL);
-	if (S_ISDIR(sts->updated_mode))
+	if (S_ISDIR(sts->st.mode))
 	{
 		BUG_ON(sts->entry_count && !sts->by_inode);
 
@@ -922,7 +978,7 @@ int ops__free_entry(struct estat **sts_p)
 		IF_FREE(sts->by_inode);
 		IF_FREE(sts->by_name);
 		IF_FREE(sts->strings);
-		sts->updated_mode=0;
+		sts->st.mode=0;
 	}
 
 	/* Clearing the memory here serves no real purpose;
@@ -1133,9 +1189,8 @@ int ops__free_marked(struct estat *dir, int fast_mode)
 		if (!fast_mode)
 		{
 			/* resize by_inode - should never give NULL. */
-			dir->by_inode=realloc(dir->by_inode, 
-					sizeof(*(dir->by_inode)) * (new_count+1) );
-			BUG_ON(!dir->by_inode);
+			STOPIF( hlp__realloc( &dir->by_inode, 
+						sizeof(*(dir->by_inode)) * (new_count+1) ), NULL);
 		}
 
 		dir->by_inode[new_count]=NULL;
@@ -1183,8 +1238,7 @@ int ops__traverse(struct estat *current, char *fullpath,
 
 
 	status=0;
-	copy=strdup(fullpath);
-	STOPIF_ENOMEM(!copy);
+	STOPIF( hlp__strdup( &copy, fullpath), NULL);
 	path=copy;
 
 	quit=0;
@@ -1234,8 +1288,7 @@ int ops__traverse(struct estat *current, char *fullpath,
 
 			/* None found, make a new. */
 			STOPIF( ops__allocate(1, &sts, NULL), NULL);
-			sts->name=strdup(path);
-			STOPIF_ENOMEM(!sts->name);
+			STOPIF( hlp__strdup( &sts->name, path), NULL);
 
 			if (flags & OPS__ON_UPD_LIST)
 				STOPIF( waa__insert_entry_block(sts, 1), NULL);
@@ -1308,7 +1361,7 @@ int ops__update_single_entry(struct estat *sts, struct sstat_t *output)
 		/* only valid error is ENOENT - then this entry has been removed */
 		/* If we did STOPIF_CODE_ERR(status != ENOENT ...), then status
 		 * would be overwritten with the value of the comparison. */
-		if (status != ENOENT) 
+		if (abs(status) != ENOENT) 
 			STOPIF(status, "cannot lstat(%s)", fullpath);
 
 removed:
@@ -1356,12 +1409,12 @@ removed:
 	if (output)
 		*output=st;
 	else
-		if (!only_check_status)
-			sts->st=st;
+		if (action->overwrite_sts_st) sts->st=st;
 
 	DEBUGP("known %s: action=%X, flags=%X, mode=0%o, status=%d",
-			fullpath, sts->entry_status, sts->flags, sts->updated_mode, status);
-	sts->updated_mode=st.mode;
+			fullpath, sts->entry_status, sts->flags, sts->st.mode, status);
+
+	sts->local_mode_packed = MODE_T_to_PACKED(st.mode);
 
 ex:
 	return status;
@@ -1369,7 +1422,7 @@ ex:
 
 
 /** Set the estat::do_* bits, depending on the parent.
- * May not be called for the root.
+ * Should not be called for the root.
  * */
 inline void ops___set_todo_bits(struct estat *sts)
 {
@@ -1385,26 +1438,23 @@ inline void ops___set_todo_bits(struct estat *sts)
 
 
 /** -.
- * May not be called for the root. */
-int ops__set_todo_bits(struct estat *sts)
+ * Should not be called for the root. */
+void ops__set_todo_bits(struct estat *sts)
 {
-	int status;
-
-	status=0;
-
 	/* We don't know any better yet. */
 	sts->do_filter_allows=1;
 	sts->do_filter_allows_done=1;
 
-	ops___set_todo_bits(sts);
+	if (sts->parent)
+		ops___set_todo_bits(sts);
 
-	DEBUGP("user,this,child=%d.%d parent=%d.%d", 
+	DEBUGP("user_sel,this=%d.%d parent=%d.%d", 
 			sts->do_userselected, 
 			sts->do_this_entry,
 			sts->parent ? sts->parent->do_userselected : 0,
 			sts->parent ? sts->parent->do_this_entry : 0);
 
-	return status;
+	return;
 }
 
 
@@ -1419,8 +1469,10 @@ int ops__update_filter_set_bits(struct estat *sts)
 	int status;
 	struct sstat_t stat;
 
+	status=0;
+
 	if (sts->parent)
-		STOPIF( ops__set_todo_bits(sts), NULL);
+		ops__set_todo_bits(sts);
 
 	if (sts->do_this_entry)
 	{
@@ -1430,7 +1482,7 @@ int ops__update_filter_set_bits(struct estat *sts)
 		{
 			/* We'd have an invalid value if the entry is removed. */
 			if ((sts->entry_status & FS_REPLACED) != FS_REMOVED)
-				if (!only_check_status)
+				if (action->overwrite_sts_st)
 					sts->st = stat;
 		}
 	}
@@ -1460,13 +1512,13 @@ void ops__copy_single_entry(struct estat *src, struct estat *dest)
 	if (S_ISDIR(dest->st.mode))
 	{
 #if 0
-			/* Currently unused. */
-			dest->by_inode=NULL;
-			dest->by_name=NULL;
-			dest->entry_count=0;
-			dest->strings=NULL;
-			dest->other_revs=0;
-			dest->to_be_sorted=0;
+		/* Currently unused. */
+		dest->by_inode=NULL;
+		dest->by_name=NULL;
+		dest->entry_count=0;
+		dest->strings=NULL;
+		dest->other_revs=0;
+		dest->to_be_sorted=0;
 #endif
 	}
 	else
@@ -1484,16 +1536,15 @@ void ops__copy_single_entry(struct estat *src, struct estat *dest)
 	}
 
 #if 0
-		/* The temporary area is mostly void, but to be on the safe side ... */
-		dest->child_index=0;
-		dest->dir_pool=NULL;
+	/* The temporary area is mostly void, but to be on the safe side ... */
+	dest->child_index=0;
+	dest->dir_pool=NULL;
 #endif
 
 	dest->flags=RF_ISNEW | RF_COPY_SUB;
 
 	/* Gets recalculated on next using */
 	dest->path_len=0;
-	dest->path_level=dest->parent->path_level+1;
 
 	/* The entry is not marked as to-be-ignored ... that would change the 
 	 * entry type, and we have to save it anyway. */
@@ -1584,7 +1635,7 @@ a_only:
 	/* Do remaining list_B entries, if necessary. */
 	if (only_B || for_every)
 	{
-	  while (*list_B)
+		while (*list_B)
 		{
 			if (only_B) 
 				STOPIF( only_B(*list_B, list_B), NULL);
@@ -1654,16 +1705,17 @@ int ops__read_special_entry(apr_file_t *a_stream,
 	bof=0;
 	STOPIF( apr_file_seek(a_stream, APR_SET, &bof), NULL);
 
-	special_data= pool ? 
-		apr_palloc( pool, special_len+1) : 
-		malloc(special_len+1);
-	STOPIF_ENOMEM(!special_data);
+	if (pool)
+		/* Aborts if no memory available. */
+		special_data= apr_palloc( pool, special_len+1);
+	else
+		STOPIF( hlp__alloc( &special_data, special_len+1), NULL);
 
 
 	/* Read data. */
 	len_read=special_len;
 	STOPIF( apr_file_read( a_stream, special_data, &len_read), NULL);
-	STOPIF_CODE_ERR( len_read != special_len, ENODATA, 
+	STOPIF_CODE_ERR( len_read != special_len, APR_EOF, 
 			"Reading was cut off at byte %llu of %llu",
 			(t_ull)len_read, (t_ull)special_len);
 	special_data[len_read]=0;
@@ -1691,4 +1743,156 @@ int ops__are_children_interesting(struct estat *dir)
 
 	return tmp.do_this_entry;
 }
+
+
+/** -.
+ *
+ * This means applying the target URL, and storing the auto-properties.
+ *
+ * Optionally the property database can be returned in \a props.
+ * */
+int ops__apply_group(struct estat *sts, hash_t *props, 
+		apr_pool_t *pool)
+{
+	int status;
+	struct grouping_t *group;
+	int own_pool;
+
+
+	status=0;
+	own_pool=0;
+	if (props) *props=NULL;
+
+	if (!sts->match_pattern) goto return_prop;
+
+	group= sts->match_pattern->group_def;
+	BUG_ON(!group);
+
+	DEBUGP("applying %s to %s", sts->match_pattern->group_name, sts->name);
+
+	if (group->auto_props)
+	{
+		if (!pool)
+		{
+			own_pool=1;
+			STOPIF( apr_pool_create_ex(&pool, global_pool, NULL, NULL), NULL);
+		}
+
+		STOPIF( prp__set_from_aprhash(sts, group->auto_props, 
+					STORE_IN_FS, props, pool), NULL);
+		sts->flags |= RF_PUSHPROPS;
+	}
+
+	if (!sts->url)
+		sts->url=group->url;
+	sts->to_be_ignored=group->is_ignore;
+
+	sts->match_pattern=NULL;
+
+return_prop:
+	if (props && !*props)
+		STOPIF( prp__open_byestat( sts, 
+					GDBM_WRCREAT | HASH_REMEMBER_FILENAME, props), NULL);
+
+ex:
+	if (own_pool)
+		apr_pool_destroy(pool);
+
+	return status;
+}
+
+
+/** -. */
+int ops__make_shadow_entry(struct estat *sts, int flags)
+{
+	int status;
+	struct estat *copy;
+
+
+	BUG_ON(sts->old);
+
+	STOPIF( ops__allocate(1, &copy, NULL), NULL);
+	memcpy(copy, sts, sizeof(*copy));
+
+	if (flags == SHADOWED_BY_REMOTE)
+	{
+		sts->remote_status=FS_REPLACED;
+		copy->remote_status=FS_REMOVED;
+	}
+	else if (flags == SHADOWED_BY_LOCAL)
+	{
+		sts->remote_status=FS_REMOVED;
+		copy->remote_status=FS_REPLACED;
+	}
+
+	/* The by_inode and by_name arrays of the parent might point to the old 
+	 * location; rather than searching and changing them, we simply copy the 
+	 * old data, and clean the references in sts. */
+	copy->cache_index=0;
+	sts->old=copy;
+
+ex:
+	return status;
+}
+
+
+#ifndef ENABLE_RELEASE
+/** -.
+ * We don't want that in a release build; but debug (and default) uses
+ * \c DEBUGP(), so we might need this. */
+void DEBUGP_dump_estat(struct estat *sts)
+{
+	char *path;
+
+	/* We don't want to return failures (like ENOMEM), because then this 
+	 * function would have to be wrapped in STOPIF(), which would look ugly 
+	 * compared to the other DEBUGP() calls.
+	 * So if we can't get the path we just use some part of the filename. */
+	/* We could also use
+	 *   char path[sts->path_len+2];
+	 *   ops__build_path2(...)
+	 * which cannot return an ENOMEM, but would always recompute the path 
+	 * (and not use the cache). */
+	if (ops__build_path(&path, sts))
+		DEBUGP("*** Dump of ... %s/%s",
+				sts->parent ? sts->parent->name : "/",
+				sts->name);
+	else
+		DEBUGP("*** Dump of %s", path);
+
+	DEBUGP("flags=%s", st__flags_string_fromint(sts->flags));
+	DEBUGP("entry_status=%s", st__status_string_fromint(sts->entry_status));
+	DEBUGP("remote_status=%s", st__status_string_fromint(sts->remote_status));
+
+	DEBUGP("types: st=%s, local=%s, new=%s, old=%s",
+				st__type_string(sts->st.mode),
+				st__type_string(PACKED_to_MODE_T(sts->local_mode_packed)),
+				st__type_string(PACKED_to_MODE_T(sts->new_rev_mode_packed)),
+				st__type_string(PACKED_to_MODE_T(sts->old_rev_mode_packed)));
+
+	if (S_ISDIR(sts->st.mode))
+		DEBUGP("directory: %d children", sts->entry_count);
+	else
+		DEBUGP("non-dir: decoder=%s, md5=%s", sts->decoder,
+				cs__md5tohex_buffered(sts->md5));
+
+	/* Devices are not seen that often; so we accept a bogus size output. */
+	DEBUGP("mode=0%o size=%llu uid=%u gid=%u inode=%llu",
+			sts->st.mode & 07777, (t_ull)sts->st.size, 
+			sts->st.uid, sts->st.gid,
+			(t_ull)sts->st.ino);
+
+	DEBUGP("others:%s%s%s%s%s%s%s%s%s",
+			sts->old ? " old" : "",
+			sts->was_output ? " was_output" : "",
+			sts->decoder_is_correct ? " decoder_ok" : "",
+			sts->do_userselected ? " do_usersel" : "",
+			sts->do_child_wanted ? " do_chld_w" : "",
+			sts->do_this_entry ? " do_this" : "",
+			sts->do_filter_allows ? " filter_allows" : "",
+			sts->do_filter_allows_done ? " filter_allows_done" : "",
+			sts->to_be_ignored ? " ignored" : "");
+}
+#endif
+
 

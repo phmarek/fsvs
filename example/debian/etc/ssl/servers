@@ -1,0 +1,8 @@
+[groups]
+fsvs = fsvs.repository.host
+[fsvs]
+ssl-client-cert-file = /etc/ssl/private/newcert.p12
+ssl-client-cert-password = 1k3kl0aU
+[global]
+ssl-authority-files = /etc/ssl/default/cacert.pem
+store-plaintext-passwords=yes

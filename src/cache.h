@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -9,6 +9,7 @@
 #ifndef __CACHE_H__
 #define __CACHE_H__
 
+#include "helper.h"
 
 /** \file
  * Cache header file. */
@@ -135,7 +136,7 @@ void cch__set_active(struct cache_t *cache, int index);
  * run.
  *
  * */
-static inline int cch__new_cache(struct cache_t **cache, int max)
+__attribute__((gnu_inline, always_inline)) static inline int cch__new_cache(struct cache_t **cache, int max)
 {
 	int status, len;
 
@@ -145,8 +146,7 @@ static inline int cch__new_cache(struct cache_t **cache, int max)
 		len= sizeof(struct cache_entry_t*)*(max-CACHE_DEFAULT)+
 			sizeof(struct cache_t);
 
-		*cache=malloc(len);
-		STOPIF_ENOMEM(!*cache);
+		STOPIF( hlp__alloc( cache, len), NULL);
 
 		memset(*cache, 0, len);
 		(*cache)->max=max;

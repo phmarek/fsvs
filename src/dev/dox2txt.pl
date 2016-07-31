@@ -14,6 +14,7 @@ while (<STDIN>)
 	next if m#^\[#;
 
 
+#	$p=m#^SYNOPSIS# .. m#^\s*-{30,}#;
 	$p=m#^\w# .. m#^\s*_{30,}#;
 	print if ($p =~ m#^\d+$#);
 }

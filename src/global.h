@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -10,6 +10,7 @@
 #define __GLOBAL_H__
 
 #include "config.h"
+#include "preproc.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -86,10 +87,30 @@ struct ignore_t {
 	/** The pattern string as given by the user, including flags. */
 	char *pattern;
 
+	/** The group this belongs to, as string. */
+	const char *group_name;
+	/** The group definition. */
+	struct grouping_t *group_def;
+
 	/** The calculated pattern string.
 	 * Does no longer include the flags (like \e take), and shell syntax 
 	 * is converted to PCRE. */
 	char *compare_string;
+
+	/** How many times this pattern was visited. */
+	unsigned stats_tested;
+	/** How many times this pattern matched.
+	 * Both are not strictly needed; we could simply do a difference between 
+	 * this and the next value, but that<ul>
+	 * <li>wouldn't work for the last entry (we'd have to store the tests 
+	 * done globally, and store how many matches at each level),
+	 * <li>isn't so easy to check for bugs ;-), and
+	 * <li>it wouldn't work anyway as soon as groups could accumulate in some 
+	 * way.
+	 * </ul>
+	 *
+	 * So, for simplicities' sake, we just store both values. */
+	unsigned stats_matches;
 
 	union {
 		/* for shell and pcre */
@@ -98,21 +119,6 @@ struct ignore_t {
 			pcre *compiled;
 			/** PCRE extra data storage. Currently nearly unused. */
 			pcre_extra *extra;
-			/** This member should be used to know at which levels in the
-			 * path hierarchy this pattern applies, to avoid trying to match
-			 * at certainly not-matching strings.
-			 *
-			 * In case of something like \verbatim
-			 * 		dir/a*§/b*§/§*.old
-			 * \endverbatim the directory \c dir and below should get this pattern, 
-			 * but on the subdir_list.
-			 * In case of a pattern with ** we have to give that to everyone
-			 * below. 
-			 * \todo currently unused. */
-			unsigned short path_level;
-			/** Flag telling whether this shell pattern has a \c ** in it.
-			 * \todo Would be used with ignore_t::path_level. */
-			unsigned int has_wildwildcard:1;
 		};
 
 		/** For device compares */
@@ -144,8 +150,6 @@ struct ignore_t {
 
 	/** Should this match only directories? */
 	unsigned int dir_only:1;
-	/** Is this an ignore or take pattern?  \a 0 = take, \a 1 = ignore */
-	unsigned int is_ignore:1;
 	/** Ignore case for comparing? */
 	unsigned int is_icase:1;
 	/** Is it an \e internally generated pattern (for the WAA area)?
@@ -211,11 +215,17 @@ struct url_t {
 	svn_ra_session_t *session;
 	/** The pool this session was allocated in. */
 	apr_pool_t *pool;
+
+	/** Changelist counter. */
+	int entry_list_count;
+
 	/** Flag saying whether this URL should be done.
 	 * Should not be queried directly, but by using url__to_be_handled().  */
 	int to_be_handled:1;
 	/** Whether the user gave a specific override revision number. */
 	int current_target_override:1;
+	/** Is a commit disallowed? */
+	unsigned is_readonly:1;
 };
 
 
@@ -291,7 +301,9 @@ struct estat {
 	/** Name of this entry. */
 	char *name;
 
-	/** Meta-data of this entry. */
+	/** Meta-data of this entry.
+	 * Most important: the entry type that is used for the shared members 
+	 * below is determined by \c st.mode. */
 	struct sstat_t st;
 
 	/** Revision of this entry. Currently only the value in the root entry is 
@@ -313,8 +325,10 @@ struct estat {
 	union {
 		/** For files */
 		struct {
-			/** The decoder string from fsvs:update-pipe. Only gets set if 
-			 * action->needs_decoder != 0. */
+			/** The en/decoder string.
+			 *  Only gets set if \c action->needs_decoder!=0 from 
+			 *  <tt>fsvs:update-pipe</tt>, or in commit from 
+			 *  <tt>fsvs:commit-pipe</tt>. */
 			char *decoder;
 			/** MD5-hash of the repository version.  While committing it is set 
 			 * to the \e new MD5, and saved with \a waa__output_tree(). */
@@ -395,8 +409,8 @@ struct estat {
 			/** Used in waa__input_tree() and waa__update_tree(). */
 			AC_CV_C_UINT32_T child_index;
 		};
-		/* output_tree */
 		struct {
+			/** Used in output_tree(). */
 			AC_CV_C_UINT32_T file_index;
 		};
 	};
@@ -406,6 +420,10 @@ struct estat {
 	/** Which argument causes this path to be done. */
 	char *arg;
 
+	/** Which pattern matched this entry.
+	 * Only set for new entries, and \c NULL if none. */
+	struct ignore_t *match_pattern;
+
 	/** Stored user-defined properties as \c name=>svn_string_t, if \c 
 	 * action->keep_user_prop is set.
 	 * Allocated in a subpool of \c estat::url->pool, so that it's still 
@@ -413,17 +431,28 @@ struct estat {
 	 * The subpool is available from a hash lookup with key "" (len=0). */
   apr_hash_t *user_prop;
 
-	/** Updated unix mode from ops__update_single_entry().
-	 * See the special \ref fsvsS_constants below.
-	 * \todo Strip that to only the needed bits, ie. the ones (used) in \c 
-	 * S_IFMT, and make estat compact, by putting between the bitfields.
-	 * Convention: has \b always to be set according to the current type of 
-	 * the entry (to account for the shared members, eg. by_inode); where 
-	 * estat::st.mode has the \e original value, as seen by the repository. */
-	mode_t updated_mode;
-
 	/** Flags for this entry. See \ref EntFlags for constant definitions. */
 	AC_CV_C_UINT32_T flags;
+
+
+	/** Packed representations of the file type; see \c preproc.h for 
+	 * details.
+	 *
+	 * The convention is that \c estat::st has the \e current (mostly local) 
+	 * value, defining which of the estat::entry_count and similar shared 
+	 * members are valid.
+	 *
+	 * See the special \ref fsvsS_constants below, too.
+	 * @{ */
+	/** This is the value of the old revision. */
+	unsigned old_rev_mode_packed:PACKED_MODE_T_NEEDED_BITS;
+	/** This is the new value, which we got from the repository.  */
+	unsigned new_rev_mode_packed:PACKED_MODE_T_NEEDED_BITS;
+	/** This is the current local value, and is always set on \c 
+	 * ops__update_single_entry(). */
+	unsigned local_mode_packed:PACKED_MODE_T_NEEDED_BITS;
+	/** @} */
+
 
 	/** Local status of this entry - \ref fs_bits. */
 	unsigned int entry_status:10;
@@ -431,19 +460,17 @@ struct estat {
 	/** Remote status of this entry. \ref fs_bits. */
 	unsigned int remote_status:10;
 
+
 	/** Cache index number +1 of this entries' path.
 	 * \c 0 (and \c >MAX_CACHED_PATHS) is used as \e uninitialized; so the 
 	 * value here has range of <tt>[1 .. MAX_CACHED_PATHS]</tt> instead of 
 	 * the usual <tt>[0 .. MAX_CACHED_PATHS-1]</tt>. */
 	unsigned int cache_index:6;
 
+
 	/** Length of path up to here. Does not include the \c \\0. See \ref 
 	 * ops__calc_path_len. */
 	unsigned short path_len:16;
-
-	/** At which level is this path? The wc root is at level 0, its children 
-	 * at 1, and so on. */
-	unsigned short path_level:9;
 
 	/** Whether this entry was already printed. \todo Remove by changing the 
 	 * logic. */
@@ -473,10 +500,11 @@ struct estat {
 	 * Was conditionalized on \c ENABLE_DEBUG - but that got ugly. */
 	unsigned int do_filter_allows_done:1;
 
-	/** Whether this entry should not be written into the \ref dir "entry 
-	 * list", and/or ignored otherwise. */
+	/** Whether this entry should not be written into the
+	 * \ref dir "entry list", and/or ignored otherwise. */
 	unsigned int to_be_ignored:1;
 };
+
 
 /** \anchor fsvsS_constants Special FSVS file type constants.
  * @{ */
@@ -487,6 +515,10 @@ struct estat {
  * repository). */
 #define S_IFANYSPECIAL S_IFSOCK
 #define S_ISANYSPECIAL S_ISSOCK
+/** These values are used to say that such an entry is lying around and has 
+ * to be removed first. */
+#define S_IFGARBAGE S_IFIFO
+#define S_ISGARBAGE S_ISFIFO
 /** @} */
 
 /** \anchor EntFlags Various flags for entries.
@@ -519,10 +551,11 @@ struct estat {
 #define RF_COPY_SUB (32)
 /** Has this entry a conflict? */
 #define RF_CONFLICT (64)
+/** This entry may not be written by waa__output_tree(). */
+#define RF_DONT_WRITE (1 << 18)
 /** Whether this entry was just created by \a ops__traverse(). */
-#define RF_ISNEW (1<<19)
-/** Print this entry, even if not changed.
- * More or less the same as opt_verbose, but per entry. */
+#define RF_ISNEW (1 << 19)
+/** Print this entry, even if not changed. */
 #define RF_PRINT (1 << 20)
 
 /** Which of the flags above should be stored in the WAA. */
@@ -615,7 +648,7 @@ extern void _DEBUGP(const char *file, int line, const char *func, char *format, 
 	 * Includes time, file, line number and function name. 
 	 * Allows filtering via opt_debugprefix.
 	 * \note Check for \ref PrintfTypes "argument sizes". */
-#define DEBUGP(...) _DEBUGP(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__)
+#define DEBUGP(...) do { if (debuglevel) _DEBUGP(__FILE__, __LINE__, __PRETTY_FUNCTION__, __VA_ARGS__); } while (0)
 #endif
 
 
@@ -655,7 +688,7 @@ __attribute__ ((format (printf, 5, 6) ));
  * \note This is like SVN_ERR(), but has one difference: The function 
  * is not simply ended (via return), cleanup is still possible.
  * \note Putting the \c make_STOP_silent check here enlarges the \c .text 
- * section of \c fsvs for about 3kByte! */
+ * section of FSVS for about 3kByte! */
 #define STOPIF_FULLPARM(cond, status, code, go, ... ) \
 	do                                                  \
 {                                                   \
@@ -813,92 +846,88 @@ __attribute__ ((format (printf, 5, 6) ));
  * A list of variables that can be set by commandline parameters or 
  * environment variables; these are used in nearly every action. */
 /** @{ */
-/** Greater than zero if additional details are wanted, or negative for 
- * extra quiet operation. */
-extern int opt_verbose, 
-			 /** Flag for recursive/non-recursive behaviour.
-				* Starting with 0, gets incremented with \c -R and decremented with \c 
-				* -N. Different actions have different default levels. */
-			 opt_recursive,
-			 /** If this is an import/export command (eg restoration after harddisk 
-				* crash), we don't use the WAA for data storage. */
-			 is_import_export,
-			 /** Flag saying whether the local update should only set the entry_status
-				* of existing entries and not check for new ones. Needed for update. */
-			 only_check_status,
-			 /** Whether debug messages are wanted. */
-			 debuglevel;
+/** Flag for recursive/non-recursive behaviour.
+ * Starting with 0, gets incremented with \c -R and decremented with \c 
+ * -N. Different actions have different default levels. */
+extern int opt_recursive;
+/** If this is an import/export command (eg restoration after harddisk 
+ * crash), we don't use the WAA for data storage. */
+extern int is_import_export;
+/** Whether debug messages are wanted. */
+extern int debuglevel;
 
-			 /** A pointer to the commit message; possibly a mmap()ped file. */
-			 extern char *opt_commitmsg,
-			 /** The file name of the commit message file. */
-			 *opt_commitmsgfile;
+/** A pointer to the commit message; possibly a mmap()ped file. */
+extern char *opt_commitmsg;
+/** The file name of the commit message file. */
+extern char *opt_commitmsgfile;
 
-			 /** The revision we're getting from the repository. */
-			 extern svn_revnum_t target_revision;
-			 /** The revision the user wants to get at (\c -r parameter).
-				* \c HEAD is represented by \c SVN_INVALID_REVNUM.
-				* Has to be splitted per-URL when we're going to multi-url operation. */
-			 extern svn_revnum_t opt_target_revision;
-			 /** The second revision number the user specified. */
-			 extern svn_revnum_t opt_target_revision2;
-			 /** How many revisions the user specified on the commandline (0, 1 or 2).
-				* For multi-update operations it's possibly to update the urls to different
-				* revisions; then we need to know for which urls the user specified a
-				* revision number. Per default we go to \c HEAD.
-				* */
-			 extern int opt_target_revisions_given;
+/** The revision we're getting from the repository. */
+extern svn_revnum_t target_revision;
+/** The revision the user wants to get at (\c -r parameter).
+ * \c HEAD is represented by \c SVN_INVALID_REVNUM.
+ * Has to be splitted per-URL when we're going to multi-url operation. */
+extern svn_revnum_t opt_target_revision;
+/** The second revision number the user specified. */
+extern svn_revnum_t opt_target_revision2;
+/** How many revisions the user specified on the commandline (0, 1 or 2).
+ * For multi-update operations it's possibly to update the urls to different
+ * revisions; then we need to know for which urls the user specified a
+ * revision number. Per default we go to \c HEAD.
+ * */
+extern int opt_target_revisions_given;
 
-			 /** The local character encoding, according to \a LC_ALL or \a LC_CTYPE) */
+/** The local character encoding, according to \a LC_ALL or \a LC_CTYPE) */
 #ifdef HAVE_LOCALES
-			 extern char *local_codeset;
+extern char *local_codeset;
 #endif
 
-			 /** The session handle for RA operations. */
-			 extern svn_ra_session_t *session;
+/** The session handle for RA operations. */
+extern svn_ra_session_t *session;
 
-			 /** The first allocated APR pool. All others are derived from it and its
-				* children. */
-			 extern apr_pool_t *global_pool;
+/** The first allocated APR pool. All others are derived from it and its
+ * children. */
+extern apr_pool_t *global_pool;
 
-			 /** The array of URLs. */
-			 extern struct url_t **urllist;
-			 /** Number of URLs we have. */
-			 extern int urllist_count;
-			 /** Pointer to \b current URL. */
-			 extern struct url_t *current_url;
+/** The array of URLs. */
+extern struct url_t **urllist;
+/** Number of URLs we have. */
+extern int urllist_count;
+/** Pointer to \b current URL. */
+extern struct url_t *current_url;
 
-			 extern unsigned approx_entry_count;
-			 /** @} */
-
-
-			 extern char propname_mtime[],
-			 /** Modification time - \c svn:owner */
-			 propname_owner[],
-			 /** Modification time - \c svn:group */
-			 propname_group[],
-			 /** Modification time - \c svn:unix-mode */
-			 propname_umode[],
-			 /** Original MD5 for encoded entries. */
-			 propname_origmd5[],
-			 /** Flag for special entry. */
-			 propname_special[],
-			 /** The value for the special property; normally \c "*". */
-			 propval_special[],
-
-			 /** Commit-pipe program.  */
-			 propval_commitpipe[],
-			 /** Update-pipe program. */
-			 propval_updatepipe[];
+extern unsigned approx_entry_count;
+/** @} */
 
 
-			 /** \addtogroup cmds_strings Common command line strings
-				* \ingroup compat
-				*
-				* These strings may have to be localized some time, that's why they're
-				* defined in this place. */
-			 /** @{ */
-			 extern char parm_dump[],
+/** Modification time - \c svn:text-time */
+extern const char propname_mtime[];
+/** Owner - \c svn:owner */
+extern const char propname_owner[];
+/** Group - \c svn:group */
+extern const char propname_group[];
+/** Unix mode - \c svn:unix-mode */
+extern const char propname_umode[];
+/** Original MD5 for encoded entries. */
+extern const char propname_origmd5[];
+/** Flag for special entry. */
+extern const char propname_special[];
+/** The value for the special property; normally \c "*". */
+extern const char propval_special[];
+
+/** Commit-pipe program.  */
+extern const char propval_commitpipe[];
+/** Update-pipe program. */
+extern const char propval_updatepipe[];
+
+
+/** \addtogroup cmds_strings Common command line strings
+ * \ingroup compat
+ *
+ * These strings may have to be localized some time, that's why they're
+ * defined in this place. */
+/** @{ */
+extern char parm_dump[],
+			 parm_test[],
 			 parm_load[];
 /** @} */
 

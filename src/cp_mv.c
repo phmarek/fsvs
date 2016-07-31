@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2008 Philipp Marek.
+ * Copyright (C) 2007-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -58,11 +58,12 @@
  * marked as copy. That means that if some entries below the copy are 
  * missing, they are reported as removed from the copy on the next commit.
  * \n (Of course it is possible to mark files as copied, too; non-recursive 
- * copies are not possible.)
+ * copies are not possible, but can be emulated by having parts of the 
+ * destination tree removed.)
  *
- * \note Or TODO: There will be differences in the exact usage - \c copy 
- * will try to run the \c cp command, whereas \c copied will just remember 
- * the relation.
+ * \note TODO: There will be differences in the exact usage - \c copy will 
+ * try to run the \c cp command, whereas \c copied will just remember the 
+ * relation.
  *
  * If this command are used without parameters, the currently defined
  * relations are printed; please keep in mind that the \b key is the 
@@ -77,7 +78,7 @@
  * directory, and they're printed that way, too.
  *
  * Later definitions are \b appended to the internal database; to undo 
- * mistakes, use the \ref revert action.
+ * mistakes, use the \ref uncopy action.
  *
  * \note <b>Important:</b> User-defined properties like \ref 
  * FSVS_PROP_COMMIT_PIPE "fsvs:commit-pipe" are \b not copied to the 
@@ -97,20 +98,20 @@
  *
  * If you have a need to give the filenames \c dump or \c load as first 
  * parameter for copyfrom relations, give some path, too, as in 
- * <tt>./dump</tt>.
+ * <tt>"./dump"</tt>.
  *
- * \note The source is internally stored as URL with revision number, 
- * because else an operation like \code
+ * \note The source is internally stored as URL with revision number, so 
+ * that operations like these \code
  *   $ fsvs cp a b
  *   $ rm a/1
  *   $ fsvs ci a
  *   $ fsvs ci b
  * \endcode
- * would fail - FSVS would send the wrong (too recent!) revision number as 
- * source, and so the local filelist would get inconsistent with the 
- * repository. \n But it is not implementd to give an URL as copyfrom 
- * source directly - we'd have to fetch a list (and possibly the data!) 
- * from the repository.
+ * work - FSVS sends the old (too recent!) revision number as source, and 
+ * so the local filelist stays consistent with the repository. \n But it is 
+ * not implemented (yet) to give an URL as copyfrom source directly - we'd 
+ * have to fetch a list of entries (and possibly the data!) from the 
+ * repository.
  *
  * \todo Filter for dump (patterns?).
  * */
@@ -125,14 +126,14 @@
  * fsvs copyfrom-detect [paths...]
  * \endcode
  *
- * This command tells \c fsvs to look through the new entries, and see 
+ * This command tells FSVS to look through the new entries, and see 
  * whether it can find some that seem to be copied from others already 
  * known. \n
  * It will output a list with source and destination path and why it could 
  * match. 
  *
  * This is just for information purposes and doesn't change any FSVS state, 
- * <i>unless some option/parameter is set. (TODO)</i>
+ * (TODO: unless some option/parameter is set).</i>
  *
  * The list format is <b>on purpose</b> incompatible with the \c load 
  * syntax, as the best match normally has to be taken manually. 
@@ -190,10 +191,10 @@
  *
  * </table>
  *
- * \note Only \b md5, \b name and \b inode matching currently done.
+ * \note \b manber matching is not implemented yet.
  *
- * \note If too many possible matches are found, not all may be printed; 
- * only the indicator <tt>...</tt> is shown at the end.
+ * \note If too many possible matches for an entry are found, not all are 
+ * printed; only an indicator <tt>...</tt> is shown at the end.
  * 
  * */
 
@@ -212,11 +213,12 @@
  *
  * Only the base of a copy can be un-copied; if a directory structure was 
  * copied, and the given entry is just implicitly copied, this command will 
- * give you an error.
+ * return an error.
  *
  * This is not folded in \ref revert, because it's not clear whether \c 
- * revert should restore the original copyfrom data or remove the copy 
- * attribute; by using a special command this is no longer ambiguous. 
+ * revert on copied, changed entries should restore the original copyfrom 
+ * data or remove the copy attribute; by using another command this is no 
+ * longer ambiguous. 
  *
  * Example:
  * \code
@@ -259,42 +261,7 @@
  * - Maybe we should write the manber hash of the first two blocks there, 
  *   too? -- No, manber-hashes would be done on all files at once.
  *
- * 
  *
- * update_dir() does directories shallowly ...
- * Change that?
- *
- * Thinking a bit about copies ...
- *
- * There are two ways to proceed here:
- * - Look what's actually here, and correlate with the entries that should 
- *   be here
- *   Adv: If no copy registered, just no correlation needed.
- * - First copy the tree, and let the update_dir logic sort it out later.
- *   Disadv: if no copy registered, still needs waa__build_tree - that gets 
- *   used less and less, and could get worse (in terms of code quality)
- *   Disadv: if some entry already added (because of some ignore patterns) 
- *   we have to take care to \b not overwrite it.
- *     - Would be easy without added entries - new directory? copy, and 
- *     look what's actually here.
- *     - Now we have to look for already given entries ...
- *
- * copy says A, B, C
- * dir_enum says A, B, D, E
- * added entry (get read \b later in waa__input_tree()) says B, F
- * would have to correlate \b 3 lists
- * at least update_dir is called after all \b expected entries, that 
- * includes added - so at least these are already present.
- *
- * But sub-directories are not yet finished! TODO
- *
- *
- * 2nd way looks easier and cleaner ...
- *
- * usecase: dir or file copied, registered with fsvs.
- * only new entries get checked - fast
- *
- * -----------------------------------------------------------------------
  * Facts:
  * - we have to copy directory structures *after* waa__input_tree(), but 
  *   before waa__partial_update().
@@ -311,6 +278,9 @@
  *   - But what about the property functions? They need access to copied 
  *   entries.
  *     - Can do the entries as RF_ADD, as now.
+ *
+ * So a "copy" does copy all entries for the list, too; but that means that 
+ * a bit more data has to be written out.
  *   
  * */
 
@@ -471,7 +441,7 @@ datum cm___md5_datum(const struct estat *sts)
 	datum d;
 
 	d.dsize=APR_MD5_DIGESTSIZE*2+1;
-	d.dptr=cs__md52hex(sts->md5);
+	d.dptr=cs__md5tohex_buffered(sts->md5);
 	return d;
 }
 
@@ -573,9 +543,9 @@ int cm___match_children(struct estat *sts, struct cm___match_t *match,
 		curr=*children;
 		/* Find entries with the same name. Depending on the type of the entry  
 		 * we have to look in one of the two hashes. */
-		if (S_ISDIR(curr->updated_mode))
+		if (S_ISDIR(curr->st.mode))
 			name_match=cm___match_array+CM___NAME_D;
-		else if (S_ISREG(curr->updated_mode))
+		else if (S_ISREG(curr->st.mode))
 			name_match=cm___match_array+CM___NAME_F;
 		else goto next_child;
 
@@ -698,8 +668,8 @@ int cm___register_entry(struct estat *sts)
 		for(i=0; i<CM___MATCH_NUM; i++)
 		{
 			match=cm___match_array+i;
-			/* We need the original value (st.mode). estat::updated_mode would be 
-			 * 0 for a deleted node. */
+			/* We need the original value (st.mode). estat::local_mode_packed 
+			 * would be 0 for a deleted node. */
 			if (match->is_enabled && match->insert &&
 					(sts->st.mode & S_IFMT) == match->entry_type )
 			{
@@ -749,7 +719,7 @@ static int cm___match(struct estat *entry)
 		match=cm___match_array+i;
 
 		/* Avoid false positives. */
-		if ((entry->updated_mode & S_IFMT) != match->entry_type)
+		if ((entry->st.mode & S_IFMT) != match->entry_type)
 			continue;
 
 		/* \todo Loop if too many for a single call. */
@@ -822,7 +792,7 @@ static int cm___match(struct estat *entry)
 					have_match=1;
 
 					STOPIF_CODE_EPIPE( fputs(match->name, output), NULL);
-					if (opt_verbose && match->format)
+					if (opt__is_verbose()>0 && match->format)
 						STOPIF_CODE_EPIPE( 
 								fputs( match->format(match, candidates+j), output), 
 								NULL);
@@ -843,7 +813,7 @@ static int cm___match(struct estat *entry)
 		/* cache might be overwritten again when we're here. */
 		STOPIF( ops__build_path(&path, entry), NULL);
 
-		if (opt_verbose>0)
+		if (opt__is_verbose() > 0)
 		{
 			STOPIF( hlp__format_path(entry, path, &formatted), NULL);
 			STOPIF_CODE_EPIPE( fprintf(output, 
@@ -917,7 +887,7 @@ int cm__find_copied(struct estat *root)
 		 * we could maybe save some searching for all children.... */
 		if (sts->entry_status & FS_NEW)
 		{
-			switch (sts->updated_mode & S_IFMT)
+			switch (sts->st.mode & S_IFMT)
 			{
 				case S_IFDIR:
 					STOPIF( cm__find_dir_source(sts), NULL);
@@ -931,7 +901,7 @@ int cm__find_copied(struct estat *root)
 			}
 		}
 
-		if (S_ISDIR(sts->updated_mode) && 
+		if (S_ISDIR(sts->st.mode) && 
 				(sts->entry_status & (FS_CHILD_CHANGED | FS_CHANGED)) )
 			STOPIF( cm__find_copied(sts), NULL);
 
@@ -991,7 +961,7 @@ int cm__detect(struct estat *root, int argc, char *argv[])
 	/* We read all entries, and show some progress. */
 	status=waa__read_or_build_tree(root, argc, normalized, argv, 
 			cm___register_entry, 1);
-	if (status == ENOENT)
+	if (status == -ENOENT)
 		STOPIF(status, "!No committed working copy found.");
 	STOPIF(status, NULL);
 
@@ -1002,7 +972,7 @@ int cm__detect(struct estat *root, int argc, char *argv[])
 
 	if (!copydetect_count)
 		STOPIF_CODE_EPIPE( printf("No copyfrom relations found.\n"), NULL);
-	else if (opt_verbose>0)
+	else if (opt__is_verbose() > 0)
 		STOPIF_CODE_EPIPE( printf("%d copyfrom relation%s found.\n",
 					copydetect_count, copydetect_count == 1 ? "" : "s"), NULL);
 
@@ -1041,7 +1011,7 @@ int cm___string_to_rev_path(char *string, char **out_url, svn_revnum_t *orev)
 
 	if (!isspace(*path)) goto inval;
 
-	while (isspace(*path)) path++;
+	path=hlp__skip_ws(path);
 	*out_url=path;
 
 	DEBUGP("string parsed to r%llu of %s", (t_ull)rev, path);
@@ -1178,7 +1148,7 @@ no_copyfrom:
 		fprintf(output, "No copyfrom information was written.\n");
 	}
 	else
-		if (opt_verbose>0)
+		if (opt__is_verbose() > 0)
 			fprintf(output, "%d copyfrom relation%s.\n", 
 					have, have == 1 ? "" : "s");
 
@@ -1275,7 +1245,7 @@ int cm___make_copy(struct estat *root,
 	else
 	{
 		STOPIF( waa__copy_entries(src, dest), NULL);
-		revision=src->url->current_rev;
+		revision=src->repos_rev;
 	}
 
 	/* Mark as base entry for copy; the RF_ADD flag was removed by 
@@ -1284,7 +1254,7 @@ int cm___make_copy(struct estat *root,
 	dest->flags &= ~RF_COPY_SUB;
 
 
-	STOPIF( url__full_url( src, NULL, &url), NULL);
+	STOPIF( url__full_url( src, &url), NULL);
 	STOPIF( cm___rev_path_to_string(url, revision, &buffer), NULL);
 	STOPIF( hsh__store_charp(db, wc_dest, buffer), NULL);
 
@@ -1312,7 +1282,7 @@ int cm___ignore_impl_copied(struct estat *cur)
 	if (cur->flags & (RF_ADD | RF_PUSHPROPS))
 		all_ign=0;
 
-	if (S_ISDIR(cur->updated_mode) && cur->entry_count)
+	if (ops__has_children(cur))
 	{
 		sts=cur->by_inode;
 		while (*sts)
@@ -1324,6 +1294,9 @@ int cm___ignore_impl_copied(struct estat *cur)
 
 	if (all_ign)
 		cur->to_be_ignored=1;
+	else
+		/* We need that because of its children, and we have to check. */
+		cur->flags |= RF_ADD | RF_CHECK;
 	DEBUGP("%s: all_ignore=%d", cur->name, all_ign);
 
 	return all_ign;
@@ -1349,7 +1322,7 @@ int cm__uncopy(struct estat *root, int argc, char *argv[])
 
 	STOPIF( url__load_nonempty_list(NULL, 0), NULL);
 
-	only_check_status=1;
+
 	/* Load the current data, without updating */
 	status=waa__input_tree(root, NULL, NULL);
 	if (status == ENOENT)
@@ -1451,12 +1424,15 @@ int cm__work(struct estat *root, int argc, char *argv[])
 
 	STOPIF( url__load_nonempty_list(NULL, 0), NULL);
 
-	/* Load the current data, without updating */
+	/* Load the current data, without updating; so st.mode equals 
+	 * st.local_mode_packed and so on. */
 	status=waa__input_tree(root, NULL, NULL);
 	if (status == -ENOENT)
 		STOPIF(status, "!No entries are currently known, "
 				"so you can't define copy or move relations yet.\n");
 	STOPIF(status, NULL);
+
+	hlp__string_from_filep(NULL, NULL, NULL, SFF_RESET_LINENUM);
 
 	if (is_load)
 	{
@@ -1465,7 +1441,7 @@ int cm__work(struct estat *root, int argc, char *argv[])
 
 		while (1)
 		{
-			status=hlp__string_from_filep(input, &cp, 0);
+			status=hlp__string_from_filep(input, &cp, NULL, 0);
 			if (status == EOF) 
 			{
 				status=0;
@@ -1475,21 +1451,19 @@ int cm__work(struct estat *root, int argc, char *argv[])
 
 			STOPIF_CODE_ERR( !*cp, EINVAL, 
 					"!Copyfrom source must not be empty.");
-			src=strdup(cp);
-			STOPIF_ENOMEM(!src);
+			STOPIF( hlp__strdup( &src, cp), NULL);
 
 
-			status=hlp__string_from_filep(input, &cp, 0);
+			status=hlp__string_from_filep(input, &cp, NULL, 0);
 			STOPIF_CODE_ERR( status == EOF, EINVAL,
 					"!Expected a target specification, got EOF!");
 			STOPIF( status, "Failed to read copyfrom destination");
 
-			dest=strdup(cp);
-			STOPIF_ENOMEM(!dest);
+			STOPIF( hlp__strdup( &dest, cp), NULL);
 
 
 			/* Get the empty line */
-			status=hlp__string_from_filep(input, &cp, 1);
+			status=hlp__string_from_filep(input, &cp, NULL, SFF_WHITESPACE);
 			if (status == EOF)
 				DEBUGP("delimiter line missing - EOF");
 			else if (status == 0 && 
@@ -1513,7 +1487,7 @@ int cm__work(struct estat *root, int argc, char *argv[])
 			free(src);
 		}
 
-		if (opt_verbose>=0)
+		if (opt__is_verbose() >= 0)
 			printf("%d copyfrom relation%s loaded.\n", count, count==1 ? "" : "s");
 	}
 	else
@@ -1526,7 +1500,8 @@ int cm__work(struct estat *root, int argc, char *argv[])
 		STOPIF( cm___make_copy(root, 
 					normalized[0], revision, 
 					normalized[1], 1), 
-				NULL);
+				"Storing \"%s\" as source of \"%s\" failed.",
+				normalized[0], normalized[1]);
 	}
 
 	STOPIF( cm___make_copy(NULL, NULL, 0, NULL, 0), NULL);
@@ -1617,10 +1592,8 @@ int cm___get_base_source(struct estat *sts, char *name,
 		 * more. We need at least the additional \0; and we give a few byte 
 		 * extra, gratis, free for nothing (and that's cutting my own throat)!  
 		 * */
-		*src_url=malloc(status + 1 +alloc_extra + 4);
-		STOPIF_ENOMEM(!*src_url);
-
-		strcpy(*src_url, url);
+		STOPIF( hlp__strnalloc( status + 1 +alloc_extra + 4, 
+					src_url, url), NULL);
 		status=0;
 	}
 

@@ -94,7 +94,9 @@ chmod 550 $copy
 $BINq ps a c $copy
 
 # TODO: user-defined property diff
-if [[ `$BINdflt diff -v $copy | wc -l` -eq 12 ]]
+$BINdflt diff -v $copy > $log
+if perl -e 'undef $/; $_=<>; 
+	exit 1 unless /\n-Mode: 0700\n\+Mode: 0550\n/m' < $log
 then
 	$SUCCESS "Diff for changed copy"
 else
@@ -177,11 +179,12 @@ ln -s old X
 $BINq ci -m1 -odelay=yes > $log 
 rev1=`grep "revision	" $log | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
 ln -sf new X
+EXPECT=9
 function testdiff
 {
 	$BINq diff "$@" > $log
 # There are additional lines "no linefeed" and "special entry changed".
-	if [[ `wc -l < $log` -ne 9 ]]
+	if [[ `wc -l < $log` -ne $EXPECT ]]
 	then
 		cat $log
 		$ERROR "'diff "$@"' line count wrong"
@@ -200,6 +203,8 @@ testdiff -r$rev1
 # Test whether other, non-wanted, entries are diffed.
 testdiff X -r$rev1
 
+# "diff x:y" should get rewritten, I think.
+# We don't get the "special entry" lines.
 $BINq ci -m1 -odelay=yes > $log 
 rev2=`grep "revision	" $log | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
 testdiff -r$rev1:$rev2
@@ -212,6 +217,7 @@ rev3=`grep "revision	" $log | tail -1 | cut -f2 -d"	" | cut -f1 -d" "`
 testdiff -r$rev1:$rev3 X
 
 # Test diff on removed entries
+# Here we get the message again?
 rm X
 testdiff -r$rev1:$rev3 X
 $BINq ci -m1 > $log 

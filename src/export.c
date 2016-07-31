@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2008 Philipp Marek.
+ * Copyright (C) 2006-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -33,10 +33,10 @@
  * \endcode
  * 
  * If you want to export a directory from your repository \b without
- * having to have an WAA-area, you can use this command.
- * This restores all meta-data - owner, group, access mask and 
- * modification time.
- * Its primary use is for data recovery.
+ * storing any FSVS-related data you can use this command.
+ *
+ * This restores all meta-data - owner, group, access mask and modification 
+ * time; its primary use is for data recovery.
  * 
  * The data gets written (in the correct directory structure) below the
  * current working directory; if entries already exist, the export will stop,
@@ -149,7 +149,7 @@ int exp__do(struct estat *root, struct url_t *url)
 	status_svn=NULL;
 	current_url=url;
 
-	STOPIF( url__open_session(NULL), NULL);
+	STOPIF( url__open_session(NULL, NULL), NULL);
 
 	rev=url->target_rev;
 	/* See the comment in update.c */
@@ -165,16 +165,16 @@ int exp__do(struct estat *root, struct url_t *url)
 			 TRUE,
 			 &export_editor,
 			 root,
-			 global_pool) );
+			 current_url->pool) );
 
 	/* We always pretend to start empty. */
 	STOPIF_SVNERR( reporter->set_path,
 			(report_baton,
 			 "", rev, TRUE,
-			 NULL, global_pool));
+			 NULL, current_url->pool));
 
 	STOPIF_SVNERR( reporter->finish_report, 
-			(report_baton, global_pool));
+			(report_baton, current_url->pool));
 
 
 ex:
@@ -208,6 +208,10 @@ int exp__work(struct estat *root, int argc, char *argv[])
 
 	STOPIF( exp__do(root, &url), NULL);
 	printf("Exported revision\t%ld.\n", target_revision);
+
+	/* As this URL is not stored in the urllist array, it wouldn't get 
+	 * cleaned up. */
+	STOPIF( url__close_session(&url), NULL);
 
 ex:
 	return status;

@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -38,10 +38,12 @@ struct cs__manber_hashes
 
 /** Checks whether a file has changed. */
 int cs__compare_file(struct estat *sts, char *fullpath, int *result);
-/** Converts an MD5 digest to an ASCII string. */
-char *cs__md52hex(const md5_digest_t md5);
+/** Puts the hex string of \a md5 into \a dest, and returns \a dest. */
+char* cs__md5tohex(const md5_digest_t md5, char *dest);
+/** Converts an MD5 digest to an ASCII string in a self-managed buffer. */
+char *cs__md5tohex_buffered(const md5_digest_t md5);
 /** Converts an ASCII string to an MD5 digest. */
-int cs__char2md5(const char *input, md5_digest_t md5);
+int cs__char2md5(const char *input, char **eos, md5_digest_t md5);
 
 /** Callback for the checksum layer. */
 int cs__set_file_committed(struct estat *sts);

@@ -3,15 +3,20 @@
 use Digest::MD5 qw(md5_hex);
 
 $_=shift;
+
 # Filename. If empty, just the path to the WAA is returned; if '^', the 
 # path to the conf area is returned.
 $file=shift; 
+
 # The softroot - see the option "softroot".
 ( $softroot=shift ) =~ s,/+$,,;
 
+# The WC base; defaults to the current directory.
+$wc_base=shift() || $ENV{"PWD"} || die $!;
+
 unless (m#^/#)
 {
-	chomp($p=`pwd`);
+	$p=$ENV{"PWD"};
 	$_ = $p . "/" . $_;
 }
 
@@ -29,7 +34,10 @@ $conf=1, $file="" if ($file eq '^');
 # remove the softroot
 die if $softroot && !s#^$softroot##;
 
+die if $softroot && $wc_base !~ s#^$softroot##;
+$wc_base =~ s# /+ $ # #gx;
 
+#print "wc=$wc_base; entry=$_;\n";
 $m=md5_hex($_);
 if ($conf)
 {
@@ -38,8 +46,10 @@ if ($conf)
 }
 else
 {
+	$wc=substr(md5_hex($wc_base), 0, $ENV{"WAA_CHARS"}+0);
 	print +($ENV{"FSVS_WAA"} || "/var/spool/fsvs"),
-				"/" . substr($m,0,2), 
+				"/" . $wc,
+				"/" . substr($m,0,2),
 				"/" . substr($m,2,2),
 				"/" . substr($m,4),
 				"/" . $file . "\n";

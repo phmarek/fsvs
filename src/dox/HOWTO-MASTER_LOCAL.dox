@@ -328,7 +328,7 @@ chances that you won't loose control in case of conflicting files.
 
 
 \subsection howto_masloc_note_2 2
-If you don't know which files are diffent in your installs, 
+If you don't know which files are different in your installs, 
 - install two machines,
 - commit the first into fsvs,
 - do a \ref sync-repos on the second,

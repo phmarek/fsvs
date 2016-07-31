@@ -29,6 +29,16 @@ if $BINdflt ignore m:a > $logfile 2>&1
 then
 	$ERROR "Wrong match pattern (non-numeric) shouldn't work."
 fi
+if $BINdflt ignore m:010000:00 > $logfile 2>&1
+then
+	$ERROR "Wrong match pattern (numbers) shouldn't work."
+fi
+if $BINdflt ignore m:-2:03 > $logfile 2>&1
+then
+	$ERROR "Wrong match pattern (negative numbers) shouldn't work."
+fi
+
+$SUCCESS "Invalid specifications rejected."
 
 
 function T
@@ -54,11 +64,41 @@ date > file
 chmod 0750 file
 
 T 0 './**'
-T 1 't./file' './**'
-T 0 'm:0700:0700,./file'
-T 1 'm:0700:0500,./**'
-T 0 m:0050:0050
+T 1 'take,./file' './**'
+T 0 'mode:0700:0700,./file'
+T 1 'mod:0700:0500,./**'
+T 0 mo:0050:0050
 T 1 m:0050:0000
-T 0 m:0007:0000
+T 0 mode:0007:0000
 
+
+# Test with a directory, too.
+# Commit everything.
+true | $BINq ignore load
+$BINq ci -m1
+
+mkdir -m 0700 dir
+touch dir/file other
+echo 'mode:04:0' | $BINq ignore load
+$BINq ci -m1 > $logfile
+
+if [[ `$BINdflt log -v -rHEAD | grep other` == "  other" ]]
+then
+	$SUCCESS "Mode match on directory."
+else
+	cat $logfile
+	$BINdflt log -v -rHEAD
+	$ERROR "Too much taken - directory should be ignored."
+fi
+
+#  Now show the entries again.
+true | $BINq ignore load
+$BINq delay
+touch .
+if [[ `$BINdflt st | wc -l` -eq 3 ]]
+then
+	$SUCCESS "Not stored in local list."
+else
+	$ERROR "Stored in local list? Not seen as new"
+fi
 

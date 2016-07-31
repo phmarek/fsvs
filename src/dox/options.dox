@@ -4,11 +4,33 @@
 
 List of settings that modify FSVS' behaviour.
 
-FSVS understands some other options, that modify its behaviour.
+FSVS understands some options that modify its behaviour in various small 
+ways.
 
 
+\section oh_overview Overview
 
-\section o__list Short list of options
+\subsection o__hlist This document
+
+This document lists all available options in FSVS, in an \ref o__list
+"full listing" and in \ref o__groups "groups".
+
+Furthermore you can see their \ref o__prio "relative priorities" and some 
+\ref o__examples "examples".
+
+
+\subsection o__groups Semantic groups
+
+<UL>
+<LI>\ref oh_display
+<LI>\ref oh_diff
+<LI>\ref oh_commit
+<LI>\ref oh_performance
+<LI>\ref oh_base
+<LI>\ref oh_debug
+</UL>
+
+\subsection o__list Sorted list of options
 
 FSVS currently knows:<UL>
 <LI>\c all_removed - \ref o_all_removed
@@ -21,25 +43,30 @@ FSVS currently knows:<UL>
 <LI>\c config_dir - \ref o_configdir.
 <LI>\c copyfrom_exp - \ref o_copyfrom_exp
 <LI>\c debug_output - \ref o_debug_output
+<LI>\c debug_buffer - \ref o_debug_buffer
 <LI>\c delay - \ref o_delay
 <LI>\c diff_prg, \c diff_opt, \c diff_extra - \ref o_diff
+<LI>\c dir_exclude_mtime - \ref o_dir_exclude_mtime
 <LI>\c dir_sort - \ref o_dir_sort
 <LI>\c empty_commit - \ref o_empty_commit
+<LI>\c empty_message - \ref o_empty_msg
 <LI>\c filter - \ref o_filter, but see \ref glob_opt_filter "-f".
+<LI>\c group_stats - \ref o_group_stats.
 <LI>\c limit - \ref o_logmax
 <LI>\c log_output - \ref o_logoutput
 <LI>\c merge_prg, \c merge_opt - \ref o_merge
+<LI>\c mkdir_base - \ref o_mkdir_base
 <LI>\c path - \ref o_opt_path
 <LI>\c softroot - \ref o_softroot
 <LI>\c stat_color - \ref o_status_color
-<LI>\c stop_on_change - \ref o_stop_change
+<LI>\c stop_change - \ref o_stop_change
+<LI>\c verbose - \ref o_verbose
 <LI>\c warning - \ref o_warnings, but see \ref glob_opt_warnings "-W".  
-<LI>\c waa - \ref o_waa.
+<LI>\c waa - \ref o_waa "waa".
 </UL>
 
 
-
-\section o__prio Priorities for option setting
+\subsection o__prio Priorities for option setting
 
 The priorities are<ul>
 <li>Command line \e (highest)
@@ -62,7 +89,7 @@ overridden if necessary.
 
 
 
-\section o__examples Examples
+\subsection o__examples Examples
 
 Using the commandline:
 \code
@@ -73,7 +100,8 @@ Using environment variables:
 \code
 	 FSVS_PATH=absolute fsvs st
 \endcode
-A configuration file:
+A configuration file, from <tt>$FSVS_CONF/config</tt> or in a WC-specific 
+path below <tt>$FSVS_CONF</tt>:
 \code
 	 # FSVS configuration file
 	 path=wcroot
@@ -81,7 +109,92 @@ A configuration file:
 
 
 
-\section o_opt_path Displaying paths
+\section oh_display Output settings and entry filtering
+
+\subsection o_all_removed Trimming the list of deleted entries
+
+If you remove a directory, all entries below are implicitly known to be 
+deleted, too. To make the \ref status output shorter there's the \c 
+all_removed option which, if set to \c no, will cause children of removed 
+entries to be omitted.
+
+Example for the config file:
+\code
+	all_removed=no
+\endcode
+
+
+\subsection o_dir_exclude_mtime Ignore mtime-metadata changes for directories
+
+When this option is enabled, directories where only the mtime changed are not reported on \ref status anymore.
+
+This is useful in situations where temporary files are created in directories, eg. by text editors. (Example: \c VIM swapfiles when no \c directory option is configured).
+
+Example for the config file:
+\code
+	dir_exclude_mtime=yes
+\endcode
+
+
+\subsection o_dir_sort Directory sorting
+
+If you'd like to have the output of \ref status sorted, you can use the 
+option \c dir_sort=yes.
+FSVS will do a run through the tree, to read the status of the entries, and 
+then go through it again, but sorted by name.
+
+\note If FSVS aborts with an error during \ref status output, you might 
+want to turn this option off again, to see where FSVS stops; the easiest 
+way is on the command line with \c -odir_sort=no.
+
+
+\subsection o_filter Filtering entries
+
+Please see the command line parameter for \ref glob_opt_filter "-f", which 
+is identical.
+
+\code
+	fsvs -o filter=mtime
+\endcode
+
+
+\subsection o_logmax "fsvs log" revision limit
+
+There are some defaults for the number of revisions that are shown on a 
+<tt>"fsvs log"</tt> command:<ul>
+<li>2 revisions given (<tt>-rX:Y</tt>): \c abs(X-Y)+1, ie. all revisions in 
+that range.
+<li>1 revision given: exactly that one.
+<li>no revisions given: from \c HEAD to 1, with a maximum of 100.
+</ul>
+
+As this option can only be used to set an upper limit of revisions, it 
+makes most sense for the no-revision-arguments case. 
+
+
+\subsection o_logoutput "fsvs log" output format
+
+You can modify aspects of the \ref log "fsvs log" output format by setting 
+the \c log_output option to a combination of these flags:<ul>
+<li>\c color: This uses color in the output, similar to \c cg-log (\c 
+cogito-log); the header and separator lines are highlighted.
+	\note This uses ANSI escape sequences, and tries to restore the default 
+	color; if you know how to do that better (and more compatible), please 
+	tell the developer mailing list.
+<li>\c indent: Additionally you can shift the log message itself a space to 
+the right, to make the borders clearer.
+</ul>
+
+Furthermore the value \c normal is available; this turns off all special 
+handling.
+
+\note If you start such an option, the value is reset; so if you specify \c 
+log_output=color,indent in the global config file, and use \c 
+log_output=color on the commandline, only colors are used. This is 
+different to the \ref o_filter option, which is cumulating.
+
+
+\subsection o_opt_path Displaying paths
 
 You can specify how paths printed by FSVS should look like; this is used 
 for the entry status output of the various actions, and for the diff header 
@@ -102,12 +215,12 @@ path option.
 	This is the new default.
 	\note Internally FSVS still first parses all arguments, and then does a 
 	single run through the entries. So if some entry matches more than one 
-	parameter, it is printed using the first. \n
+	parameter, it is printed using the first match.
 
 <li>\anchor pd_absolute \c absolute \n
 	All paths are printed in absolute form. This is useful if you want to 
 	paste them into other consoles without worrying whether the current 
-	directory matches.
+	directory matches, or for using them in pipelines.
 </ul>
 
 The next two are nearly identical to \c absolute, but the beginning of 
@@ -124,7 +237,7 @@ want the advantage of full paths, but have some of them abbreviated.
 	base - shorter paths won't be substituted.
 <li>\c full-environment \n
 	Check for matches just before printing the path. \n
-	This is slower, but find the best fit.
+	This is slower, but finds the best fit.
 \note The string of the environment variables must match a directory name; 
 the filename is always printed literally, and partial string matches are 
 not allowed. Feedback wanted.
@@ -185,9 +298,78 @@ as long as they're still identifiable.
 Please use the full strings in the configuration file, to avoid having 
 problems in future versions when more options are available.
 
+\subsection o_status_color Status output coloring
+
+FSVS can colorize the output of the status lines; removed entries will 
+be printed in red, new ones in green, and otherwise changed in blue.  
+Unchanged (for \c -v) will be given in the default color.
+
+For this you can set \c stat_color=yes; this is turned \c off per default.
+
+As with the other colorizing options this gets turned \c off automatically 
+if the output is not on a tty; on the command line you can override this, 
+though.
 
 
-\section o_diff Options relating to the "diff" action
+\subsection o_stop_change Checking for changes in a script
+
+If you want to use FSVS in scripts, you might simply want to know whether
+anything was changed.
+
+In this case use the \c stop_on_change option, possibly combined with \ref 
+o_filter; this gives you no output on \c STDOUT, but an error code on the 
+first change seen:
+\code
+    fsvs -o stop_change=yes st /etc
+		if fsvs status -o stop_change=yes -o filter=text /etc/init.d
+		then
+			echo No change found ...
+		else
+			echo Changes seen.
+		fi
+\endcode
+
+
+\subsection o_verbose Verbosity flags
+
+If you want a bit more control about the data you're getting you can use 
+some specific flags for the \c verbose options.
+
+<ul>
+<li>\c none,veryquiet - reset the bitmask, don't display anything.
+<li>\c quiet - only a few output lines.
+<li>\c changes - the characters showing what has changed for an entry.
+<li>\c size - the size for files, or the textual description (like \c 
+"dir").
+<li>\c path - the path of the file, formatted according to \ref 
+o_opt_path "the path option".
+<li>\c default - The default value, ie. \c changes, \c size and \c name.
+<li>\c meta - One more than the default so it can be used via a single \c 
+"-v", it marks that the mtime and owner/group changes get reported as two 
+characters.
+.
+If \c "-v" is used to achieve that, even entries without changes are 
+reported, unless overridden by \ref o_filter.
+<li>\c url - Displays the entries' top priority URL
+<li>\c copyfrom - Displays the URL this entry has been copied from (see 
+\ref copy).
+<li>\c group - The group this entry belongs to, see \ref group
+<li>\c urls - Displays all known URLs of this entry
+<li>\c stacktrace - Print the full stacktrace when reporting errors; useful 
+for debugging.
+<li>\c all - Sets all flags. Mostly useful for debugging.
+</ul>
+
+Please note that if you want to display \b fewer items than per default, 
+you'll have to clear the bitmask first, like this:
+\code
+	fsvs status -o verbose=none,changes,path
+\endcode
+
+
+\section oh_diff Diffing and merging on update
+
+\subsection o_diff Options relating to the "diff" action
 
 The diff is not done internally in FSVS, but some other program is called, 
 to get the highest flexibility.
@@ -200,7 +382,7 @@ There are several option values:<ul>
 
 The call is done as
 \code
-	$diff_prg $diff_opt $file1 --label "$label1" $file2 --label "$label2" diff_extra
+	$diff_prg $diff_opt $file1 --label "$label1" $file2 --label "$label2" $diff_extra
 \endcode
 
 \note In \c diff_opt you should use only use command line flags without 
@@ -209,20 +391,21 @@ parameters; in \c diff_extra you can encode a single flag with parameter
 If you need more flexibility, write a shell script and pass its name as \c 
 diff_prg.
 
-Very advanced users might be interested in \ref exp_env "exported environment
-variables", too.
+Advanced users might be interested in \ref exp_env 
+"exported environment variables", too; with their help you can eg. start 
+different \c diff programs depending on the filename.
 
 
-\section o_colordiff Using colordiff
+\subsection o_colordiff Using colordiff
 
 If you have \c colordiff installed on your system, you might be interested 
 in the \c colordiff option.
 
-It can take on of these values:<ul>
+It can take one of these values:<ul>
 <li>\c no, \c off or \c false: Don't use \c colordiff.
 <li>empty (default value): Try to use \c colordiff as executable, but don't 
 throw an error if it can't be started; just pipe the data as-is to \c 
-STDOUT.
+STDOUT. (\e Auto mode.)
 <li> anything else: Pipe the output of the \c diff program (see \ref 
 o_diff) to the given executable.</ul>
 
@@ -230,195 +413,66 @@ Please note that if \c STDOUT is not a tty (eg. is redirected into a file),
 this option must be given on the command line to take effect.
 
 
+\subsection o_conflict How to resolve conflicts on update
 
-\section o_filter Filtering entries
+If you start an update, but one of the entries that was changed in the 
+repository is changed locally too, you get a conflict.
 
-Please see the command line parameter for \ref glob_opt_filter "-f", which 
-is identical.
+There are some ways to resolve a conflict:<UL>
+<LI>\c local - Just take the local entry, ignore the repository.
+<LI>\c remote - Overwrite any local change with the remote version.
 
-\code
-	fsvs -o filter=mtime
-\endcode
+<LI>\c both - Keep the local modifications in the file renamed to 
+<tt><i>filename</i>.mine</tt>, and save the repository version as 
+<tt><i>filename</i>.r<i>XXX</i></tt>, ie.  put the revision number after 
+the filename.
 
+The conflict must be solved manually, and the solution made known to FSVS 
+via the \ref resolve command.
 
-\section o_all_removed Trimming the list of deleted entries
-
-If you remove a directory, all entries below are implicitly known to be 
-deleted, too. To make the \ref status output shorter there's the \c 
-all_removed option; which, if set to \c yes, will cause children of removed 
-entries to be omitted.
-
-Example for the config file:
-\code
-	all_removed=yes
-\endcode
-
-
-\section o_chcheck Change detection
-
-This options allows to specify the trade-off between speed and accuracy.
-
-A file with a changed size can immediately be known as changed; but if only 
-the modification time is changed, this is not so easy. Per default FSVS 
-does a MD5 check on the file in this case; if you don't want that, or if 
-you want to do the checksum calculation for \b every file (in case a file 
-has changed, but its mtime not), you can use this option to change FSVS' 
-behaviour.
-
-On the command line there's a shortcut for that: for every \c "-C" another 
-check in this option is chosen.
+\note As there's no known \e good version after this renaming, a zero byte 
+file gets created. \n
+Any \ref resolve "resolve" or \ref revert "revert" command would make that 
+current, and the changes that are kept in <tt><i>filename</i>.mine</tt> 
+would be lost! \n
+You should only \ref revert to the last repository version, ie. the data of
+<tt><i>filename</i>.r<i>XXX</i></tt>.
 
 
-The recognized specifications are
-<table>
-<tr><td>none</td><td> Resets the check bitmask to "no checks".
-<tr><td>file_mtime</td><td> Check files for modifications via MD5 if the 
-mtime is different - default
-<tr><td>dir</td><td> Check all directories for new entries - this happens 
-normally if a directory ha
-<tr><td>allfiles</td><td> Check \b all files with MD5 for changes (\c 
-tripwire -like operation).
-<tr><td>full</td><td> All available checks.
-</table>
+<LI>\c merge - Call the program \c merge with the common ancestor, the 
+local and the remote version.
 
-
-You can give multiple options; they're accumulated unless overridden by \c 
-none.
-\code
-	fsvs -o change_check=allfiles status
-\endcode
-
-
-\note \a commit and \a update set additionally the \c dir option, to avoid 
-missing new files.
- 
-
-\section o_warnings Setting warning behaviour
-
-Please see the command line parameter \ref glob_opt_warnings "-W", which is 
-identical.
-
-\code
-	fsvs -o warning=diff-status=ignore
-\endcode
-
-
-
-\section o_softroot Using an alternate root directory
-
-This is a path that is prepended to \c $FSVS_WAA and \c $FSVS_CONF 
-(or their default values, see \ref waa_files), if they do not already 
-start with it, and it is cut off for the directory-name MD5 calculation.
-
-When is that needed? Imagine that you've booted from some Live-CD like 
-Knoppix; if you want to setup or restore a non-working system, you'd have 
-to transfer all files needed by the \c fsvs binary to it, and then start in 
-some kind of \c chroot environment.
-
-With this parameter you can tell \c fsvs that it should load its libraries 
-from the current filesystem, but use the given path as root directory for 
-its administrative data.
-
-This is used for recovery; see the example in \ref howto_backup_recovery.
-
-So how does this work?<ul>
-
-<li>The internal data paths derived from \c $FSVS_WAA and \c $FSVS_CONF use 
-the value given for \c softroot as a base directory, if they do not already 
-start with it. \n
-(If that creates a conflict for you, eg. in that you want to use \c /var as 
-the \c softroot, and your \c $FSVS_WAA should be \c /var/fsvs, you can make 
-the string comparison fail by using <tt>/./var</tt> for either path.)
-
-<li>When a directory name for \c $FSVS_CONF or \c $FSVS_WAA is derived from 
-some file path, the part matching \c softroot is cut off, so that the 
-generated names match the situation after rebooting.
+If it is a clean merge, no further work is necessary; else you'll get the 
+(partly) merged file, and the two other versions just like with the \c both 
+variant, and (again) have to tell FSVS that the conflict is solved, by 
+using the \ref resolve command.
 </ul>
 
-Previously you'd have to \ref export your data back to the filesystem and 
-call \ref urls <tt>"fsvs urls"</tt> and \c fsvs \ref sync-repos 
-"sync-repos" again, to get the WAA data back.
-
-\note A plain \c chroot() would not work, as some needed programs (eg. 
-the decoder for update, see \ref s_p_n) would not be available.
-
-\note The easy way to understand \c softroot is: If you want to do a 
-\c chroot() into the given directory (or boot with it as \c /), you'll want 
-this set.
-
-\note As this value is used for finding the correct working copy root (by 
-trying to find a \ref o_conf "conf-path", it cannot be set from a per-wc 
-config file. Only the environment, global configuration or command line 
-parameter make sense.
+\note As in the subversion command line client \c svn the auxiliary files 
+are seen as new, although that might change in the future (so that they 
+automatically get ignored).
 
 
+\subsection o_merge Options regarding the "merge" program
 
-\section o_logmax "fsvs log" revision limit
+Like with \ref o_diff "diff", the \c merge operation is not done internally 
+in FSVS.
 
-There are some defaults for the number of revisions that are shown on a 
-<tt>"fsvs log"</tt> command:<ul>
-<li>2 revisions given (<tt>-rX:Y</tt>): \c abs(X-Y)+1, ie. all revisions in 
-that range.
-<li>1 revision given: exactly that one.
-<li>no revisions given: from \c HEAD to 1, with a maximum of 100.
+To have better control<UL>
+<li><tt>merge_prg</tt>: The executable name, default <tt>"merge"</tt>.
+<li><tt>merge_opt</tt>: The default options, default <tt>"-A"</tt>.
 </ul>
 
-So this command is mostly useful to get more than the default number of 
-revisions on when running without revision arguments, or to get fewer.
+The option \c "-p" is always used:
+\code
+	$merge_prg $merge_opt -p $file1 $common $file2
+\endcode
 
 
 
-\section o_logoutput "fsvs log" output format
+\section oh_commit Options for commit
 
-You can modify aspects of the \ref log "fsvs log" output format by setting 
-the \c log_output option to a combination of these flags:<ul>
-<li>\c color: This uses color in the output, similar to \c cg-log 
-(cogito-log); the header and separator lines are highlighted.
-	\note This uses ANSI escape sequences, and tries to restore the default 
-	color; if you know how to do that better (and more compatible), please 
-	tell the developer mailing list.
-<li>\c indent: Additionally you can shift the log message itself a space to 
-the right, to make the borders clearer.
-</ul>
-
-Furthermore the value \c normal is available; this turns off all special 
-handling.
-
-\note If you start such an option, the value is reseted; so if you specify 
-\c log_output=color,indent in the global config file, and use \c 
-log_output=color on the commandline, only colors are used. This is a 
-difference to the \ref o_filter option, which is cumulating.
-
-
-
-\section o_status_color Status output coloring
-
-\c FSVS can colorize the output of the status lines; removed entries will 
-be printed in red, new ones in green, and otherwise changed in blue.  
-Unchanged (for \c -v) will be given in the default color.
-
-For this you can set \c stat_color=yes; this is turned \c off per default.
-
-As with the other colorizing options this gets turned \c off automatically 
-if the output is not on a tty; on the command line you can override this, 
-though.
-
-
-
-\section o_dir_sort Directory sorting
-
-If you'd like to have the output of \ref status sorted, you can use the 
-option \c dir_sort=yes.
-\c FSVS will do a run through the tree, to read the status of the entries, 
-and then go through it again, but sorted by name. (See dir_enumerator().)
-
-\note If \c FSVS aborts with an error during \ref status output, you might 
-want to turn this option off again, to see where \c fsvs stops; the easiest 
-way is on the commandline with \c -odir_sort=no.
-
-
-
-\section o_author Author
+\subsection o_author Author
 
 You can specify an author to be used on commit.
 This option has a special behaviour; if the first character of
@@ -443,9 +497,9 @@ also take a look at the \c AcceptEnv and \c SendEnv documentation.
 
 
 
-\section o_commit_to Destination URL for commit
+\subsection o_commit_to Destination URL for commit
 
-If you defined multiple URLs for your working copy, \c FSVS needs to know 
+If you defined multiple URLs for your working copy, FSVS needs to know 
 which URL to commit to.
 
 For this you would set \c commit_to to the \b name of the URL; see this 
@@ -457,18 +511,7 @@ example:
 
 
 
-\section o_debug_output Destination for debug output
-
-See \ref glob_opt_deb "-d".
-
-Example:
-\code
-	 fsvs -o debug_output=/tmp/debug.out -d st /etc
-\endcode
-
-
-
-\section o_empty_commit Doing empty commits
+\subsection o_empty_commit Doing empty commits
 
 In the default settings FSVS will happily create empty commits, ie.  
 revisions without any changed entry. These just have a revision number, an 
@@ -485,23 +528,42 @@ Example:
 
 
 
-\section o_copyfrom_exp Avoiding expensive compares on \ref cpfd "copyfrom-detect"
+\subsection o_empty_msg Avoid commits without a commit message
 
-If you've got big files that are seen as new, doing the MD5 comparison can 
-be time consuming. So there's the option \c copyfrom_exp, which takes the 
-usual \c yes (default) and \c no arguments.
+If you don't like the behaviour that FSVS does commits with an empty 
+message received from \c $EDITOR (eg if you found out that you don't want 
+to commit after all), you can change this option to \c no; then FSVS won't 
+allow empty commit messages.
 
+Example for the config file:
 \code
-		fsvs copyfrom-detect -o copyfrom_exp=no some_directory
+		empty_message=no
 \endcode
 
 
 
-\section o_delay Waiting for a time change after working copy operations
+\subsection o_mkdir_base Creating directories in the repository above the URL
 
-If you're using \c fsvs in automated systems, you might see that changes 
+If you want to keep some data versioned, the first commit is normally the 
+creation of the base directories \b above the given URL (to keep that data 
+separate from the other repository data).
+
+Previously this had to be done manually, ie. with a <tt>svn mkdir $URL 
+--parents</tt> or similar command. \n
+With the \c mkdir_base option you can tell FSVS to create directories as 
+needed; this is mostly useful on the first commit.
+
+\code
+		fsvs urls ...
+		fsvs group 'group:ignore,./**'
+		fsvs ci -m "First post!" -o mkdir_base=yes
+\endcode
+
+\subsection o_delay Waiting for a time change after working copy operations
+
+If you're using FSVS in automated systems, you might see that changes 
 that happen in the same second as a commit are not seen with \ref status 
-later; this is because the timestamp granularity of \c fsvs is 1 second.
+later; this is because the timestamp granularity of FSVS is 1 second.
 
 For backward compatibility the default value is \c no (don't delay).
 You can set it to any combination of<ul>
@@ -517,83 +579,94 @@ Example how to set that option via an environment variable:
 \endcode
 
 
+\section oh_performance Performance and tuning related options
 
-\section o_stop_change Stopping status reports as soon as changes are found
+\subsection o_chcheck Change detection
 
-If you want to use \c FSVS in scripts, you might simply want to know whether
-anything was changed.
+This options allows to specify the trade-off between speed and accuracy.
 
-For this use the \c stop_on_change option, possibly combined with 
-\ref o_filter :
+A file with a changed size can immediately be known as changed; but if only 
+the modification time is changed, this is not so easy. Per default FSVS 
+does a MD5 check on the file in this case; if you don't want that, or if 
+you want to do the checksum calculation for \b every file (in case a file 
+has changed, but its mtime not), you can use this option to change FSVS' 
+behaviour.
+
+On the command line there's a shortcut for that: for every \c "-C" another 
+check in this option is chosen.
+
+
+The recognized specifications are
+<table>
+<tr><td>none</td><td> Resets the check bitmask to "no checks".
+<tr><td>file_mtime</td><td> Check files for modifications (via MD5) and 
+directories for new entries, if the mtime is different - default
+<tr><td>dir</td><td> Check all directories for new entries, regardless of 
+the timestamp.
+<tr><td>allfiles</td><td> Check \b all files with MD5 for changes (\c 
+tripwire -like operation).
+<tr><td>full</td><td> All available checks.
+</table>
+
+
+You can give multiple options; they're accumulated unless overridden by \c 
+none.
 \code
-    fsvs -o stop_change=yes st /etc
-    fsvs -o stop_change=yes -o filter=text status /etc/init.d
+	fsvs -o change_check=allfiles status
+\endcode
+
+
+\note \a commit and \a update set additionally the \c dir option, to avoid 
+missing new files.
+
+
+\subsection o_copyfrom_exp Avoiding expensive compares on \ref cpfd "copyfrom-detect"
+
+If you've got big files that are seen as new, doing the MD5 comparison can 
+be time consuming. So there's the option \c copyfrom_exp (for \e 
+"expensive", which takes the usual \c yes (default) and \c no arguments.
+
+\code
+		fsvs copyfrom-detect -o copyfrom_exp=no some_directory
 \endcode
 
 
 
-\section o_conflict How to resolve conflicts on update
 
-If you start an update, but one of the entries that was changed in the 
-repository is changed locally too, you get a conflict.
+\subsection o_group_stats Getting grouping/ignore statistics
 
+If you need to ignore many entries of your working copy, you might find 
+that the ignore pattern matching takes some valuable time. \n
+In order to optimize the order of your patterns you can specify this option
+to print the number of tests and matches for each pattern.
 
-There are some ways to resolve a conflict:<UL>
-
-<LI>\c local - Just take the local entry, ignore the repository.
-
-<LI>\c remote - Overwrite any local change with the remote version.
-
-<LI>\c both - Keep the local modifications in the file renamed to 
-<tt><i>filename</i>.mine</tt>, and save the repository version as 
-<tt><i>filename</i>.r<i>XXX</i></tt>, ie.  put the revision number after 
-the filename.
-
-These files will be seen as \c New; the conflict must be solved manually, 
-and the resolution made known to FSVS via \ref resolve.
-
-\note As there's no known \e good version after this renaming, a zero byte 
-file gets created. \n
-Any \ref resolve "resolve" or \ref revert "revert" command would make that 
-current, and the changes that are kept in <tt><i>filename</i>.mine</tt> 
-would be lost! \n
-You could only \ref revert to the last repository version, ie. the data of
-<tt><i>filename</i>.r<i>XXX</i></tt>.
-
-
-<LI>\c merge - Call the program \c merge with the common ancestor, the 
-local and the remote version.
-
-If it is a clean merge, no further work is necessary; else you'll get the 
-(partly) merged file, and the two other versions just like with the \c both 
-variant, and have to tell FSVS that the conflict is resolved by \ref 
-resolve.
-</ul>
-
-\note As in the subversion command line client \c svn the auxiliary files 
-are seen as new, although that might change in the future (so that they 
-automatically get ignored).
-
-
-
-\section o_merge Options regarding the "merge" programm
-
-Like with \ref o_diff "diff", the \c merge operation is not done internally 
-in FSVS.
-
-To have better control<UL>
-<li><tt>merge_prg</tt>: The executable name, default <tt>"merge"</tt>.
-<li><tt>merge_opt</tt>: The default options, default <tt>"-A"</tt>.
-</ul>
-
-The option \c "-p" is always used:
 \code
-	$merge_prg $merge_opt -p $file1 $common $file2
+		$ fsvs status -o group_stats=yes -q
+
+		Grouping statistics (tested, matched, groupname, pattern):
+
+		4705  80   ignore   group:ignore,./**.bak
+		4625  40   ignore   group:ignore,./**.tmp
 \endcode
 
+For optimizing you'll want to put often matching patterns at the front (to 
+make them match sooner, and avoid unnecessary tests); but if you are using 
+other groups than \c ignore (like \c take), you will have to take care to 
+keep the patterns within a group together.
+
+Please note that the first line shows how many entries were tested, and 
+that the next lines differ by the number of matches entries for the current 
+line, as all entries being tested against some pattern get tested for the 
+next too, <b>unless they match the current pattern</b>.
+
+This option is available for \ref status and the \ref ignore "ignore test" 
+commands.
 
 
-\section o_conf Path definitions for the config and WAA area
+
+\section oh_base Base configuration
+
+\subsection o_conf Path definitions for the config and WAA area
 
 \anchor o_waa 
 
@@ -611,19 +684,143 @@ variables (\c $FSVS_CONF resp. \c $FSVS_WAA) or as command line parameter;
 settings in config files are ignored.
 
 
-\section o_configdir Configuration directory for the subversion libraries
+\subsection o_configdir Configuration directory for the subversion libraries
 
 This path specifies where the subversion libraries should take their
 configuration data from; the most important aspect of that is authentication
 data, especially for certificate authentication.
 
-The default value is \c $FSVS_CONF/auth/.
+The default value is \c $FSVS_CONF/svn/.
 
 \c /etc/fsvs/config could have eg.
 \code
 	config_dir=/root/.subversion
 \endcode
 
+Please note that this directory can hold an \c auth directory, and the \c
+servers and \c config files.
+
+
+\subsection o_softroot Using an alternate root directory
+
+This is a path that is prepended to \c $FSVS_WAA and \c $FSVS_CONF 
+(or their default values, see \ref waa_files), if they do not already 
+start with it, and it is cut off for the directory-name MD5 calculation.
+
+When is that needed? Imagine that you've booted from some Live-CD like 
+Knoppix; if you want to setup or restore a non-working system, you'd have 
+to transfer all files needed by the FSVS binary to it, and then start in 
+some kind of \c chroot environment.
+
+With this parameter you can tell FSVS that it should load its libraries 
+from the current filesystem, but use the given path as root directory for 
+its administrative data.
+
+This is used for recovery; see the example in \ref howto_backup_recovery.
+
+So how does this work?<ul>
+
+<li>The internal data paths derived from \c $FSVS_WAA and \c $FSVS_CONF use 
+the value given for \c softroot as a base directory, if they do not already 
+start with it. \n
+(If that creates a conflict for you, eg. in that you want to use \c /var as 
+the \c softroot, and your \c $FSVS_WAA should be \c /var/fsvs, you can make 
+the string comparison fail by using <tt>/./var</tt> for either path.)
+
+<li>When a directory name for \c $FSVS_CONF or \c $FSVS_WAA is derived from 
+some file path, the part matching \c softroot is cut off, so that the 
+generated names match the situation after rebooting.
+</ul>
+
+Previously you'd have to \ref export your data back to the filesystem and 
+call \ref urls <tt>"fsvs urls"</tt> and FSVS \ref sync-repos 
+"sync-repos" again, to get the WAA data back.
+
+\note A plain \c chroot() would not work, as some needed programs (eg. 
+the decoder for update, see \ref s_p_n) would not be available.
+
+\note The easy way to understand \c softroot is: If you want to do a 
+\c chroot() into the given directory (or boot with it as \c /), you'll want 
+this set.
+
+\note As this value is used for finding the correct working copy root (by 
+trying to find a \ref o_conf "conf-path", it cannot be set from a per-wc 
+config file. Only the environment, global configuration or command line 
+parameter make sense.
+
+
+
+\section oh_debug Debugging and diagnosing
+
+The next two options could be set in the global configuration file, to 
+automatically get the last debug messages when an error happens.
+
+To provide an easy way to get on-line debugging again, \c debug_output and 
+\c debug_buffer are both reset to non-redirected, on-line output, if more 
+than a single \c -d is specified on the command line, like this:
+\code
+fsvs commit -m "..."  -d -d filenames
+\endcode
+
+In this case you'll get a message telling you about that.
+
+
+
+\subsection o_debug_output Destination for debug output
+
+You can specify the debug output destination with the option \c 
+debug_output. This can be a simple filename (which gets truncated on open), 
+or, if it starts with a \c |, a command that the output gets piped into.
+
+If the destination cannot be opened (or none is given), debug output goes 
+to \c STDOUT (for easier tracing via \c less).
+
+Example:
+\code
+fsvs -o debug_output=/tmp/debug.out -d st /etc
+\endcode
+
+\note That string is taken only once - at the first debug output line.
+So you have to use the correct order of parameters: 
+<tt>-o debug_output=... -d</tt>.
+
+An example: writing the last 200 lines of debug output into a file.
+\code
+fsvs -o debug_output='| tail -200 > /tmp/debug.log' -d ....
+\endcode
+
+
+\subsection o_debug_buffer Using a debug buffer
+
+With the \c debug_buffer option you can specify the size of a buffer (in 
+kB) that is used to capture the output, and which gets printed 
+automatically if an error occurs.
+
+This must be done \b before debugging starts, like with the \ref 
+o_debug_output "debug_output" specification.
+
+\code
+fsvs -o debug_buffer=128 ...
+\endcode
+
+\note If this option is specified in the configuration file or via the 
+environment, only the buffer is allocated; if it is used on the command 
+line, debugging is automatically turned on, too.
+
+
+\subsection o_warnings Setting warning behaviour
+
+Please see the command line parameter \ref glob_opt_warnings "-W", which is 
+identical.
+
+\code
+	fsvs -o warning=diff-status=ignore
+\endcode
+
+
 
  */
-// vi: filetype=doxygen spell spelllang=en_gb formatoptions+=ta : 
+// Use this for folding:
+//    g/^\\subsection/normal v/^\\skkzf
+// vi: filetype=doxygen spell spelllang=en_gb formatoptions+=ta :
+// vi: nowrapscan foldmethod=manual foldcolumn=3 :

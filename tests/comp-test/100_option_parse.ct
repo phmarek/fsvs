@@ -9,17 +9,23 @@ set opt__list[OPT__FILTER].prio=0
 print opt__list[OPT__FILTER].i_val
 print opt__list[OPT__FILTER].prio
 
-set buffer="filter=any"
+# With gdb 6.8.50 or something like that this doesn't work anymore.
+# set buffer="filter=any"
+set strcpy(buffer, "filter=any")
 call opt__parse(buffer, 0, 1, 0)
 #= -1
 print opt__list[OPT__FILTER].i_val
 
-set buffer="filter\0none;text"
-call opt__parse(buffer, buffer+7, 2, 0)
+# Now we have to set both strings, because strcpy() doesn't go beyond \0.
+# Or we could use memcpy ... but that's fragile if the value gets changed.
+set strcpy(buffer, "filter")
+set strcpy(buffer+10, "none;text")
+set opt_debugprefix=0
+call opt__parse(buffer, buffer+10, 2, 0)
 #= 7
 print opt__list[OPT__FILTER].i_val
 
-set buffer="filter=none"
+set strcpy(buffer, "filter=none")
 call opt__parse(buffer, 0, 3, 0)
 #= 0
 print opt__list[OPT__FILTER].i_val
@@ -31,17 +37,17 @@ call opt__parse(buffer, 0, 4, 0)
 print /x opt__list[OPT__FILTER].i_val
 
 
-set buffer="delay=no"
+set strcpy(buffer, "delay=no")
 call opt__parse(buffer, 0, 1, 0)
 #= 0
 print opt__list[OPT__DELAY].i_val
 
-set buffer="delay=yes"
+set strcpy(buffer, "delay=yes")
 call opt__parse(buffer, 0, 2, 0)
 #= -1
 print opt__list[OPT__DELAY].i_val
 
-set buffer="delay=commit,update,checkout,revert"
+set strcpy(buffer, "delay=commit,update,checkout,revert")
 call opt__parse(buffer, 0, 3, 0)
 #= 15
 print opt__list[OPT__DELAY].i_val

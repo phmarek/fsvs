@@ -43,12 +43,14 @@ function CT
 {
 	delay_start=`date +%s`
 # Make sure the files have different lengths
+	msecs=0
 	for a in 1 22 333 4444
 	do
 		echo $a > file
 		$BINq ci -m$a $1 > /dev/null
-# Alternatively we could test whether the microseconds are nearly 0 when we 
-# get here.
+		nsec=`date +%_9N`
+		c_msec=${nsec:0:3}
+		msecs=$(($msecs + ${c_msec:=0}))
 	done
 # We get an error here if the result is 0 ... so make it at least 1.
 	delta=$(expr `date +%s` - $delay_start + 1)
@@ -56,21 +58,29 @@ function CT
 
 CT -odelay=yes
 with_delay=$delta
-echo "With delay that took $delta seconds"
+wd_msec=$msecs
+echo "With delay that took $delta seconds (dm=$wd_msec)"
 
 CT -odelay=no
 normal=$delta
-echo "Without delay that took $delta seconds"
+n_msec=$msecs
+echo "Without delay that took $delta seconds (dm=$n_msec)"
 
 diff=$(expr $with_delay - $normal)
-$INFO "Difference $diff"
+factor=$(expr $n_msec / $wd_msec)
+$INFO "Difference $diff, factor $factor"
 
 # At least two seconds difference should be here.
-if [[ $(expr $with_delay - $normal) -ge 2 ]]
+if [[ $diff -ge 2 ]]
 then
-  $SUCCESS "The delay option seems to work."
+  $SUCCESS "The delay option seems to work (runtime)."
 else
-  $ERROR "The delay option is too fast"
+	if [[ $factor -ge 4 ]]
+	then
+		$SUCCESS "The delay option seems to work (msec-diff)."
+	else
+		$ERROR "The delay option is too fast"
+	fi
 fi
 
 

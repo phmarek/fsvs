@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2008 Philipp Marek.
+ * Copyright (C) 2006-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -48,9 +48,7 @@ static struct wa__warnings wa___warn_options[_WRN__LAST_INDEX]=
 	[WRN__CHMOD_OTHER]					=	{ "chmod-other", WA__STOP },
 	[WRN__CHOWN_OTHER]					=	{ "chown-other", WA__STOP },
 
-	[WRN__OVERLAYED_ENTRIES]		=	{ "overlayed-entries", WA__WARN_ALWAYS },
 	[WRN__MIXED_REV_WC]					=	{ "mixed-rev-wc", WA__WARN_ALWAYS },
-	[WRN__LOCAL_VANISHED]				=	{ "local-entry-vanished", WA__WARN_ALWAYS },
 
 	[WRN__PROP_NAME_RESERVED]		=	{ "propname-reserved", WA__STOP },
 
@@ -189,7 +187,7 @@ int wa__warn(warning_e index, int stat, char *format, ...)
 			/* Print a warning */
 			va_start(va, format);
 			ret=fprintf(warn_out, "\nWARNING");
-			if (opt_verbose>0)
+			if (opt__is_verbose() > 0)
 				ret|=fprintf(warn_out, "(%s)", wa___warn_options[index].text);
 			ret|=fprintf(warn_out, ": ");
 			ret|=vfprintf(warn_out, format, va);

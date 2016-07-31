@@ -1,0 +1,7 @@
+The described files are part of a monitoring-etc-setup on a Debian/Ubuntu linuxhost.
+
+ - ./apt.conf.d contains configuration for the apt-hook
+ - ./cron.d contains a trigger for the fsvs cron-job
+ - ./etc contains fsvs config files
+ - ./etc/ssl, fsvs config file for access of secured repositories
+ - ./ignore, a sample ignore ruleset

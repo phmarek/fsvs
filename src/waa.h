@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -66,7 +66,7 @@ extern struct waa__entry_blocks_t waa__entry_block;
  *   The names of files stored here have the first letter in upper-case.
  *   Having this data backed-up (eg. along with the rest of the filesystem) 
  *   allows easy recovery of the configuration.
- *   The single exception are the \ref dir Files; these are, strictly seen, 
+ *   The single exception are the \ref dir files; these are, strictly seen, 
  *   per working copy, but are stored in the spool directory, as they are 
  *   reconstructed on restore and would only give conflicts with old 
  *   versions. \n
@@ -93,10 +93,6 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * These are stored in a subdirectory of the WAA, named by the MD5-sum of 
  * the WC-path.
  * @{ */
-/** \anchor urls List of URLs.
- * They consist of a header with the number of URLs, followed by the URLs 
- * themselves; \c NUL -terminated, \c LF -separated.  */
-#define WAA__URLLIST_EXT		"Urls"
 /** \anchor dir List of files/subdirs/devices/symlinks in and below this
  * working copy directory. 
  *
@@ -113,15 +109,29 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * See also \a waa__output_tree().
  * */
 #define WAA__DIR_EXT		"dir"
-/** \anchor ign List of ignored patterns.
- * They consist of a header with the number of ignore entries, followed by 
- * he ignore patterns; \c NUL -terminated, \c LF -separated. */
+/** \anchor ign List of groupings ("Identification Groups for New entries", 
+ * formally "Ignore patterns").
+ * They consist of a header with the number of patterns, followed by the 
+ * group, a whitespace, and the pattern (as, string with options); \c NUL 
+ * -terminated, \c LF -separated. */
 #define WAA__IGNORE_EXT		"Ign"
+/** \anchor urls List of URLs.
+ * They consist of a header with the number of URLs, followed by the URLs 
+ * themselves; \c NUL -terminated, \c LF -separated.  */
+#define WAA__URLLIST_EXT		"Urls"
+/** \anchor urls Current revisions of the URLs.
+ * Very similar to \c WAA__URLLIST_EXT (see \ref url__load_list()).
+ * These are split into a separate file, so that no data in \c /etc is 
+ * changed after a commit. */
+#define WAA__URL_REVS		"revs"
 /** \anchor copy Hash of copyfrom relations.
  * The key is the destination-, the value is the source-path; they are 
  * stored relative to the wc root, without the leading \c "./", ie. as \c 
  * "dir/test". The \c \\0 is included in the data.  */
 #define WAA__COPYFROM_EXT		"Copy"
+/** \anchor readme Information file.
+ * Here a short explanation for this directory is stored. */
+#define WAA__README		"README.txt"
 /** @} */
 
 /** \anchor waa_file \name Per file/directory
@@ -241,8 +251,8 @@ int waa__load_repos_urls(char *dir, int reserve_space);
 int waa__load_repos_urls_silent(char *dir, int reserve_space);
 /** Returns the given directory or, if \c NULL , \c getcwd() . */
 int waa__given_or_current_wd(char *directory, char **erg);
-/** Creates a symlink in the WAA. */
-int waa__make_info_link(char *directory, char *name, char *dest);
+/** Creates a README in the WAA. */
+int waa__make_info_file(char *directory, char *name, char *dest);
 /** This function takes a \a path and an \a extension and tries to remove
  * the associated file in the WAA. */
 int waa__delete_byext(char *path, 
@@ -255,20 +265,28 @@ int waa__read_or_build_tree(struct estat *root,
 		int return_ENOENT);
 
 
+#define FCB__PUT_DOTSLASH (1)
+#define FCB__NO_REALPATH (2)
 /** Given a list of path arguments the \a base path and relative paths
  * are returned. */
 int waa__find_common_base2(int argc, char *args[], 
 		char ***normalized_paths,
-		int put_dotslash);
+		int flags);
 /** Wrapper for waa__find_common_base2. */
 static inline int waa__find_common_base(int argc, char *args[], 
 		char **normalized[])
 {
 	return waa__find_common_base2(argc, args, normalized, 0);
 }
-/** Similar to \ref waa__find_common_base(), but allows only specification 
- * of a WC root. */
+/** Similar to \ref waa__find_common_base, but allows only specification of 
+ * a WC root. */
 int waa__find_base(struct estat *root, int *argc, char ***args);
+
+/** Creates the WAA and CONF directories needed for \a wc_path. */
+int waa__create_working_copy(const char const *wc_dir);
+/** Stores the path of the working copy.
+ * Not needed if waa__find_common_base or similar is called. */
+int waa__set_working_copy(const char const *wc_dir);
 
 
 /** \name Building paths for FSVS's datafiles.
@@ -352,6 +370,8 @@ int waa__get_tmp_name(const char *base_dir,
 extern char *wc_path;
 /** How much bytes the \ref wc_path has. */
 extern int wc_path_len;
+/** Length of paths of temporary files. */
+extern int waa_tmp_path_len;
 
 /** Buffers for temporary filename storage.
  * @{ */

@@ -1,0 +1,34 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+logfile=$LOGDIR/063.chroot
+
+if [[ $UID -eq 0 ]]
+then
+	export FSVS_CHROOT_CWD=17
+	export FSVS_CHROOT_ROOT=84
+	export FSVS_CHROOT_LIBS=m
+
+	mkdir dir
+	echo gurgle > empty-file
+	date > dir/new-chroot
+
+	# The shell doesn't do $X</ - the $X is taken as parameter for the 
+	# binary, not as file number. So we call a sub-shell.
+	bash -c "$BINdflt st .. -o dir_sort=yes > $logfile $FSVS_CHROOT_CWD<dir $FSVS_CHROOT_ROOT</"
+	if [[ `cat $logfile` != ".mC."*"dir  .."*"N..."*"dir  ../dir"*"N..."*"../dir/new-chroot"*".mC."*"../empty-file" ]]
+	then
+		cat $logfile
+		$ERROR "Wrong status output?"
+	fi
+
+	$SUCCESS "Chroot execution seems ok."
+else
+  $WARN "Cannot test chroot as user."
+fi
+

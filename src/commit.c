@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -41,15 +41,15 @@
  * fsvs commit [-m "message"|-F filename] [-v] [-C [-C]] [PATH [PATH ...]]
  * \endcode
  * 
- * Commits the current state into the repository.
- * It is possible to commit only parts of a working copy into the repository.
+ * Commits (parts of) the current state of the working copy into the 
+ * repository.
  * 
- * 
- * <example>
- * Your working copy is \c /etc , and you've set it up and committed already.
- * Now you've changed \c /etc/hosts , and \c /etc/inittab . 
- * Since these are non-related changes, you'd like them to be 
- * in separate commits.
+ *
+ * \subsection Example
+ *
+ * The working copy is \c /etc , and it is set up and committed already. \n
+ * Then \c /etc/hosts and \c /etc/inittab got modified. Since these are 
+ * non-related changes, you'd like them to be in separate commits.
  *
  * So you simply run these commands:
  * \code
@@ -57,12 +57,12 @@
  * fsvs commit -m "Tweaked default runlevel" /etc/inittab
  * \endcode
  *
- * If you're currently in \c /etc , you can even drop the \c /etc/ in 
- * front, and just use the filenames.
+ * If the current directory is \c /etc you could even drop the \c /etc/ in 
+ * front, and use just the filenames.
  * 
- * Please see \ref status for explanations on \c -v and \c -C .
- * For advanced backup usage see also \ref FSVS_PROP_COMMIT_PIPE. 
- * */
+ * Please see \ref status for explanations on \c -v and \c -C . \n
+ * For advanced backup usage see also \ref FSVS_PROP_COMMIT_PIPE "the 
+ * commit-pipe property".  */
 
 
 #include <apr_md5.h>
@@ -78,6 +78,7 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <time.h>
 #include <fcntl.h>
 
 
@@ -85,6 +86,7 @@
 #include "status.h"
 #include "checksum.h"
 #include "waa.h"
+#include "cache.h"
 #include "est_ops.h"
 #include "props.h"
 #include "options.h"
@@ -103,7 +105,12 @@ typedef svn_error_t *(*change_any_prop_t) (void *baton,
 		apr_pool_t *pool);
 
 
+/** Counts the entries committed on the current URL. */
 unsigned committed_entries;
+/** Remembers the to-be-made path in the repository, in UTF-8. */
+char *missing_path_utf8;
+/** The precalculated length. */
+int missing_path_utf8_len;
 
 
 /** -.
@@ -144,8 +151,9 @@ svn_error_t * ci__callback (
 
 
 	status=0;
-	printf("committed revision\t%ld on %s as %s\n",
-			new_revision, utf8_date, utf8_author);
+	if (opt__verbosity() > VERBOSITY_VERYQUIET)
+		printf("committed revision\t%ld on %s as %s\n",
+				new_revision, utf8_date, utf8_author);
 
 	/* recursively set the new revision */
 //	STOPIF( ci__set_revision(root, new_revision), NULL);
@@ -197,7 +205,7 @@ void ci___unset_copyflags(struct estat *root)
 	/* Set the current url for this entry. */
 	root->url=current_url;
 
-	if (S_ISDIR(root->st.mode) && root->entry_count)
+	if (ops__has_children(root))
 	{
 		sts=root->by_inode;
 		while (*sts)
@@ -213,16 +221,39 @@ void ci___unset_copyflags(struct estat *root)
 }
 
 
+#define TEST_FOR_OUT_OF_DATE(_sts, _s_er, ...)             \
+	do { if (_s_er) {                                        \
+		if (_s_er->apr_err == SVN_ERR_FS_TXN_OUT_OF_DATE)      \
+		{                                                      \
+			char *filename;                                      \
+			if (ops__build_path(&filename, _sts))                \
+				filename="(internal error)";                       \
+			STOPIF( EBUSY,                                       \
+					"!The entry \"%s\" is out-of-date;\n"            \
+					"Please update your working copy.",              \
+					filename);                                       \
+			goto ex;                                             \
+		}                                                      \
+		STOPIF( EBUSY, __VA_ARGS__);                           \
+	} } while (0)
+
+
+
 /** Send the user-defined properties.
  *
  * The property table is left cleaned up, ie. any deletions that were 
  * ordered by the user have been done -- no properties with \c 
  * prp__prop_will_be_removed() will be here.
+ *
+ * If \a store_encoder is set, \c sts->decoder gets set from the value of 
+ * the commit-pipe.
+ *
+ * \c auto-props from groupings are sent, too.
  * */
 int ci___send_user_props(void *baton, 
 		struct estat *sts,
 		change_any_prop_t function,
-		hash_t *props,
+		int store_encoder,
 		apr_pool_t *pool)
 {
 	int status;
@@ -234,16 +265,38 @@ int ci___send_user_props(void *baton,
 
 	db=NULL;
 
+	/* Convinience function; checks for \c FSVS_PROP_COMMIT_PIPE.
+	 * By putting that here we can avoid sending most of the parameters. */
+	int send_a_prop(char *key, svn_string_t *value)
+	{
+		int status;
+
+		status=0;
+		/* We could tell the parent whether we need this property value, to avoid 
+		 * copying and freeing; but it's no performance problem, I think. */
+		if (store_encoder && strcmp(key, propval_commitpipe) == 0)
+		{
+			if (value)
+				STOPIF( hlp__strdup( &sts->decoder, value->data), NULL);
+			else 
+				sts->decoder=NULL;
+		}
+
+		status_svn=function(baton, key, value, pool);
+		TEST_FOR_OUT_OF_DATE(sts, status_svn, "send user props");
+
+ex:
+		return status;
+	}
+
+
+	/* First do auto-props. */
+	STOPIF( ops__apply_group(sts, &db, pool), NULL);
+
 	/* Do user-defined properties.
 	 * Could return ENOENT if none. */
-	status=prp__open_byestat( sts, GDBM_WRITER, &db);
-	DEBUGP("prop open: %d", status);
-	if (status == ENOENT)
-		status=0;
-	else
+	if (db)
 	{
-		STOPIF( status, NULL);
-
 		status=prp__first(db, &key);
 		while (status==0)
 		{
@@ -257,7 +310,7 @@ int ci___send_user_props(void *baton,
 			{
 				DEBUGP("removing property %s", key.dptr);
 
-				STOPIF_SVNERR( function, (baton, key.dptr, NULL, pool) );
+				STOPIF( send_a_prop(key.dptr, NULL), NULL);
 				STOPIF( hsh__register_delete(db, key), NULL);
 			}
 			else
@@ -266,10 +319,8 @@ int ci___send_user_props(void *baton,
 						value.dsize, value.dsize, value.dptr);
 
 				str=svn_string_ncreate(value.dptr, value.dsize-1, pool);
-				STOPIF_SVNERR( function, (baton, key.dptr, str, pool) );
+				STOPIF( send_a_prop(key.dptr, str), NULL);
 			}
-
-			IF_FREE(value.dptr);
 
 			status=prp__next( db, &key, &key);
 		}
@@ -280,16 +331,8 @@ int ci___send_user_props(void *baton,
 		status=0;
 	}
 
-	if (props)
-	{
-		STOPIF( hsh__collect_garbage(db, NULL), NULL);
-		*props=db;
-	}
-	else
-	{
-		/* A hsh__close() does the garbage collection, too. */
-		STOPIF( hsh__close(db, status), NULL);
-	}
+	/* A hsh__close() does the garbage collection. */
+	STOPIF( hsh__close(db, status), NULL);
 
 ex:
 	return status;
@@ -317,33 +360,42 @@ svn_error_t *ci___set_props(void *baton,
 
 
 	status=0;
-	/* The meta-data properties are not sent for a symlink. */
-	if (!S_ISLNK(sts->updated_mode))
+	/* The unix-mode property is not sent for a symlink, as there's no 
+	 * lchmod().  */
+	if (!S_ISLNK(sts->st.mode))
 	{
-		/* owner */
-		str=svn_string_createf (pool, "%u %s", 
-				sts->st.uid, hlp__get_uname(sts->st.uid, "") );
-		STOPIF_SVNERR( function, (baton, propname_owner, str, pool) );
-
-		/* group */
-		str=svn_string_createf (pool, "%u %s", 
-				sts->st.gid, hlp__get_grname(sts->st.gid, "") );
-		STOPIF_SVNERR( function, (baton, propname_group, str, pool) );
-
 		/* mode */
-		str=svn_string_createf (pool, "0%03o", sts->st.mode & 07777);
-		STOPIF_SVNERR( function, (baton, propname_umode, str, pool) );
-
-		/* mtime. Extra const char * needed. */
-		ccp=(char *)svn_time_to_cstring (
-				apr_time_make( sts->st.mtim.tv_sec, sts->st.mtim.tv_nsec/1000),
-				pool);
-		str=svn_string_create(ccp, pool);
-		STOPIF_SVNERR( function, (baton, propname_mtime, str, pool) );
+		str=svn_string_createf (pool, "0%03o", (int)(sts->st.mode & 07777));
+		status_svn=function(baton, propname_umode, str, pool);
+		if (status_svn) goto error;
 	}
+
+	/* owner */
+	str=svn_string_createf (pool, "%lu %s", 
+			(unsigned long)sts->st.uid, hlp__get_uname(sts->st.uid, "") );
+	status_svn=function(baton, propname_owner, str, pool);
+	if (status_svn) goto error;
+
+	/* group */
+	str=svn_string_createf (pool, "%lu %s", 
+			(unsigned long)sts->st.gid, hlp__get_grname(sts->st.gid, "") );
+	status_svn=function(baton, propname_group, str, pool);
+	if (status_svn) goto error;
+
+	/* mtime. Extra const char * needed. */
+	ccp=(char *)svn_time_to_cstring (
+			apr_time_make( sts->st.mtim.tv_sec, sts->st.mtim.tv_nsec/1000),
+			pool);
+	str=svn_string_create(ccp, pool);
+	status_svn=function(baton, propname_mtime, str, pool);
+	if (status_svn) goto error;
 
 ex:
 	RETURN_SVNERR(status);
+
+error:
+	TEST_FOR_OUT_OF_DATE(sts, status_svn, "set meta-data");
+	goto ex;
 }
 
 
@@ -370,8 +422,6 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	svn_string_t *stg;
 	apr_file_t *a_stream;
 	svn_stringbuf_t *str;
-	hash_t db;
-	datum encoder_prop;
 	struct encoder_t *encoder;
 	int transfer_text, has_manber;
 
@@ -379,7 +429,6 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	str=NULL;
 	a_stream=NULL;
 	s_stream=NULL;
-	db=NULL;
 	encoder=NULL;
 
 	STOPIF( ops__build_path(&filename, sts), NULL);
@@ -395,11 +444,10 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	/* if ((sts->flags & RF_PUSHPROPS) ||
 		 (sts->entry_status & (FS_META_CHANGED | FS_NEW)) ) */
 	STOPIF( ci___send_user_props(baton, sts, 
-				editor->change_file_prop, &db, pool), NULL);
+				editor->change_file_prop, 1, pool), NULL);
 
-	if (!S_ISLNK(sts->updated_mode))
-		STOPIF_SVNERR( ci___set_props, 
-				(baton, sts, editor->change_file_prop, pool) ); 
+	STOPIF_SVNERR( ci___set_props, 
+			(baton, sts, editor->change_file_prop, pool) ); 
 
 	/* By now we should know if our file really changed. */
 	BUG_ON( sts->entry_status & FS_LIKELY );
@@ -410,7 +458,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	 * The RF_ADD was replaced by FS_NEW above. */
 	DEBUGP("%s: status %s; flags %s", sts->name,
 			st__status_string(sts), 
-      st__flags_string_fromint(sts->flags));
+			st__flags_string_fromint(sts->flags));
 
 
 	transfer_text= sts->entry_status & (FS_CHANGED | FS_NEW | FS_REMOVED);
@@ -470,19 +518,16 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 
 				/* That's needed only for actually putting the data in the 
 				 * repository - for local re-calculating it isn't. */
-				if (transfer_text)
+				if (transfer_text && sts->decoder)
 				{
-					status= prp__get(db, propval_commitpipe, &encoder_prop);
 					/* The user-defined properties have already been sent, so the 
 					 * propval_commitpipe would already be cleared; we don't need to 
 					 * check for prp__prop_will_be_removed().  */
+					STOPIF( hlp__encode_filter(s_stream, sts->decoder, 0,
+								filename, &s_stream, &encoder, pool), NULL );
+					encoder->output_md5= &(sts->md5);
 
-					if (status == 0)
-					{
-						STOPIF( hlp__encode_filter(s_stream, encoder_prop.dptr, 0,
-									filename, &s_stream, &encoder, pool), NULL );
-						encoder->output_md5= &(sts->md5);
-					}
+					IF_FREE(sts->decoder);
 				}
 				break;
 			default:
@@ -537,7 +582,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 		/* If the entry was encoded, send the original MD5 as well. */
 		if (encoder)
 		{
-			cp=cs__md52hex(sts->md5);
+			cp=cs__md5tohex_buffered(sts->md5);
 			DEBUGP("Sending original MD5 as %s", cp);
 
 			stg=svn_string_create(cp, pool);
@@ -557,7 +602,6 @@ ex:
 		 * We could give them only if everything else worked ... */
 		apr_file_close(a_stream);
 	}
-	if (db) hsh__close(db, status);
 
 	RETURN_SVNERR(status);
 }
@@ -576,14 +620,17 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	apr_pool_t *subpool;
 	int i, exists_now;
 	char *filename;
-	char* utf8_filename;
+	char *utf8_filename, *tmp;
 	svn_error_t *status_svn;
 	char *src_path;
 	svn_revnum_t src_rev;
 	struct sstat_t stat;
-  
+	struct cache_entry_t *utf8fn_plus_missing;
+	int utf8fn_len;
+
 
 	status=0;
+	utf8fn_plus_missing=NULL;
 	subpool=NULL;
 	DEBUGP("commit_dir with baton %p", dir_baton);
 	for(i=0; i<dir->entry_count; i++)
@@ -618,11 +665,23 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 				"no pool");
 
 		STOPIF( ops__build_path(&filename, sts), NULL);
-		/* as the path needs to be canonical we strip the ./ in front */
+		/* As the path needs to be canonical we strip the ./ in front, and 
+		 * possibly have to prepend some path (see option mkdir_base) */
 		STOPIF( hlp__local2utf8(filename+2, &utf8_filename, -1), NULL );
+		if (missing_path_utf8)
+		{
+			utf8fn_len=strlen(utf8_filename);
+			STOPIF( cch__entry_set(&utf8fn_plus_missing, 0, NULL, 
+					missing_path_utf8_len + 1 + utf8fn_len + 1, 
+					0, &tmp), NULL);
+			strcpy(tmp, missing_path_utf8);
+			tmp[missing_path_utf8_len]='/';
+			strcpy(tmp + missing_path_utf8_len +1, utf8_filename);
+			utf8_filename=tmp;
+		}
 
-		DEBUGP("%s: action %X, updated mode 0%o, flags %X, filter %d", 
-				filename, sts->entry_status, sts->updated_mode, sts->flags,
+		DEBUGP("%s: action (%s), updated mode 0%o, flags %X, filter %d", 
+				filename, st__status_string(sts), sts->st.mode, sts->flags,
 				ops__allowed_by_filter(sts));
 
 		if (ops__allowed_by_filter(sts))
@@ -715,37 +774,22 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		else
 		{
 			status_svn=
-				(S_ISDIR(sts->updated_mode) ?
+				(S_ISDIR(sts->st.mode) ?
 				 editor->open_directory : editor->open_file)
 				( utf8_filename, dir_baton, 
 					current_url->current_rev,
 					subpool, &baton);		
 
-			if (status_svn)
-			{
-				DEBUGP("got error %d %d", status_svn->apr_err, SVN_ERR_FS_PATH_SYNTAX);
-				/* In case we're having more than a single URL, it is possible that 
-				 * directories we got from URL1 get changed, and that these changes 
-				 * should be committed to URL2.
-				 * Now these directories need not exist in URL2 - we create them on 
-				 * demand.  
-				 * */
-				if (S_ISDIR(sts->st.mode) &&
-						(
-						 status_svn->apr_err == SVN_ERR_FS_PATH_SYNTAX ||
-						 status_svn->apr_err == SVN_ERR_FS_NOT_DIRECTORY ) &&
-						urllist_count>1)
-				{
-					DEBUGP("dir %s didn't exist, trying to create", filename);
-					/* Make sure we'll re-try */
-					baton=NULL;
-					status_svn=NULL;
-				}
-				else
-					STOPIF_CODE_ERR(1, status_svn->apr_err,
-							S_ISDIR(sts->st.mode) ?
-							"open_directory" : "open_file");
-			}
+			DEBUGP("opening %s with base %llu", filename, 
+					(t_ull)current_url->current_rev);
+			status_svn= (S_ISDIR(sts->st.mode) ?
+					editor->open_directory : editor->open_file)
+				( utf8_filename, dir_baton, current_url->current_rev,
+					subpool, &baton);
+			TEST_FOR_OUT_OF_DATE(sts, status_svn,
+					"%s(%s) returns %d",
+					S_ISDIR(sts->st.mode) ? "open_directory" : "open_file",
+					filename, status_svn->apr_err);
 
 			DEBUGP("baton for mod %s %p (parent %p)", 
 					sts->name, baton, dir_baton);
@@ -781,27 +825,26 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			DEBUGP("adding %s with %s:%ld",
 					filename, src_path, src_rev);
 			/** \name STOPIF_SVNERR_INDIR */
-			STOPIF_SVNERR_TEXT( 
-					(S_ISDIR(sts->updated_mode) ?
-					 editor->add_directory : editor->add_file),
+			status_svn = 
+					(S_ISDIR(sts->st.mode) ?
+					 editor->add_directory : editor->add_file)
 					(utf8_filename, dir_baton, 
 					 src_path, src_rev, 
-					 subpool, &baton),
-					"%s(\"%s\", source=\"%s\"@%s)",
-					S_ISDIR(sts->updated_mode) ? "add_directory" : "add_file",
-					filename, src_path, hlp__rev_to_string(src_rev));
+					 subpool, &baton);
+			TEST_FOR_OUT_OF_DATE(sts, status_svn,
+					"%s(%s, source=\"%s\"@%s) returns %d",
+					S_ISDIR(sts->st.mode) ? "add_directory" : "add_file",
+					filename, 
+					src_path, hlp__rev_to_string(src_rev),
+					status_svn->apr_err);
 			DEBUGP("baton for new %s %p (parent %p)", 
 					sts->name, baton, dir_baton);
 
 
-			/* If it's copy base, we need to clean up all flags below; else we 
-			 * just remove an (ev. set) add-flag. */
-			if (sts->flags & RF_COPY_BASE)
-				ci___unset_copyflags(sts);
-			else
+			/* Copied entries need their information later in ci__nondir(). */
+			if (!(sts->flags & RF_COPY_BASE))
 			{
 				sts->flags &= ~RF_ADD;
-
 				sts->entry_status |= FS_NEW | FS_META_CHANGED;
 			}
 		}
@@ -810,7 +853,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		committed_entries++;
 		DEBUGP("doing changes, flags=%X", sts->flags);
 		/* Now we have a baton. Do changes. */
-		if (S_ISDIR(sts->updated_mode))
+		if (S_ISDIR(sts->st.mode))
 		{
 			STOPIF_SVNERR( ci__directory, (editor, sts, baton, subpool) );
 			STOPIF_SVNERR( editor->close_directory, (baton, subpool) );
@@ -820,6 +863,14 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			STOPIF_SVNERR( ci__nondir, (editor, sts, baton, subpool) );
 			STOPIF_SVNERR( editor->close_file, (baton, NULL, subpool) );
 		}
+
+
+		/* If it's copy base, we need to clean up all flags below; else we 
+		 * just remove an (ev. set) add-flag.
+		 * We cannot do that earlier, because eg. ci__nondir() needs this 
+		 * information. */
+		if (sts->flags & RF_COPY_BASE)
+			ci___unset_copyflags(sts);
 
 
 		/* Now this paths exists in this URL. */
@@ -878,7 +929,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 				(dir_baton, dir, editor->change_dir_prop, pool) ); 
 
 		STOPIF( ci___send_user_props(dir_baton, dir, 
-					editor->change_dir_prop, NULL, pool), NULL);
+					editor->change_dir_prop, 0, pool), NULL);
 	}
 
 
@@ -891,7 +942,7 @@ ex:
 
 /** Start an editor, to get a commit message. 
  *
- * We look for \c $EDITOR and $VISUAL -- to fall back on good ol' vi. */
+ * We look for \c $EDITOR and \c $VISUAL -- to fall back on good ol' vi. */
 int ci__getmsg(char **filename)
 {
 	char *editor_cmd, *cp;
@@ -911,13 +962,9 @@ int ci__getmsg(char **filename)
 	if (!editor_cmd) editor_cmd="vi";
 
 	l=strlen(editor_cmd) + 1 + strlen(opt_commitmsgfile) + 1;
-	cp=malloc(l);
-	STOPIF_CODE_ERR(!cp, ENOMEM, 
-			"cannot allocate command buffer (%d bytes)", l);
 
-	strcpy(cp, editor_cmd);
-	strcat(cp, " ");
-	strcat(cp, opt_commitmsgfile);
+	STOPIF( hlp__strmnalloc(l, &cp, 
+				editor_cmd, " ", opt_commitmsgfile, NULL), NULL);
 
 	l=system(cp);
 	STOPIF_CODE_ERR(l == -1, errno, "fork() failed");
@@ -931,6 +978,67 @@ int ci__getmsg(char **filename)
 ex:
 	return status;
 }
+
+
+/** Creates base directories from \c missing_path_utf8, if necessary, and 
+ * calls \c ci__directory().
+ *
+ * \a current_missing points into \c missing_path_utf8_len, to the current 
+ * path spec; \a editor, \a root and \a dir_baton are as in 
+ * ci__directory().
+ *
+ * As the number of directories created this way is normally 0, and for 
+ * typical non-zero use I'd believe about 3 or 4 levels (maximum), we don't 
+ * use an extra recursion pool here. */
+svn_error_t *ci___base_dirs(char *current_missing,
+		const svn_delta_editor_t *editor, 
+		struct estat *root, 
+		void *dir_baton)
+{
+	int status;
+	svn_error_t *status_svn;
+	char *delim;
+	void *child_baton;
+
+
+	status=0;
+	if (current_missing && *current_missing)
+	{
+		/* Create one level of the hierarchy. */
+		delim=strchr(current_missing, '/');
+		if (delim) 
+		{
+			*delim=0;
+			delim++;
+			/* There must not be a "/" at the end, or two slashes. */
+			BUG_ON(!*delim || *delim=='/');
+		}
+
+		DEBUGP("adding %s", missing_path_utf8);
+		STOPIF_SVNERR( editor->add_directory,
+				(missing_path_utf8, dir_baton, 
+				 NULL, SVN_INVALID_REVNUM, 
+				 current_url->pool, &child_baton));
+
+		if (delim)
+			delim[-1]='/';
+
+		STOPIF_SVNERR( ci___base_dirs,
+				(delim, editor, root, child_baton));
+
+		STOPIF_SVNERR( editor->close_directory,
+				(child_baton, current_url->pool));
+	}
+	else
+		STOPIF_SVNERR( ci__directory,
+				(editor, root, dir_baton, current_url->pool));
+
+
+ex:
+	RETURN_SVNERR(status);
+}
+
+
 
 
 /** The main commit function.
@@ -951,21 +1059,45 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	void *root_baton;
 	struct stat st;
 	int commitmsg_fh,
-			commitmsg_is_temp;
+		commitmsg_is_temp;
 	char *utf8_commit_msg;
 	char **normalized;
 	const char *url_name;
 	time_t delay_start;
+	char *missing_dirs;
 
 
 	status=0;
 	status_svn=NULL;
 	edit_baton=NULL;
 	editor=NULL;
+	/* This cannot be used uninitialized, but gcc doesn't know */
+	commitmsg_fh=-1;
+
 
 	opt__set_int(OPT__CHANGECHECK, 
 			PRIO_MUSTHAVE,
 			opt__get_int(OPT__CHANGECHECK) | CHCHECK_DIRS | CHCHECK_FILE);
+
+
+	/* This must be done before opening the file. */
+	commitmsg_is_temp=!opt_commitmsg && !opt_commitmsgfile;
+	if (commitmsg_is_temp)
+		STOPIF( ci__getmsg(&opt_commitmsgfile), NULL);
+
+
+
+	/* If there's a message file, open it here. (Bug out early, if 
+	 * necessary).
+	 *
+	 * This must be done before waa__find_common_base(), as this does a 
+	 * chdir() and would make relative paths invalid. */
+	if (opt_commitmsgfile)
+	{
+		commitmsg_fh=open(opt_commitmsgfile, O_RDONLY);
+		STOPIF_CODE_ERR( commitmsg_fh<0, errno, 
+				"cannot open file %s", opt_commitmsgfile);
+	}
 
 
 	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
@@ -986,32 +1118,29 @@ int ci__work(struct estat *root, int argc, char *argv[])
 				"!No URL named \"%s\" could be found.", url_name);
 	}
 
+	STOPIF_CODE_ERR( current_url->is_readonly, EROFS, 
+			"!Cannot commit to \"%s\",\n"
+			"because it is marked read-only.",
+			current_url->url);
 
-	/* That was done with do_chdir==1, but we don't do that anymore - 
-	 * that would barf if a subentry was given on the command line. */
+
 	STOPIF(ign__load_list(NULL), NULL);
 
-	commitmsg_is_temp=!opt_commitmsg && !opt_commitmsgfile;
-	if (commitmsg_is_temp)
-		STOPIF( ci__getmsg(&opt_commitmsgfile), NULL);
 
-	/* This cannot be used uninitialized, but gcc doesn't know */
-	commitmsg_fh=-1;
-
-	/* If there's a message file, open it here. (Bug out early, if necessary) */
-	if (opt_commitmsgfile)
-	{
-		commitmsg_fh=open(opt_commitmsgfile, O_RDONLY);
-		STOPIF_CODE_ERR( commitmsg_fh<0, errno, 
-				"cannot open file %s", opt_commitmsgfile);
-	}
-
-	/* warn/break if file is empty ?? */
-
-	STOPIF( url__open_session(NULL), NULL);
+	STOPIF( url__open_session(NULL, &missing_dirs), NULL);
+	/* Warn early. */
+	if (missing_dirs)
+		STOPIF_CODE_ERR( opt__get_int(OPT__MKDIR_BASE) == OPT__NO, ENOENT,
+				"!The given URL \"%s\" does not exist (yet).\n"
+				"The missing directories \"%s\" could possibly be created, if\n"
+				"you enable the \"mkdir_base\" option (with \"-o mkdir_base=yes\").",
+				current_url->url, missing_dirs);	 
 
 
-	only_check_status=2;
+
+	opt__set_int( OPT__CHANGECHECK, PRIO_MUSTHAVE, 
+			opt__get_int(OPT__CHANGECHECK) | CHCHECK_DIRS | CHCHECK_FILE);
+
 	/* This is the first step that needs some wall time - descending
 	 * through the directories, reading inodes */
 	STOPIF( waa__read_or_build_tree(root, argc, normalized, argv, 
@@ -1027,7 +1156,7 @@ int ci__work(struct estat *root, int argc, char *argv[])
 		{
 			/* We're not using some mapped memory. */
 			DEBUGP("empty file");
-			opt_commitmsg="(none)";
+			opt_commitmsg="";
 		}
 		else
 		{
@@ -1042,10 +1171,19 @@ int ci__work(struct estat *root, int argc, char *argv[])
 		close(commitmsg_fh);
 	}
 
+	if (!*opt_commitmsg)
+	{
+		STOPIF_CODE_ERR( opt__get_int(OPT__EMPTY_MESSAGE)==OPT__NO, EINVAL,
+				"!Empty commit messages are defined as invalid, "
+				"see \"empty_message\" option.");
+	}
+
 	STOPIF( hlp__local2utf8(opt_commitmsg, &utf8_commit_msg, -1),
 			"Conversion of the commit message to utf8 failed");
 
-	printf("Committing to %s\n", current_url->url);
+	if (opt__verbosity() > VERBOSITY_VERYQUIET)
+		printf("Committing to %s\n", current_url->url);
+
 
 	STOPIF_SVNERR( svn_ra_get_commit_editor,
 			(current_url->session,
@@ -1074,10 +1212,23 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	if (ops__allowed_by_filter(root))
 		STOPIF( hlp__lstat( root->name, &root->st), NULL);
 
+
 	committed_entries=0;
+	if (missing_dirs)
+	{
+		STOPIF( hlp__local2utf8( missing_dirs, &missing_dirs, -1), NULL);
+		/* As we're doing a lot of local->utf8 conversions we have to copy the 
+		 * result. */
+		missing_path_utf8_len=strlen(missing_dirs);
+		STOPIF( hlp__strnalloc(missing_path_utf8_len+1, 
+					&missing_path_utf8, missing_dirs), NULL);
+	}
+
+
 	/* This is the second step that takes time. */
-	STOPIF_SVNERR( ci__directory,
-			(editor, root, root_baton, global_pool));
+	STOPIF_SVNERR( ci___base_dirs,
+			(missing_path_utf8, editor, root, root_baton));
+
 
 	/* If an error occurred, abort the commit. */
 	if (!status)
@@ -1085,7 +1236,8 @@ int ci__work(struct estat *root, int argc, char *argv[])
 		if (opt__get_int(OPT__EMPTY_COMMIT)==OPT__NO && 
 				committed_entries==0)
 		{
-			printf("Avoiding empty commit as requested.\n");
+			if (opt__verbosity() > VERBOSITY_VERYQUIET)
+				printf("Avoiding empty commit as requested.\n");
 			goto abort_commit;
 		}
 

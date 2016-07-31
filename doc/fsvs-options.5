@@ -1,10 +1,35 @@
-.TH "FSVS - Options and configfile" 5 "29 Oct 2008" "Version trunk:2782" "fsvs" \" -*- nroff -*-
+.TH "FSVS - Options and configfile" 5 "11 Mar 2010" "Version trunk:2424" "fsvs" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-Further options for FSVS. \- FSVS understands some other options, that modify its behaviour.
-.SH "Short list of options"
+Further options for FSVS. \- 
 .PP
+List of settings that modify FSVS' behaviour.  
+List of settings that modify FSVS' behaviour. 
+
+FSVS understands some options that modify its behaviour in various small ways.
+.SH "Overview"
+.PP
+.SS "This document"
+This document lists all available options in FSVS, in an \fBfull listing\fP and in \fBgroups\fP.
+.PP
+Furthermore you can see their \fBrelative priorities\fP and some \fBexamples\fP.
+.SS "Semantic groups"
+.PD 0
+.IP "\(bu" 2
+\fBOutput settings and entry filtering\fP 
+.IP "\(bu" 2
+\fBDiffing and merging on update\fP 
+.IP "\(bu" 2
+\fBOptions for commit\fP 
+.IP "\(bu" 2
+\fBPerformance and tuning related options\fP 
+.IP "\(bu" 2
+\fBBase configuration\fP 
+.IP "\(bu" 2
+\fBDebugging and diagnosing\fP 
+.PP
+.SS "Sorted list of options"
 FSVS currently knows:
 .PD 0
 
@@ -29,21 +54,31 @@ FSVS currently knows:
 .IP "\(bu" 2
 \fCdebug_output\fP - \fBDestination for debug output\fP 
 .IP "\(bu" 2
+\fCdebug_buffer\fP - \fBUsing a debug buffer\fP 
+.IP "\(bu" 2
 \fCdelay\fP - \fBWaiting for a time change after working copy operations\fP 
 .IP "\(bu" 2
 \fCdiff_prg\fP, \fCdiff_opt\fP, \fCdiff_extra\fP - \fBOptions relating to the 'diff' action\fP 
+.IP "\(bu" 2
+\fCdir_exclude_mtime\fP - \fBIgnore mtime-metadata changes for directories\fP 
 .IP "\(bu" 2
 \fCdir_sort\fP - \fBDirectory sorting\fP 
 .IP "\(bu" 2
 \fCempty_commit\fP - \fBDoing empty commits\fP 
 .IP "\(bu" 2
+\fCempty_message\fP - \fBAvoid commits without a commit message\fP 
+.IP "\(bu" 2
 \fCfilter\fP - \fBFiltering entries\fP, but see \fB-f\fP. 
+.IP "\(bu" 2
+\fCgroup_stats\fP - \fBGetting grouping/ignore statistics\fP. 
 .IP "\(bu" 2
 \fClimit\fP - \fB'fsvs log' revision limit\fP 
 .IP "\(bu" 2
 \fClog_output\fP - \fB'fsvs log' output format\fP 
 .IP "\(bu" 2
-\fCmerge_prg\fP, \fCmerge_opt\fP - \fBOptions regarding the 'merge' programm\fP 
+\fCmerge_prg\fP, \fCmerge_opt\fP - \fBOptions regarding the 'merge' program\fP 
+.IP "\(bu" 2
+\fCmkdir_base\fP - \fBCreating directories in the repository above the URL\fP 
 .IP "\(bu" 2
 \fCpath\fP - \fBDisplaying paths\fP 
 .IP "\(bu" 2
@@ -51,14 +86,15 @@ FSVS currently knows:
 .IP "\(bu" 2
 \fCstat_color\fP - \fBStatus output coloring\fP 
 .IP "\(bu" 2
-\fCstop_on_change\fP - \fBStopping status reports as soon as changes are found\fP 
+\fCstop_change\fP - \fBChecking for changes in a script\fP 
+.IP "\(bu" 2
+\fCverbose\fP - \fBVerbosity flags\fP 
 .IP "\(bu" 2
 \fCwarning\fP - \fBSetting warning behaviour\fP, but see \fB-W\fP. 
 .IP "\(bu" 2
-\fCwaa\fP - \fBo_waa\fP. 
+\fCwaa\fP - \fBwaa\fP. 
 .PP
-.SH "Priorities for option setting"
-.PP
+.SS "Priorities for option setting"
 The priorities are
 .PD 0
 
@@ -84,8 +120,7 @@ The \fC$HOME-dependent\fP configuration files are not implemented currently. Vol
 .RE
 .PP
 Furthermore there are 'intelligent' run-time dependent settings, like turning off colour output when the output is redirected. Their priority is just below the command line - so they can always be overridden if necessary.
-.SH "Examples"
-.PP
+.SS "Examples"
 Using the commandline: 
 .PP
 .nf
@@ -101,7 +136,7 @@ Using the commandline:
 
 .fi
 .PP
- A configuration file: 
+ A configuration file, from \fC$FSVS_CONF/config\fP or in a WC-specific path below \fC$FSVS_CONF\fP: 
 .PP
 .nf
      # FSVS configuration file
@@ -109,8 +144,84 @@ Using the commandline:
 
 .fi
 .PP
-.SH "Displaying paths"
+.SH "Output settings and entry filtering"
 .PP
+.SS "Trimming the list of deleted entries"
+If you remove a directory, all entries below are implicitly known to be deleted, too. To make the \fBstatus\fP output shorter there's the \fCall_removed\fP option which, if set to \fCno\fP, will cause children of removed entries to be omitted.
+.PP
+Example for the config file: 
+.PP
+.nf
+    all_removed=no
+
+.fi
+.PP
+.SS "Ignore mtime-metadata changes for directories"
+When this option is enabled, directories where only the mtime changed are not reported on \fBstatus\fP anymore.
+.PP
+This is useful in situations where temporary files are created in directories, eg. by text editors. (Example: \fCVIM\fP swapfiles when no \fCdirectory\fP option is configured).
+.PP
+Example for the config file: 
+.PP
+.nf
+    dir_exclude_mtime=yes
+
+.fi
+.PP
+.SS "Directory sorting"
+If you'd like to have the output of \fBstatus\fP sorted, you can use the option \fCdir_sort=yes\fP. FSVS will do a run through the tree, to read the status of the entries, and then go through it again, but sorted by name.
+.PP
+\fBNote:\fP
+.RS 4
+If FSVS aborts with an error during \fBstatus\fP output, you might want to turn this option off again, to see where FSVS stops; the easiest way is on the command line with \fC-odir_sort=no\fP.
+.RE
+.PP
+.SS "Filtering entries"
+Please see the command line parameter for \fB-f\fP, which is identical.
+.PP
+.PP
+.nf
+    fsvs -o filter=mtime
+.fi
+.PP
+.SS "'fsvs log' revision limit"
+There are some defaults for the number of revisions that are shown on a \fC'fsvs log'\fP command:
+.PD 0
+
+.IP "\(bu" 2
+2 revisions given (\fC-rX:Y\fP): \fCabs\fP(X-Y)+1, ie. all revisions in that range. 
+.IP "\(bu" 2
+1 revision given: exactly that one. 
+.IP "\(bu" 2
+no revisions given: from \fCHEAD\fP to 1, with a maximum of 100. 
+.PP
+.PP
+As this option can only be used to set an upper limit of revisions, it makes most sense for the no-revision-arguments case.
+.SS "'fsvs log' output format"
+You can modify aspects of the \fBfsvs log\fP output format by setting the \fClog_output\fP option to a combination of these flags:
+.PD 0
+
+.IP "\(bu" 2
+\fCcolor:\fP This uses color in the output, similar to \fCcg-log\fP (\fCcogito-log\fP); the header and separator lines are highlighted. 
+.PP
+\fBNote:\fP
+.RS 4
+This uses ANSI escape sequences, and tries to restore the default color; if you know how to do that better (and more compatible), please tell the developer mailing list. 
+.RE
+.PP
+
+.IP "\(bu" 2
+\fCindent:\fP Additionally you can shift the log message itself a space to the right, to make the borders clearer. 
+.PP
+.PP
+Furthermore the value \fCnormal\fP is available; this turns off all special handling.
+.PP
+\fBNote:\fP
+.RS 4
+If you start such an option, the value is reset; so if you specify \fClog_output=color\fP,indent in the global config file, and use \fClog_output=color\fP on the commandline, only colors are used. This is different to the \fBFiltering entries\fP option, which is cumulating.
+.RE
+.PP
+.SS "Displaying paths"
 You can specify how paths printed by FSVS should look like; this is used for the entry status output of the various actions, and for the diff header lines.
 .PP
 There are several possible settings, of which one can be chosen via the \fCpath\fP option.
@@ -131,15 +242,14 @@ There are several possible settings, of which one can be chosen via the \fCpath\
 .PP
 \fBNote:\fP
 .RS 4
-Internally FSVS still first parses all arguments, and then does a single run through the entries. So if some entry matches more than one parameter, it is printed using the first. 
-.br
+Internally FSVS still first parses all arguments, and then does a single run through the entries. So if some entry matches more than one parameter, it is printed using the first match.
 .RE
 .PP
 
 .IP "\(bu" 2
  \fCabsolute\fP 
 .br
- All paths are printed in absolute form. This is useful if you want to paste them into other consoles without worrying whether the current directory matches. 
+ All paths are printed in absolute form. This is useful if you want to paste them into other consoles without worrying whether the current directory matches, or for using them in pipelines. 
 .PP
 .PP
 The next two are nearly identical to \fCabsolute\fP, but the beginning of paths are substituted by environment variables. This makes sense if you want the advantage of full paths, but have some of them abbreviated. 
@@ -156,7 +266,7 @@ The next two are nearly identical to \fCabsolute\fP, but the beginning of paths 
 .br
  Check for matches just before printing the path. 
 .br
- This is slower, but find the best fit. 
+ This is slower, but finds the best fit. 
 .PP
 \fBNote:\fP
 .RS 4
@@ -221,8 +331,70 @@ $ fsvs -o path=parameters st X11 /etc/X11/xinit
 At least for the command line options the strings can be abbreviated, as long as they're still identifiable. Please use the full strings in the configuration file, to avoid having problems in future versions when more options are available.
 .RE
 .PP
-.SH "Options relating to the 'diff' action"
+.SS "Status output coloring"
+FSVS can colorize the output of the status lines; removed entries will be printed in red, new ones in green, and otherwise changed in blue. Unchanged (for \fC-v\fP) will be given in the default color.
 .PP
+For this you can set \fCstat_color=yes\fP; this is turned \fCoff\fP per default.
+.PP
+As with the other colorizing options this gets turned \fCoff\fP automatically if the output is not on a tty; on the command line you can override this, though.
+.SS "Checking for changes in a script"
+If you want to use FSVS in scripts, you might simply want to know whether anything was changed.
+.PP
+In this case use the \fCstop_on_change\fP option, possibly combined with \fBFiltering entries\fP; this gives you no output on \fCSTDOUT\fP, but an error code on the first change seen: 
+.PP
+.nf
+    fsvs -o stop_change=yes st /etc
+        if fsvs status -o stop_change=yes -o filter=text /etc/init.d
+        then
+            echo No change found ...
+        else
+            echo Changes seen.
+        fi
+
+.fi
+.PP
+.SS "Verbosity flags"
+If you want a bit more control about the data you're getting you can use some specific flags for the \fCverbose\fP options.
+.PP
+.PD 0
+.IP "\(bu" 2
+\fCnone\fP,veryquiet - reset the bitmask, don't display anything. 
+.IP "\(bu" 2
+\fCquiet\fP - only a few output lines. 
+.IP "\(bu" 2
+\fCchanges\fP - the characters showing what has changed for an entry. 
+.IP "\(bu" 2
+\fCsize\fP - the size for files, or the textual description (like \fC'dir'\fP). 
+.IP "\(bu" 2
+\fCpath\fP - the path of the file, formatted according to \fBthe path option\fP. 
+.IP "\(bu" 2
+\fCdefault\fP - The default value, ie. \fCchanges\fP, \fCsize\fP and \fCname\fP. 
+.IP "\(bu" 2
+\fCmeta\fP - One more than the default so it can be used via a single \fC'-v'\fP, it marks that the mtime and owner/group changes get reported as two characters.If \fC'-v'\fP is used to achieve that, even entries without changes are reported, unless overridden by \fBFiltering entries\fP. 
+.IP "\(bu" 2
+\fCurl\fP - Displays the entries' top priority URL 
+.IP "\(bu" 2
+\fCcopyfrom\fP - Displays the URL this entry has been copied from (see \fBcopy\fP). 
+.IP "\(bu" 2
+\fCgroup\fP - The group this entry belongs to, see \fBgroup\fP 
+.IP "\(bu" 2
+\fCurls\fP - Displays all known URLs of this entry 
+.IP "\(bu" 2
+\fCstacktrace\fP - Print the full stacktrace when reporting errors; useful for debugging. 
+.IP "\(bu" 2
+\fCall\fP - Sets all flags. Mostly useful for debugging. 
+.PP
+.PP
+Please note that if you want to display \fBfewer\fP items than per default, you'll have to clear the bitmask first, like this: 
+.PP
+.nf
+    fsvs status -o verbose=none,changes,path
+
+.fi
+.PP
+.SH "Diffing and merging on update"
+.PP
+.SS "Options relating to the 'diff' action"
 The diff is not done internally in FSVS, but some other program is called, to get the highest flexibility.
 .PP
 There are several option values:
@@ -239,7 +411,7 @@ There are several option values:
 The call is done as 
 .PP
 .nf
-    $diff_prg $diff_opt $file1 --label '$label1' $file2 --label '$label2' diff_extra
+    $diff_prg $diff_opt $file1 --label '$label1' $file2 --label '$label2' $diff_extra
 
 .fi
 .PP
@@ -249,166 +421,82 @@ The call is done as
 In \fCdiff_opt\fP you should use only use command line flags without parameters; in \fCdiff_extra\fP you can encode a single flag with parameter (like \fC'-U5'\fP). If you need more flexibility, write a shell script and pass its name as \fCdiff_prg\fP.
 .RE
 .PP
-Very advanced users might be interested in \fBexported environment\fPvariables', too.
-.SH "Using colordiff"
-.PP
+Advanced users might be interested in \fBexported environment variables\fP, too; with their help you can eg. start different \fCdiff\fP programs depending on the filename.
+.SS "Using colordiff"
 If you have \fCcolordiff\fP installed on your system, you might be interested in the \fCcolordiff\fP option.
 .PP
-It can take on of these values:
+It can take one of these values:
 .PD 0
 
 .IP "\(bu" 2
 \fCno\fP, \fCoff\fP or \fCfalse:\fP Don't use \fCcolordiff\fP. 
 .IP "\(bu" 2
-empty (default value): Try to use \fCcolordiff\fP as executable, but don't throw an error if it can't be started; just pipe the data as-is to \fCSTDOUT\fP. 
+empty (default value): Try to use \fCcolordiff\fP as executable, but don't throw an error if it can't be started; just pipe the data as-is to \fCSTDOUT\fP. (\fIAuto\fP mode.) 
 .IP "\(bu" 2
 anything else: Pipe the output of the \fCdiff\fP program (see \fBOptions relating to the 'diff' action\fP) to the given executable.
 .PP
 .PP
 Please note that if \fCSTDOUT\fP is not a tty (eg. is redirected into a file), this option must be given on the command line to take effect.
-.SH "Filtering entries"
+.SS "How to resolve conflicts on update"
+If you start an update, but one of the entries that was changed in the repository is changed locally too, you get a conflict.
 .PP
-Please see the command line parameter for \fB-f\fP, which is identical.
-.PP
-.PP
-.nf
-    fsvs -o filter=mtime
-.fi
-.PP
-.SH "Trimming the list of deleted entries"
-.PP
-If you remove a directory, all entries below are implicitly known to be deleted, too. To make the \fBstatus\fP output shorter there's the \fCall_removed\fP option; which, if set to \fCyes\fP, will cause children of removed entries to be omitted.
-.PP
-Example for the config file: 
-.PP
-.nf
-    all_removed=yes
-
-.fi
-.PP
-.SH "Change detection"
-.PP
-This options allows to specify the trade-off between speed and accuracy.
-.PP
-A file with a changed size can immediately be known as changed; but if only the modification time is changed, this is not so easy. Per default FSVS does a MD5 check on the file in this case; if you don't want that, or if you want to do the checksum calculation for \fBevery\fP file (in case a file has changed, but its mtime not), you can use this option to change FSVS' behaviour.
-.PP
-On the command line there's a shortcut for that: for every \fC'-C'\fP another check in this option is chosen.
-.PP
-The recognized specifications are noneResets the check bitmask to 'no checks'. file_mtimeCheck files for modifications via MD5 if the mtime is different - default dirCheck all directories for new entries - this happens normally if a directory ha allfilesCheck \fBall\fP files with MD5 for changes (\fCtripwire\fP -like operation). fullAll available checks. 
-.PP
-You can give multiple options; they're accumulated unless overridden by \fCnone\fP. 
-.PP
-.nf
-    fsvs -o change_check=allfiles status
-
-.fi
-.PP
-.PP
-\fBNote:\fP
-.RS 4
-\fIcommit\fP and \fIupdate\fP set additionally the \fCdir\fP option, to avoid missing new files.
-.RE
-.PP
-.SH "Setting warning behaviour"
-.PP
-Please see the command line parameter \fB-W\fP, which is identical.
-.PP
-.PP
-.nf
-    fsvs -o warning=diff-status=ignore
-.fi
-.PP
-.SH "Using an alternate root directory"
-.PP
-This is a path that is prepended to \fC$FSVS_WAA\fP and \fC$FSVS_CONF\fP (or their default values, see \fBFiles used by fsvs\fP), if they do not already start with it, and it is cut off for the directory-name MD5 calculation.
-.PP
-When is that needed? Imagine that you've booted from some Live-CD like Knoppix; if you want to setup or restore a non-working system, you'd have to transfer all files needed by the \fCfsvs\fP binary to it, and then start in some kind of \fCchroot\fP environment.
-.PP
-With this parameter you can tell \fCfsvs\fP that it should load its libraries from the current filesystem, but use the given path as root directory for its administrative data.
-.PP
-This is used for recovery; see the example in \fBRecovery for a non-booting system\fP.
-.PP
-So how does this work?
+There are some ways to resolve a conflict:
 .PD 0
 
 .IP "\(bu" 2
-The internal data paths derived from \fC$FSVS_WAA\fP and \fC$FSVS_CONF\fP use the value given for \fCsoftroot\fP as a base directory, if they do not already start with it. 
+\fClocal\fP - Just take the local entry, ignore the repository. 
+.IP "\(bu" 2
+\fCremote\fP - Overwrite any local change with the remote version.
+.PP
+
+.IP "\(bu" 2
+\fCboth\fP - Keep the local modifications in the file renamed to \fC\fIfilename\fP.mine\fP, and save the repository version as \fC\fIfilename\fP.r\fIXXX\fP\fP, ie. put the revision number after the filename.
+.PP
+The conflict must be solved manually, and the solution made known to FSVS via the \fBresolve\fP command.
+.PP
+\fBNote:\fP
+.RS 4
+As there's no known \fIgood\fP version after this renaming, a zero byte file gets created. 
 .br
- (If that creates a conflict for you, eg. in that you want to use \fC/var\fP as the \fCsoftroot\fP, and your \fC$FSVS_WAA\fP should be \fC/var/fsvs\fP, you can make the string comparison fail by using \fC/./var\fP for either path.)
+ Any \fBresolve\fP or \fBrevert\fP command would make that current, and the changes that are kept in \fC\fIfilename\fP.mine\fP would be lost! 
+.br
+ You should only \fBrevert\fP to the last repository version, ie. the data of \fC\fIfilename\fP.r\fIXXX\fP\fP.
+.RE
 .PP
 
 .IP "\(bu" 2
-When a directory name for \fC$FSVS_CONF\fP or \fC$FSVS_WAA\fP is derived from some file path, the part matching \fCsoftroot\fP is cut off, so that the generated names match the situation after rebooting. 
+\fCmerge\fP - Call the program \fCmerge\fP with the common ancestor, the local and the remote version.
 .PP
+If it is a clean merge, no further work is necessary; else you'll get the (partly) merged file, and the two other versions just like with the \fCboth\fP variant, and (again) have to tell FSVS that the conflict is solved, by using the \fBresolve\fP command. 
 .PP
-Previously you'd have to \fBexport\fP your data back to the filesystem and call \fBurls\fP \fC'fsvs urls'\fP and \fCfsvs\fP \fBsync-repos\fP again, to get the WAA data back.
 .PP
 \fBNote:\fP
 .RS 4
-A plain \fCchroot()\fP would not work, as some needed programs (eg. the decoder for update, see \fBSpecial property names\fP) would not be available.
-.PP
-The easy way to understand \fCsoftroot\fP is: If you want to do a \fCchroot()\fP into the given directory (or boot with it as \fC/\fP), you'll want this set.
-.PP
-As this value is used for finding the correct working copy root (by trying to find a \fBconf-path\fP, it cannot be set from a per-wc config file. Only the environment, global configuration or command line parameter make sense.
+As in the subversion command line client \fCsvn\fP the auxiliary files are seen as new, although that might change in the future (so that they automatically get ignored).
 .RE
 .PP
-.SH "'fsvs log' revision limit"
+.SS "Options regarding the 'merge' program"
+Like with \fBdiff\fP, the \fCmerge\fP operation is not done internally in FSVS.
 .PP
-There are some defaults for the number of revisions that are shown on a \fC'fsvs log'\fP command:
+To have better control
 .PD 0
 
 .IP "\(bu" 2
-2 revisions given (\fC-rX:Y\fP): \fCabs\fP(X-Y)+1, ie. all revisions in that range. 
+\fCmerge_prg\fP: The executable name, default \fC'merge'\fP. 
 .IP "\(bu" 2
-1 revision given: exactly that one. 
-.IP "\(bu" 2
-no revisions given: from \fCHEAD\fP to 1, with a maximum of 100. 
+\fCmerge_opt\fP: The default options, default \fC'-A'\fP. 
 .PP
 .PP
-So this command is mostly useful to get more than the default number of revisions on when running without revision arguments, or to get fewer.
-.SH "'fsvs log' output format"
+The option \fC'-p'\fP is always used: 
 .PP
-You can modify aspects of the \fBfsvs log\fP output format by setting the \fClog_output\fP option to a combination of these flags:
-.PD 0
+.nf
+    $merge_prg $merge_opt -p $file1 $common $file2
 
-.IP "\(bu" 2
-\fCcolor:\fP This uses color in the output, similar to \fCcg-log\fP (cogito-log); the header and separator lines are highlighted. 
+.fi
 .PP
-\fBNote:\fP
-.RS 4
-This uses ANSI escape sequences, and tries to restore the default color; if you know how to do that better (and more compatible), please tell the developer mailing list. 
-.RE
+.SH "Options for commit"
 .PP
-
-.IP "\(bu" 2
-\fCindent:\fP Additionally you can shift the log message itself a space to the right, to make the borders clearer. 
-.PP
-.PP
-Furthermore the value \fCnormal\fP is available; this turns off all special handling.
-.PP
-\fBNote:\fP
-.RS 4
-If you start such an option, the value is reseted; so if you specify \fClog_output=color\fP,indent in the global config file, and use \fClog_output=color\fP on the commandline, only colors are used. This is a difference to the \fBFiltering entries\fP option, which is cumulating.
-.RE
-.PP
-.SH "Status output coloring"
-.PP
-\fCFSVS\fP can colorize the output of the status lines; removed entries will be printed in red, new ones in green, and otherwise changed in blue. Unchanged (for \fC-v\fP) will be given in the default color.
-.PP
-For this you can set \fCstat_color=yes\fP; this is turned \fCoff\fP per default.
-.PP
-As with the other colorizing options this gets turned \fCoff\fP automatically if the output is not on a tty; on the command line you can override this, though.
-.SH "Directory sorting"
-.PP
-If you'd like to have the output of \fBstatus\fP sorted, you can use the option \fCdir_sort=yes\fP. \fCFSVS\fP will do a run through the tree, to read the status of the entries, and then go through it again, but sorted by name. (See dir_enumerator().)
-.PP
-\fBNote:\fP
-.RS 4
-If \fCFSVS\fP aborts with an error during \fBstatus\fP output, you might want to turn this option off again, to see where \fCfsvs\fP stops; the easiest way is on the commandline with \fC-odir_sort=no\fP.
-.RE
-.PP
-.SH "Author"
-.PP
+.SS "Author"
 You can specify an author to be used on commit. This option has a special behaviour; if the first character of the value is an \fC'$'\fP, the value is replaced by the environment variable named.
 .PP
 Empty strings are ignored; that allows an \fC/etc/fsvs/config\fP like this: 
@@ -434,9 +522,8 @@ Empty strings are ignored; that allows an \fC/etc/fsvs/config\fP like this:
 Your \fCsshd_config\fP needs the \fCPermitUserEnvironment\fP setting; you can also take a look at the \fCAcceptEnv\fP and \fCSendEnv\fP documentation.
 .RE
 .PP
-.SH "Destination URL for commit"
-.PP
-If you defined multiple URLs for your working copy, \fCFSVS\fP needs to know which URL to commit to.
+.SS "Destination URL for commit"
+If you defined multiple URLs for your working copy, FSVS needs to know which URL to commit to.
 .PP
 For this you would set \fCcommit_to\fP to the \fBname\fP of the URL; see this example: 
 .PP
@@ -446,19 +533,7 @@ For this you would set \fCcommit_to\fP to the \fBname\fP of the URL; see this ex
 
 .fi
 .PP
-.SH "Destination for debug output"
-.PP
-See \fB-d\fP.
-.PP
-Example: 
-.PP
-.nf
-     fsvs -o debug_output=/tmp/debug.out -d st /etc
-
-.fi
-.PP
-.SH "Doing empty commits"
-.PP
+.SS "Doing empty commits"
 In the default settings FSVS will happily create empty commits, ie. revisions without any changed entry. These just have a revision number, an author and a timestamp; this is nice if FSVS is run via CRON, and you want to see when FSVS gets run.
 .PP
 If you would like to avoid such revisions, set this option to \fCno\fP; then such commits will be avoided.
@@ -470,18 +545,32 @@ Example:
 
 .fi
 .PP
-.SH "Avoiding expensive compares on \\ref cpfd 'copyfrom-detect'"
+.SS "Avoid commits without a commit message"
+If you don't like the behaviour that FSVS does commits with an empty message received from \fC$EDITOR\fP (eg if you found out that you don't want to commit after all), you can change this option to \fCno\fP; then FSVS won't allow empty commit messages.
 .PP
-If you've got big files that are seen as new, doing the MD5 comparison can be time consuming. So there's the option \fCcopyfrom_exp\fP, which takes the usual \fCyes\fP (default) and \fCno\fP arguments.
+Example for the config file: 
+.PP
+.nf
+        empty_message=no
+
+.fi
+.PP
+.SS "Creating directories in the repository above the URL"
+If you want to keep some data versioned, the first commit is normally the creation of the base directories \fBabove\fP the given URL (to keep that data separate from the other repository data).
+.PP
+Previously this had to be done manually, ie. with a \fCsvn mkdir $URL --parents\fP or similar command. 
+.br
+ With the \fCmkdir_base\fP option you can tell FSVS to create directories as needed; this is mostly useful on the first commit.
 .PP
 .PP
 .nf
-        fsvs copyfrom-detect -o copyfrom_exp=no some_directory
+        fsvs urls ...
+        fsvs group 'group:ignore,./**'
+        fsvs ci -m 'First post!' -o mkdir_base=yes
 .fi
 .PP
-.SH "Waiting for a time change after working copy operations"
-.PP
-If you're using \fCfsvs\fP in automated systems, you might see that changes that happen in the same second as a commit are not seen with \fBstatus\fP later; this is because the timestamp granularity of \fCfsvs\fP is 1 second.
+.SS "Waiting for a time change after working copy operations"
+If you're using FSVS in automated systems, you might see that changes that happen in the same second as a commit are not seen with \fBstatus\fP later; this is because the timestamp granularity of FSVS is 1 second.
 .PP
 For backward compatibility the default value is \fCno\fP (don't delay). You can set it to any combination of
 .PD 0
@@ -504,81 +593,61 @@ Example how to set that option via an environment variable:
 
 .fi
 .PP
-.SH "Stopping status reports as soon as changes are found"
+.SH "Performance and tuning related options"
 .PP
-If you want to use \fCFSVS\fP in scripts, you might simply want to know whether anything was changed.
+.SS "Change detection"
+This options allows to specify the trade-off between speed and accuracy.
 .PP
-For this use the \fCstop_on_change\fP option, possibly combined with \fBFiltering entries\fP : 
+A file with a changed size can immediately be known as changed; but if only the modification time is changed, this is not so easy. Per default FSVS does a MD5 check on the file in this case; if you don't want that, or if you want to do the checksum calculation for \fBevery\fP file (in case a file has changed, but its mtime not), you can use this option to change FSVS' behaviour.
+.PP
+On the command line there's a shortcut for that: for every \fC'-C'\fP another check in this option is chosen.
+.PP
+The recognized specifications are noneResets the check bitmask to 'no checks'. file_mtimeCheck files for modifications (via MD5) and directories for new entries, if the mtime is different - default dirCheck all directories for new entries, regardless of the timestamp. allfilesCheck \fBall\fP files with MD5 for changes (\fCtripwire\fP -like operation). fullAll available checks. 
+.PP
+You can give multiple options; they're accumulated unless overridden by \fCnone\fP. 
 .PP
 .nf
-    fsvs -o stop_change=yes st /etc
-    fsvs -o stop_change=yes -o filter=text status /etc/init.d
+    fsvs -o change_check=allfiles status
 
 .fi
-.PP
-.SH "How to resolve conflicts on update"
-.PP
-If you start an update, but one of the entries that was changed in the repository is changed locally too, you get a conflict.
-.PP
-There are some ways to resolve a conflict:
-.PD 0
-
-.IP "\(bu" 2
-\fClocal\fP - Just take the local entry, ignore the repository.
-.PP
-
-.IP "\(bu" 2
-\fCremote\fP - Overwrite any local change with the remote version.
-.PP
-
-.IP "\(bu" 2
-\fCboth\fP - Keep the local modifications in the file renamed to \fC\fIfilename\fP.mine\fP, and save the repository version as \fC\fIfilename\fP.r\fIXXX\fP\fP, ie. put the revision number after the filename.
-.PP
-These files will be seen as \fCNew\fP; the conflict must be solved manually, and the resolution made known to FSVS via \fBresolve\fP.
-.PP
-\fBNote:\fP
-.RS 4
-As there's no known \fIgood\fP version after this renaming, a zero byte file gets created. 
-.br
- Any \fBresolve\fP or \fBrevert\fP command would make that current, and the changes that are kept in \fC\fIfilename\fP.mine\fP would be lost! 
-.br
- You could only \fBrevert\fP to the last repository version, ie. the data of \fC\fIfilename\fP.r\fIXXX\fP\fP.
-.RE
-.PP
-
-.IP "\(bu" 2
-\fCmerge\fP - Call the program \fCmerge\fP with the common ancestor, the local and the remote version.
-.PP
-If it is a clean merge, no further work is necessary; else you'll get the (partly) merged file, and the two other versions just like with the \fCboth\fP variant, and have to tell FSVS that the conflict is resolved by \fBresolve\fP. 
 .PP
 .PP
 \fBNote:\fP
 .RS 4
-As in the subversion command line client \fCsvn\fP the auxiliary files are seen as new, although that might change in the future (so that they automatically get ignored).
+\fIcommit\fP and \fIupdate\fP set additionally the \fCdir\fP option, to avoid missing new files.
 .RE
 .PP
-.SH "Options regarding the 'merge' programm"
+.SS "Avoiding expensive compares on \\ref cpfd 'copyfrom-detect'"
+If you've got big files that are seen as new, doing the MD5 comparison can be time consuming. So there's the option \fCcopyfrom_exp\fP (for \fI'expensive'\fP, which takes the usual \fCyes\fP (default) and \fCno\fP arguments.
 .PP
-Like with \fBdiff\fP, the \fCmerge\fP operation is not done internally in FSVS.
-.PP
-To have better control
-.PD 0
-
-.IP "\(bu" 2
-\fCmerge_prg\fP: The executable name, default \fC'merge'\fP. 
-.IP "\(bu" 2
-\fCmerge_opt\fP: The default options, default \fC'-A'\fP. 
-.PP
-.PP
-The option \fC'-p'\fP is always used: 
 .PP
 .nf
-    $merge_prg $merge_opt -p $file1 $common $file2
-
+        fsvs copyfrom-detect -o copyfrom_exp=no some_directory
 .fi
 .PP
-.SH "Path definitions for the config and WAA area"
+.SS "Getting grouping/ignore statistics"
+If you need to ignore many entries of your working copy, you might find that the ignore pattern matching takes some valuable time. 
+.br
+ In order to optimize the order of your patterns you can specify this option to print the number of tests and matches for each pattern.
 .PP
+.PP
+.nf
+        $ fsvs status -o group_stats=yes -q
+
+        Grouping statistics (tested, matched, groupname, pattern):
+
+        4705  80   ignore   group:ignore,.
+.fi
+.PP
+.PP
+For optimizing you'll want to put often matching patterns at the front (to make them match sooner, and avoid unnecessary tests); but if you are using other groups than \fCignore\fP (like \fCtake\fP), you will have to take care to keep the patterns within a group together.
+.PP
+Please note that the first line shows how many entries were tested, and that the next lines differ by the number of matches entries for the current line, as all entries being tested against some pattern get tested for the next too, \fBunless they match the current pattern\fP.
+.PP
+This option is available for \fBstatus\fP and the \fBignore test\fP commands.
+.SH "Base configuration"
+.PP
+.SS "Path definitions for the config and WAA area"
 .PP
 The paths given here are used to store the persistent configuration data needed by FSVS; please see \fBFiles used by fsvs\fP and \fBPriorities for option setting\fP for more details, and the \fBUsing an alternate root directory\fP parameter as well as the \fBRecovery for a non-booting system\fP for further discussion.
 .PP
@@ -593,11 +662,10 @@ The paths given here are used to store the persistent configuration data needed 
 Please note that these paths can be given \fBonly\fP as environment variables (\fC$FSVS_CONF\fP resp. \fC$FSVS_WAA\fP) or as command line parameter; settings in config files are ignored.
 .RE
 .PP
-.SH "Configuration directory for the subversion libraries"
-.PP
+.SS "Configuration directory for the subversion libraries"
 This path specifies where the subversion libraries should take their configuration data from; the most important aspect of that is authentication data, especially for certificate authentication.
 .PP
-The default value is \fC$FSVS_CONF/auth/\fP.
+The default value is \fC$FSVS_CONF/svn/\fP.
 .PP
 \fC/etc/fsvs/config\fP could have eg. 
 .PP
@@ -606,6 +674,104 @@ The default value is \fC$FSVS_CONF/auth/\fP.
 
 .fi
 .PP
- 
+.PP
+Please note that this directory can hold an \fCauth\fP directory, and the \fCservers\fP and \fCconfig\fP files.
+.SS "Using an alternate root directory"
+This is a path that is prepended to \fC$FSVS_WAA\fP and \fC$FSVS_CONF\fP (or their default values, see \fBFiles used by fsvs\fP), if they do not already start with it, and it is cut off for the directory-name MD5 calculation.
+.PP
+When is that needed? Imagine that you've booted from some Live-CD like Knoppix; if you want to setup or restore a non-working system, you'd have to transfer all files needed by the FSVS binary to it, and then start in some kind of \fCchroot\fP environment.
+.PP
+With this parameter you can tell FSVS that it should load its libraries from the current filesystem, but use the given path as root directory for its administrative data.
+.PP
+This is used for recovery; see the example in \fBRecovery for a non-booting system\fP.
+.PP
+So how does this work?
+.PD 0
+
+.IP "\(bu" 2
+The internal data paths derived from \fC$FSVS_WAA\fP and \fC$FSVS_CONF\fP use the value given for \fCsoftroot\fP as a base directory, if they do not already start with it. 
+.br
+ (If that creates a conflict for you, eg. in that you want to use \fC/var\fP as the \fCsoftroot\fP, and your \fC$FSVS_WAA\fP should be \fC/var/fsvs\fP, you can make the string comparison fail by using \fC/./var\fP for either path.)
 .PP
 
+.IP "\(bu" 2
+When a directory name for \fC$FSVS_CONF\fP or \fC$FSVS_WAA\fP is derived from some file path, the part matching \fCsoftroot\fP is cut off, so that the generated names match the situation after rebooting. 
+.PP
+.PP
+Previously you'd have to \fBexport\fP your data back to the filesystem and call \fBurls\fP \fC'fsvs urls'\fP and FSVS \fBsync-repos\fP again, to get the WAA data back.
+.PP
+\fBNote:\fP
+.RS 4
+A plain \fCchroot()\fP would not work, as some needed programs (eg. the decoder for update, see \fBSpecial property names\fP) would not be available.
+.PP
+The easy way to understand \fCsoftroot\fP is: If you want to do a \fCchroot()\fP into the given directory (or boot with it as \fC/\fP), you'll want this set.
+.PP
+As this value is used for finding the correct working copy root (by trying to find a \fBconf-path\fP, it cannot be set from a per-wc config file. Only the environment, global configuration or command line parameter make sense.
+.RE
+.PP
+.SH "Debugging and diagnosing"
+.PP
+The next two options could be set in the global configuration file, to automatically get the last debug messages when an error happens.
+.PP
+To provide an easy way to get on-line debugging again, \fCdebug_output\fP and \fCdebug_buffer\fP are both reset to non-redirected, on-line output, if more than a single \fC-d\fP is specified on the command line, like this: 
+.PP
+.nf
+fsvs commit -m '...'  -d -d filenames
+
+.fi
+.PP
+.PP
+In this case you'll get a message telling you about that.
+.SS "Destination for debug output"
+You can specify the debug output destination with the option \fCdebug_output\fP. This can be a simple filename (which gets truncated on open), or, if it starts with a \fC\fP|, a command that the output gets piped into.
+.PP
+If the destination cannot be opened (or none is given), debug output goes to \fCSTDOUT\fP (for easier tracing via \fCless\fP).
+.PP
+Example: 
+.PP
+.nf
+fsvs -o debug_output=/tmp/debug.out -d st /etc
+
+.fi
+.PP
+.PP
+\fBNote:\fP
+.RS 4
+That string is taken only once - at the first debug output line. So you have to use the correct order of parameters: \fC-o debug_output=... -d\fP.
+.RE
+.PP
+An example: writing the last 200 lines of debug output into a file. 
+.PP
+.nf
+fsvs -o debug_output='| tail -200 > /tmp/debug.log' -d ....
+
+.fi
+.PP
+.SS "Using a debug buffer"
+With the \fCdebug_buffer\fP option you can specify the size of a buffer (in kB) that is used to capture the output, and which gets printed automatically if an error occurs.
+.PP
+This must be done \fBbefore\fP debugging starts, like with the \fBdebug_output\fP specification.
+.PP
+.PP
+.nf
+fsvs -o debug_buffer=128 ...
+.fi
+.PP
+.PP
+\fBNote:\fP
+.RS 4
+If this option is specified in the configuration file or via the environment, only the buffer is allocated; if it is used on the command line, debugging is automatically turned on, too.
+.RE
+.PP
+.SS "Setting warning behaviour"
+Please see the command line parameter \fB-W\fP, which is identical.
+.PP
+.PP
+.nf
+    fsvs -o warning=diff-status=ignore
+.fi
+.PP
+ 
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for fsvs from the source code.

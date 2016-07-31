@@ -121,8 +121,16 @@ seq -f%9.0f 1000000 1100000 > $filename
 $BINdflt ci -m2
 $WC2_UP_ST_COMPARE
 
+
 # Try export
 cd ${WCBASE}3
+
+
+cd $WC
+$INFO "Try with no data"
+> $filename
+$BINdflt ci -m4
+$WC2_UP_ST_COMPARE
 
 
 # Check for error checking
@@ -134,6 +142,15 @@ then
 	$ERROR "Error return of commit pipe not seen?"
 else
 	$SUCCESS "Commit pipe gets checked for return level"
+fi
+
+# Delayed error
+$BINq ps fsvs:commit-pipe "cat && false" $filename
+if $BINq ci -m2 2> /dev/null
+then
+	$ERROR "Delayed error return of commit pipe not seen?"
+else
+	$SUCCESS "Commit pipe gets checked for return level, even for delayed"
 fi
 
 

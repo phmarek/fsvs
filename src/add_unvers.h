@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2008 Philipp Marek.
+ * Copyright (C) 2006-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -20,6 +20,10 @@ work_t au__work;
 
 /** Worker function. */
 action_t au__action;
+
+/** In case we need to handle new entries we might have to assign an URL to 
+ * them. */
+int au__prepare_for_added(void);
 
 
 #endif

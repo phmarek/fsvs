@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2008 Philipp Marek.
+ * Copyright (C) 2007-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,6 +21,25 @@
 
 #define ENV_PREFIX "FSVS_"
 
+/* \addtogroup cmds
+ * 
+ * \section options
+ *
+ * \code
+ * fsvs options dump
+ * fsvs options help
+ * \endcode
+ *
+ * This command 
+ * 
+ * There's no \c load, as FSVS wouldn't know where to store the settings.
+ *
+ * Please see \ref options for the list of options, their values and 
+ * meanings.
+ *
+ * */
+
+
 /** A structure to associate a string with an integer. */
 struct opt___val_str_t 
 {
@@ -28,6 +47,10 @@ struct opt___val_str_t
 	int val;
 };
 
+/** We don't use the value INT_MIN directly, because then we couldn't use 
+ * -1 for "everything." */
+#define BITMAP_CLEAR	(( (unsigned)INT_MIN) >> 1)
+#define BITMAP_CLEAR_MASK	(BITMAP_CLEAR ^ (BITMAP_CLEAR >> 2))
 
 /** Associate the path options with the enumerated value.
  * See also \ref o_opt_path */
@@ -79,6 +102,8 @@ const struct opt___val_str_t opt___filter_strings[]= {
 	{ .val=FS_CHANGED, 												.string="changed" },
 	{ .val=FS_REMOVED, 												.string="deleted" },
 	{ .val=FS_REMOVED, 												.string="removed" },
+	{ .val=FS__CHANGE_MASK,										.string="default" },
+	{ .val=FS__CHANGE_MASK,										.string="def" },
 	{ .val=0, 																.string="none" },
 	{ .string=NULL, }
 };
@@ -92,6 +117,30 @@ const struct opt___val_str_t opt___chcheck_strings[]= {
 	{ .val=CHCHECK_DIRS,			 								.string="dir" },
 	{ .val=CHCHECK_ALLFILES,	 								.string="allfiles" },
 	{ .val=-1,	 															.string="full" },
+};
+
+
+/** Verbosity strings
+ * \ref o_verbose. */
+const struct opt___val_str_t opt___verbosity_strings[]= {
+	{ .val=VERBOSITY_VERYQUIET | BITMAP_CLEAR,			.string="none" },
+	{ .val=VERBOSITY_VERYQUIET | BITMAP_CLEAR,			.string="veryquiet" },
+	{ .val=VERBOSITY_QUIET 		 | BITMAP_CLEAR,			.string="quiet" },
+	{ .val=VERBOSITY_SHOWCHG,												.string="changes" }, 
+	{ .val=VERBOSITY_SHOWCHG,												.string="status" }, 
+	{ .val=VERBOSITY_SHOWSIZE,											.string="size" },
+	{ .val=VERBOSITY_SHOWNAME,											.string="path" },
+	{ .val=VERBOSITY_SHOWNAME,											.string="name" },
+	{ .val=VERBOSITY_SHOWTIME,											.string="time" },
+	{ .val=VERBOSITY_DEFAULT,												.string="default" },
+	{ .val=VERBOSITY_TOP_URL,		 										.string="url" },
+	{ .val=VERBOSITY_ALL_URLS | VERBOSITY_TOP_URL,	.string="urls" },
+	{ .val=VERBOSITY_COPYFROM,	 										.string="copyfrom" },
+	{ .val=VERBOSITY_GROUP,		 											.string="group" },
+	{ .val=VERBOSITY_STACKTRACE,										.string="stack" },
+	{ .val=VERBOSITY_STACKTRACE,										.string="backtrace" },
+	{ .val=VERBOSITY_STACKTRACE,										.string="stacktrace" },
+	{ .val=-1,																			.string="all" },
 };
 
 
@@ -131,6 +180,7 @@ opt___parse_t opt___store_env_noempty;
 opt___parse_t opt___normalized_path;
 opt___parse_t opt___parse_warnings;
 opt___parse_t opt___atoi;
+opt___parse_t opt___debug_buffer;
 /** @} */
 
 
@@ -167,6 +217,10 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.name="stop_change", .i_val=OPT__NO, 
 		.parse=opt___string2val, .parm=opt___yes_no,
 	},
+	[OPT__DIR_EXCLUDE_MTIME] = {
+		.name="dir_exclude_mtime", .i_val=OPT__NO,
+		.parse=opt___string2val, .parm=opt___yes_no,
+	},
 	[OPT__FILTER] = {
 		.name="filter", .i_val=0, 
 		.parse=opt___strings2bitmap, .parm=opt___filter_strings,
@@ -179,13 +233,24 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.name="all_removed", .i_val=OPT__YES, 
 		.parse=opt___string2val, .parm=opt___yes_no,
 	},
+	[OPT__VERBOSE] = {
+		.name="verbose", .i_val=VERBOSITY_DEFAULT, 
+		.parse=opt___strings2bitmap, .parm=opt___verbosity_strings,
+	},
 
 	[OPT__DEBUG_OUTPUT] = {
 		.name="debug_output", .cp_val=NULL, .parse=opt___store_string, 
 	},
+	[OPT__DEBUG_BUFFER] = {
+		.name="debug_buffer", .i_val=0, .parse=opt___debug_buffer, 
+	},
+	[OPT__GROUP_STATS] = {
+		.name="group_stats", .i_val=OPT__NO,
+		.parse=opt___string2val, .parm=opt___yes_no,
+	},
 
 	[OPT__CONFLICT] = {
-		.name="conflict", .i_val=CONFLICT_STOP,
+		.name="conflict", .i_val=CONFLICT_MERGE,
 		.parse=opt___string2val, .parm=opt___conflict_strings,
 	},
 	[OPT__MERGE_PRG] = {
@@ -211,6 +276,10 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.name="softroot", .cp_val=NULL, .parse=opt___normalized_path,
 	},
 
+	[OPT__MKDIR_BASE] = {
+		.name="mkdir_base", .i_val=OPT__NO,
+		.parse=opt___string2val, .parm=opt___yes_no,
+	},
 	[OPT__COMMIT_TO] = {
 		.name="commit_to", .cp_val=NULL, .parse=opt___store_string,
 	},
@@ -242,6 +311,10 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.name="empty_commit", .i_val=OPT__YES, 
 		.parse=opt___string2val, .parm=opt___yes_no,
 	},
+	[OPT__EMPTY_MESSAGE] = {
+		.name="empty_message", .i_val=OPT__YES, 
+		.parse=opt___string2val, .parm=opt___yes_no,
+	},
 	[OPT__DELAY] = {
 		.name="delay", .i_val=OPT__NO,
 		.parse=opt___strings2empty_bm, .parm=opt___delay_strings,
@@ -251,6 +324,44 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.parse=opt___string2val, .parm=opt___yes_no,
 	},
 };
+
+
+/** Get the debugbuffer size, round and test for minimum size.
+ * The value is in KB; we round up to a 4kB size, and make it at least 8k.  
+ * A value of \c 0 means \b off.
+ * */
+int opt___debug_buffer(struct opt__list_t *ent, char *string, 
+		enum opt__prio_e prio UNUSED)
+{
+#ifndef ENABLE_DEBUGBUFFER
+	int status;
+	STOPIF(EINVAL, "!The debugbuffer option is not available, because\n"
+			"fmemopen() was not found during compilation.");
+ex:
+	return status;
+#else
+	char *l;
+	int i;
+
+	i=strtol(string, &l, 0);
+	if (*l) return EINVAL;
+
+	if (i)
+	{
+		if (i<4) 
+			i=4;
+		else
+			/* Round up. */
+			i = (i+3) & ~3;
+
+		i *= 1024;
+	}
+
+	ent->i_val=i;
+ 
+	return 0;
+#endif
+}
 
 
 /** Get an integer value directly. */
@@ -302,7 +413,8 @@ ex:
 
 /** Convert a string into a list of words, and \c OR their associated 
  * values together.
- * With an association of \c 0 the value is resetted. */
+ * With an association of \c 0, or if BITMAP_CLEAR is set, the value is 
+ * resetted.  */
 int opt___strings2bitmap(struct opt__list_t *ent, char *string, 
 		enum opt__prio_e prio UNUSED)
 {
@@ -322,9 +434,12 @@ int opt___strings2bitmap(struct opt__list_t *ent, char *string,
 
 	while ( (cp=strsep(&string, delim)) )
 	{
-	/* Return errors quietly. */
-		STOPIF( opt___find_string(ent->parm, cp, &i), NULL);
-		if (i == 0) val=0;
+		/* Return errors quietly. */
+		status=opt___find_string(ent->parm, cp, &i);
+		if (status) goto ex;
+
+		if (i == 0 || ((i & BITMAP_CLEAR_MASK) == BITMAP_CLEAR))
+			val=0;
 		else val |= i;
 	}
 
@@ -352,15 +467,16 @@ int opt___strings2empty_bm(struct opt__list_t *ent, char *string,
 int opt___store_string(struct opt__list_t *ent, char *string, 
 		enum opt__prio_e prio UNUSED)
 {
+	int status;
+
 	ent->i_val=strlen(string);
 	/* strdup() would work, but count again. */
 
-	ent->cp_val=malloc(ent->i_val+1);
-	if (!ent->cp_val) return ENOMEM;
-
 	/* This initial write has to be done, so cast the const away. */
-	memcpy((char*)ent->cp_val, string, ent->i_val+1);
-	return 0;
+	STOPIF( hlp__strnalloc(ent->i_val, (char**)&ent->cp_val, string), NULL);
+
+ex:
+	return status;
 }
 
 
@@ -402,7 +518,7 @@ int opt__parse_option(enum opt__settings_e which, enum opt__prio_e prio,
 
 	status=0;
 
-	while (isspace(*string)) string++;
+	string=hlp__skip_ws(string);
 	ent=opt__list+which;
 	if (ent->prio <= prio) 
 	{
@@ -432,7 +548,7 @@ int opt__parse(char *key, char *value, enum opt__prio_e prio,
 	status=0;
 
 	/* Normalize. */
-	while (isspace(*key)) key++;
+	key=hlp__skip_ws(key);
 
 	/* If no value given ... */
 	if (!value)
@@ -448,7 +564,7 @@ int opt__parse(char *key, char *value, enum opt__prio_e prio,
 
 	while (klen && isspace(key[klen])) klen--;
 
-	while (isspace(*value)) value++;
+	value=hlp__skip_ws(value);
 
 	//	DEBUGP("Got %*s=%s", klen, key, value);
 
@@ -480,10 +596,8 @@ int opt__load_settings(char *path, char *name, enum opt__prio_e prio)
 {
 	int status;
 	char fn[strlen(path) + 1 + (name ? strlen(name) : 0) + 1];
-	char buffer[OPT__MAX_LINE_LEN];
-	int line;
+	char *buffer;
 	FILE *fp;
-	char *sol, *eol;
 
 
 	status=0;
@@ -506,38 +620,26 @@ int opt__load_settings(char *path, char *name, enum opt__prio_e prio)
 			status=0;
 			goto ex;
 		}
-		STOPIF( status, "Open file '%s'", buffer);
+		STOPIF( status, "Open file '%s'", fn);
 	}
 
-	line=0;
+	hlp__string_from_filep(NULL, NULL, NULL, SFF_RESET_LINENUM);
 	while (!feof(fp))
 	{
-		line++;
-		sol=fgets( buffer, sizeof(buffer), fp);
-		if (!sol) continue;
+		status=hlp__string_from_filep(fp, &buffer, NULL,
+				SFF_WHITESPACE | SFF_COMMENT);
+		if (status == EOF) break;
+		STOPIF( status, NULL);
 
-		while (isspace(*sol)) sol++;
-		if (*sol == '#') continue;
+		if (*buffer == '#') continue;
 
-		if (*buffer)
-		{
-			eol=sol+strlen(sol)-1;
-			/* That doesn't work for options with a 1-character name and without 
-			 * a value -- we'd need ">=" . Who cares? */
-			while (eol >= buffer && isspace(*eol)) eol--;
-
-			/* Character *after* non-whitespace; could be at buffer[0] (if we'd 
-			 * use ">=" above).  */
-			eol[1]=0;
-
-			/* Only non-empty lines. */
-			if (*sol)
-			{
-				STOPIF( opt__parse(sol, NULL, prio, 0),
-						"In file '%s' on line %d", fn, line);
-			}
-		}
+		STOPIF( opt__parse(buffer, NULL, prio, 0),
+				"In file '%s' on line %u", fn, 
+				hlp__string_from_filep(NULL, NULL, NULL, SFF_GET_LINENUM));
 	}
+
+	/* status == EOF from the loop above. */
+	status=0;
 
 ex:
 	if (fp) fclose(fp);
@@ -612,6 +714,12 @@ int opt___normalized_path(struct opt__list_t *ent, char *string,
 		return EINVAL;
 }
 
+/** -.
+ * */
+int opt__help(struct estat *root, int argc, char *argv[])
+{
+	return EBUSY;
+}
 
 /** -.
  * Invalid values are handled by returning \c 1, ie. they don't say \c off.

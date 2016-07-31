@@ -207,3 +207,31 @@ else
   $ERROR "added directory after rmdir has wrong info output."
 fi
 
+
+# Try adding more than one file
+touch h5 h6 h7
+$BINq add -u url h5 h6 h7
+list=`$BINdflt st -o verbose=none,status,path h? | sort`
+# echo to normalize the whitespace
+if [[ `echo $list` == "n... h5 n... h6 n... h7" ]]
+then
+	$SUCCESS "Multiple entries added."
+else
+	echo $list
+	$ERROR "Didn't add more than one entry?"
+fi
+
+
+if $BINdflt unversion . > $logfile 2>&1
+then
+	$ERROR "Expected error message for unversion wc root"
+fi
+if [[ `wc -l < $logfile` -ne 1 ]]
+then
+	$ERROR "Too many lines printed for unversion wc root"
+fi
+if ! grep "working copy root" $logfile
+then
+	$ERROR "No nice error printed for unversion wc root"
+fi
+$SUCCESS "unversion wc root ok"

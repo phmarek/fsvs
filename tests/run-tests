@@ -5,6 +5,12 @@ set -e
 anyfail=0
 . ./test_functions
 
+if [[ "$LC_ALL" != "" ]]
+then
+	$ERROR_NB "Using LC_ALL overrides the needed LC_MESSAGES setting."
+	$ERROR "Please use LANG instead."
+fi
+
 for test in $TEST_LIST
 do
 	echo "" 

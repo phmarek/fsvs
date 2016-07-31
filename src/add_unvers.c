@@ -1,5 +1,5 @@
 /***********************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2009 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -11,6 +11,7 @@
 #include "global.h"
 #include "add_unvers.h"
 #include "status.h"
+#include "ignore.h"
 #include "warnings.h"
 #include "est_ops.h"
 #include "url.h"
@@ -27,14 +28,18 @@
  *
  * \section add
  *
- * \code 
- * fsvs add PATH [PATH...]
+ * \code
+ * fsvs add [-u URLNAME] PATH [PATH...]
  * \endcode
  *
  * With this command you can explicitly define entries to be versioned,
  * even if they have a matching ignore pattern.
  * They will be sent to the repository on the next commit, just like
  * other new entries, and will therefore be reported as \e New .
+ *
+ * The \c -u option can be used if you're have more than one URL defined 
+ * for this working copy and want to have the entries pinned to the this 
+ * URL.
  *
  * \subsection add_ex Example
  * Say, you're versioning your home directory, and gave an ignore pattern
@@ -50,15 +55,11 @@
  * <tt>./.*</tt> pattern (as a match at the beginning is sufficient), 
  * so you have to insert a negative ignore pattern (a \e take pattern):
  * \code
- * 	fsvs ignore --insert t./.kde3
+ * 	fsvs ignore prepend t./.kde3
  * \endcode
  * Now a <tt>fsvs st</tt> would show your entries as 
  * \e New , and the next commit will send them to the repository.
  * 
- * \note
- * This loads the wc data, writes the given paths with some flags to it,
- * and saves the wc data again.
- *
  * */
 
 /**
@@ -150,6 +151,10 @@ int au__action(struct estat *sts)
 	int mask=RF_ADD | RF_UNVERSION;
 
 
+	STOPIF_CODE_ERR(!sts->parent, EINVAL,
+			"!Using %s on the working copy root doesn't make sense.",
+			action->name[0]);
+
 	status=0;
 
 	/* This should only be done once ... but as it could be called by others, 
@@ -165,8 +170,8 @@ int au__action(struct estat *sts)
 	DEBUGP("changing flags: has now %X", sts->flags);
 	STOPIF( st__status(sts), NULL);
 
-	/* If we have an entry which was added *and* unversioned (or vice 
-	 * versa), but
+	/* If we have an entry which was added *and* unversioned (or vice versa), 
+	 * but
 	 * 1) has never been committed, we remove it from the list;
 	 * 2) is a normal, used entry, we delete the flags. 
 	 *
@@ -181,6 +186,52 @@ int au__action(struct estat *sts)
 		else
 			sts->flags &= ~mask;
 	}
+
+	if (sts->flags & RF_ADD)
+	{
+		/* Get the group. */
+		STOPIF( ign__is_ignore(sts, &old), NULL);
+		/* We don't want to know whether it's ignored, so we just discard the 
+		 * ignore flag. */
+
+		STOPIF( ops__apply_group(sts, NULL, NULL), NULL);
+
+		/* And we don't want to ignore it, even if ops__apply_group() only 
+		 * found an ignore pattern, thank you so much.  */
+		sts->to_be_ignored=0;
+	}
+
+	if ((sts->flags & mask) == RF_ADD)
+		sts->url=current_url;
+
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * */
+int au__prepare_for_added(void)
+{
+	int status;
+
+	STOPIF( url__load_list(NULL, 0), NULL);
+	STOPIF( url__mark_todo(), NULL);
+	STOPIF_CODE_ERR( url__parm_list_used>1, EINVAL,
+			"!At most a single destination URL may be given.");
+
+	if (url__parm_list_used)
+	{
+		STOPIF(url__find_by_name(url__parm_list[0], &current_url), 
+				"!No URL with name \"%s\" defined.", url__parm_list[0]);
+		DEBUGP("URL to add to: %s", current_url->url);
+	}
+	else
+		current_url=NULL;
+
+	/* We need the groups, to assign the auto-props. */
+	STOPIF( ign__load_list(NULL), NULL);
 
 ex:
 	return status;
@@ -202,13 +253,7 @@ int au__work(struct estat *root, int argc, char *argv[])
 
 	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
 
-	/** \todo Do we really need to load the URLs here? They're needed for 
-	 * associating the entries - but maybe we should do that two-way:
-	 * - just read \c intnum , and store it again
-	 * - or process to <tt>(struct url_t*)</tt>.
-	 *
-	 * Well, reading the URLs doesn't cost that much ... */
-	STOPIF( url__load_list(NULL, 0), NULL);
+	STOPIF( au__prepare_for_added(), NULL);
 
 	STOPIF( waa__read_or_build_tree(root, argc, normalized, argv, 
 				NULL, 0), NULL);

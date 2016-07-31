@@ -1,8 +1,12 @@
-.TH "FSVS - Backup HOWTO" 5 "29 Oct 2008" "Version trunk:2782" "fsvs" \" -*- nroff -*-
+.TH "FSVS - Backup HOWTO" 5 "11 Mar 2010" "Version trunk:2424" "fsvs" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-FSVS - Backup HOWTO
+HOWTO: Backup \- 
+.PP
+This document is a step-by-step explanation how to do backups using FSVS.  
+This document is a step-by-step explanation how to do backups using FSVS. 
+
 .SH "Preparation"
 .PP
 If you're going to back up your system, you have to decide what you want to have stored in your backup, and what should be left out.
@@ -21,7 +25,7 @@ In case of hardware crash the OS must be set up again
 .PP
 
 .IP "\(bu" 2
-Do you want to keep track of your configuration in \fCetc\fP?
+Do you want to keep track of your configuration in \fC/etc\fP?
 .PD 0
 
 .IP "  \(bu" 4
@@ -72,7 +76,7 @@ Virtual system directories, like \fC/proc\fP and \fC/sys\fP, \fC/dev/shmfs\fP.
 .PP
 .SH "Telling FSVS what to do"
 .PP
-Given \fC$WC\fP as the \fIworking directory\fP - the base of the data you'd like backup'ed (\fC/\fP, \fC/home\fP), and \fC$URL\fP as a valid subversion URL to your (already created) repository path.
+Given \fC$WC\fP as the \fIworking directory\fP - the base of the data you'd like backed up (\fC/\fP, \fC/home\fP), and \fC$URL\fP as a valid subversion URL to your (already created) repository path.
 .PP
 Independent of all these details the first steps look like these: 
 .PP
@@ -121,7 +125,7 @@ This are just examples. You'll probably have to exclude some other paths and pat
 .PP
 .PP
 .nf
-        fsvs commit -m 'First commit!'
+        fsvs commit -m 'First commit.'
 .fi
 .PP
  That's all there is to it!
@@ -167,7 +171,7 @@ In case of a real emergency, when your harddisks crashed or your filesystem was 
 .PD 0
 
 .IP "\(bu" 2
-booting from a knoppix or some other Live-CD (with \fCfsvs\fP on it), 
+booting from a knoppix or some other Live-CD (with FSVS on it), 
 .IP "\(bu" 2
 partition/format as needed, 
 .IP "\(bu" 2
@@ -192,5 +196,6 @@ For more information please take a look at \fBUsing an alternate root directory\
 If you've got any questions, ideas, wishes or other feedback, please tell us in the mailing list \fCusers [at] fsvs.tigris.org\fP.
 .PP
 Thank you! 
-.PP
-
+.SH "Author"
+.PP 
+Generated automatically by Doxygen for fsvs from the source code.
