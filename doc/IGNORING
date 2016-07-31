@@ -32,8 +32,8 @@ Shell-like patterns
 
      ./[oa]pt
      ./sys
-     ./proc/ *
-     ./home/ **~
+     ./proc/*
+     ./home/**~
 
    This would ignore files and directories called apt or opt in the root
    directory (and files below, in the case of a directory), the directory
@@ -45,7 +45,7 @@ Shell-like patterns
           The patterns are anchored at the beginning and the end. So a
           pattern ./sys will match only a file or directory named sys. If
           you want to exclude a directories' files, but not the directory
-          itself, use something like ./dir/ * or ./dir/ **
+          itself, use something like ./dir/* or ./dir/**
 
 PCRE-patterns
 
@@ -60,7 +60,7 @@ PCRE-patterns
 
      PCRE:./home/.*~
 
-   This one achieves exactly the same as ./home/ **~ .
+   This one achieves exactly the same as ./home/**~ .
 
    Another example:
 
@@ -95,7 +95,7 @@ Ignoring all files on a device
    Examples:
 
      tDEVICE:3
-     ./ *
+     ./*
 
    This patterns would define that all filesystems on IDE-devices (with
    major number 3) are taken , and all other files are ignored.

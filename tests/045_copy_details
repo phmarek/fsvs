@@ -1,0 +1,92 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+# A file gets copied; but before it gets marked as copied, it is changed:
+# - The MD5 of the copy must be the original MD5.
+# - If the copy gets changed, it must have the correct MD5 after commit.
+
+file1=src-f
+file2=cpy-f
+
+logfile=$LOGDIR/045.log
+
+orig=text-$RANDOM-$RANDOM-$RANDOM-text
+new=NEW
+
+
+function CheckStoredMD5
+{
+  file=$1
+  expect=$2
+	msg=$3
+
+
+	$BINdflt info $file > $logfile
+	have=`perl -ne 'print $1 if m#^\s+Repos-MD5:\s+(\S+)#' < $logfile`
+	if [[ "$expect" == "$have" ]]
+	then
+	  $SUCCESS "MD5($file): $msg"
+	else
+	  $ERROR_NB "MD5($file): $msg:"
+	  $ERROR_NB "  expected $expect"
+	  $ERROR    "  have     $have"
+	fi
+}
+
+
+
+function Test
+{
+# Generate source file
+	echo "$orig" > $file1
+	$BINq ci -m "$file1" "$file1"
+	orig_md5=`md5sum < $file1 | cut -f1 -d" "`
+
+# Copy, change, and record as copied
+	CheckStoredMD5 "$file1" $orig_md5 "$file1 after commit"
+	cat $file1 > $file2
+	echo "$new" > $file1
+	new_md5=`md5sum < $file1 | cut -f1 -d" "`
+# The stored value must not change until commit.
+	CheckStoredMD5 "$file1" $orig_md5 "changed $file1"
+	$BINq cp $file1 $file2
+	CheckStoredMD5 "$file1" $orig_md5 "copy recorded - $file1"
+	CheckStoredMD5 "$file2" $orig_md5 "copy recorded - $file2"
+
+# Change other file
+	echo "$RANDOM-$file2" > $file2
+	CheckStoredMD5 "$file2" $orig_md5 "changed"
+
+# Commit other file
+	$BINq ci -m "$file2" "$file2"
+	new2_md5=`md5sum < $file2 | cut -f1 -d" "`
+	CheckStoredMD5 "$file2" $new2_md5 "$file2 after commit"
+
+	CheckStoredMD5 "$file1" $orig_md5 "$file1 after committing $file2"
+	$BINq ci -m "$file1" "$file1"
+	CheckStoredMD5 "$file1" $new_md5 "committed $file1"
+}
+
+
+$INFO "Run 1"
+Test
+
+ls -i | sort -n
+
+# There might be differences in the behaviour, depending on whether file1 
+# or file2 is first in the inode order. So we try both ways.
+$INFO "Run 2 with exchanged inodes"
+mv "$file1" xx
+mv "$file2" "$file1"
+mv xx "$file2"
+# Put the second file out of the filelist, so that it can be added again
+$BINq unversion "$file2"
+$BINq ci -m "inodes"
+Test
+
+ls -i | sort -n

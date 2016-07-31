@@ -2,7 +2,7 @@
  * Copyright (C) 2005-2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -17,6 +17,7 @@
 #include "direnum.h"
 #include "cache.h"
 #include "url.h"
+#include "cp_mv.h"
 #include "ignore.h"
 #include "options.h"
 #include "est_ops.h"
@@ -71,13 +72,13 @@
  *   opt_checksum.
  * - The meta-data flag \c 'm' shows meta-data changes like properties, 
  *   modification timestamp and/or the rights (owner, group, mode); 
- *   depending on the \ref glob_opt_verb "verbose/quiet" command line 
- *   parameters, it may be splitted into \c 'P' (properties), \c 't' (time) 
- *   and \c 'p' (permissions). \n
+ *   depending on the \ref glob_opt_verb "-v/-q" command line parameters, 
+ *   it may be splitted into \c 'P' (properties), \c 't' (time) and \c 'p' 
+ *   (permissions). \n
  *   If \c 'P' is shown for the non-verbose case, it means \b only property 
  *   changes, ie. the entries filesystem meta-data is unchanged.
- * - A \c '+' is reserved for files with a copy-from history, and not 
- *   currently used.
+ * - A \c '+' is printed for files with a copy-from history; to see the URL 
+ *   of the copyfrom source, use \c -v twice.
  *
  * 
  * Here's a table with the characters and their positions:
@@ -170,6 +171,8 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
     struct estat *sts)
 {
   int status;
+	char *copyfrom;
+	int copy_inherited;
 
 
   status=0;
@@ -190,12 +193,26 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
       (status_bits & FS__CHANGE_MASK) ||
       (flags & ~RF_CHECK))
   {
+		copyfrom=NULL;
+		/* Go to copied parent when RF_COPY_SUB is set, and re-construct the 
+		 * entire copyfrom-URL?  */
+		copy_inherited= (flags & RF_COPY_SUB);
+		if (opt_verbose > 1 &&
+				(flags & RF_COPY_BASE))
+		{
+			status=cm__get_source(sts, NULL, NULL, NULL, NULL, NULL, 0);
+			BUG_ON(status == ENOENT, "Marked as copied, but no info?");
+			STOPIF(status, NULL);
+			STOPIF( urls__full_url( sts->copyfrom_src, NULL, &copyfrom), NULL);
+		}
+
     /* We do this here, so that the debug output is not disturbed by the 
      * printed status characters. */
     STOPIF( hlp__format_path(sts, path, &path), NULL);
 
+
     status= 0>
-      printf("%s%c%s%c%c  %8s  %s%s\n",
+      printf("%s%c%s%c%c  %8s  %s%s%s%s%s\n",
           opt__get_int(OPT__STATUS_COLOR) ? st___color(status_bits) : "",
 
           flags & RF_ADD ? 'n' : 
@@ -208,14 +225,22 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
 
           status_bits & FS_CHANGED ? 'C' : '.',
 
-          status_bits & FS_LIKELY ? '?' : 
-          /* An entry marked for unversioning or adding, 
-           * which does not exist, gets a '!' */
-          ( ( status_bits & FS_REMOVED ) &&
-            ( flags & (RF_UNVERSION | RF_ADD) ) ) ? '!' : '.',
+					flags & (RF_COPY_BASE | RF_COPY_SUB) ? '+' : 
+					status_bits & FS_LIKELY ? '?' : 
+					/* An entry marked for unversioning or adding, 
+					 * which does not exist, gets a '!' */
+					( ( status_bits & FS_REMOVED ) &&
+						( flags & (RF_UNVERSION | RF_ADD) ) ) ? '!' : '.',
 
           size, path,
-          opt__get_int(OPT__STATUS_COLOR) ? ANSI__NORMAL : "");
+          opt__get_int(OPT__STATUS_COLOR) ? ANSI__NORMAL : "",
+					
+					/* Here the comparison of opt_verbose is already included in the 
+					 * check on copyfrom above. */
+					copyfrom ? " (copied from " : "",
+					copyfrom ? copyfrom : 
+						copy_inherited ? " (inherited)" : "",
+					copyfrom ? ")" : "");
     /* possibly a EPIPE */
     STOPIF_CODE_ERR(status, errno, "Broken Pipe");
   }
@@ -549,7 +574,9 @@ inline volatile char* st__flags_string_fromint(int mask)
 		 * So there's no information. */
 		//	 BIT_INFO( RF_PRINT,		"print"),
 		BIT_INFO( RF_CHECK,			"check"),
-		BIT_INFO( RF_PUSHPROPS,  "push_props"),
+		BIT_INFO( RF_COPY_BASE,	"copy_base"),
+		BIT_INFO( RF_COPY_SUB,	"copy_sub"),
+		BIT_INFO( RF_PUSHPROPS,	"push_props"),
 	};	
 
 	return st___string_from_bits(mask, flags, "none");
@@ -580,7 +607,7 @@ inline volatile char* st__status_string(const struct estat * const sts)
 }
 
 
-int st__print_entry_info(const struct estat *const sts, int with_type)
+int st__print_entry_info(struct estat *sts, int with_type)
 {
 	int status;
 	const struct st___bit_info types[]={
@@ -593,12 +620,21 @@ int st__print_entry_info(const struct estat *const sts, int with_type)
 		BIT_INFO( FT_UNKNOWN,	"unknown"),
 	};
 
-	char *path, *waa_path, *url;
+	char *path, *waa_path, *url, *copyfrom;
+	svn_revnum_t copy_rev;
 
 
 	status=errno=0;
 	STOPIF( ops__build_path(&path, (struct estat*)sts), NULL);
 	STOPIF( urls__full_url((struct estat*)sts, path, &url), NULL);
+
+	copyfrom=NULL;
+	if (opt_verbose && (sts->flags & (RF_COPY_SUB | RF_COPY_BASE)) )
+	{
+		STOPIF( cm__get_source(sts, path, NULL, NULL, 
+					NULL, &copy_rev, 0), NULL);
+		STOPIF( urls__full_url(sts->copyfrom_src, NULL, &copyfrom), NULL);
+	}
 
 	if (with_type)
 		status=printf("\tType:\t\t%s\n", 
@@ -611,6 +647,13 @@ int st__print_entry_info(const struct estat *const sts, int with_type)
 	status |= printf("\tFlags:\t\t0x%X (%s)\n", 
 			sts->flags & ~RF_PRINT,
 			st__flags_string_fromint(sts->flags));
+
+	if (opt_verbose && copyfrom)
+	{
+		status |= printf("\tCopyfrom:\trev. %llu of %s\n", 
+				(t_ull)copy_rev, copyfrom);
+	}
+
 	status |= printf("\tDev:\t\t%llu\n", (t_ull)sts->st.dev);
 	status |= printf("\tInode:\t\t%llu\n", (t_ull)sts->st.ino);
 	status |= printf("\tMode:\t\t0%4o\n", sts->st.mode);

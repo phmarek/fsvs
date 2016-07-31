@@ -2,7 +2,7 @@
  * Copyright (C) 2006-2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -1031,7 +1031,7 @@ ex:
  * The space for the output is allocated, and must not be freed. */
 int urls__full_url(struct estat *sts, char *path, char **url)
 {	
-	const char none[]="(none)";
+	static const char none[]="(none)";
 	static struct cache_t *cache=NULL;
 	int status, len;
 	char *data;

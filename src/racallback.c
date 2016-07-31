@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -174,7 +174,7 @@ int cb___add_entry(struct estat *dir,
 	DEBUGP("add entry %s, mode 0%03o", path, mode);
 	/* The path should be done by open_directory descending. 
 	 * We need only the file name. */
-	filename = ops___get_filename(path);
+	filename = ops__get_filename(path);
 	STOPIF( ops__find_entry_byname(dir, filename, &sts, 0),
 			"cannot lookup entry %s", path);
 

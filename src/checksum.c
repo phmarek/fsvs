@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -243,17 +243,17 @@ ex:
 /** 
  * -.
  * \param sts Which entry to check
- * \param fullpath The path to the file (optionally, else \c NULL). 
- * If the file has been checked already and fullpath is \c NULL,
- * a debug message can write \c (null), as then even the name calculation
+ * \param fullpath The path to the file (optionally, else \c NULL).  If the 
+ * file has been checked already and fullpath is \c NULL, a debug message 
+ * can write \c (null), as then even the name calculation
  * is skipped.
  * \param result is set to 0 for identical to old or !=0 for changed.
  *
  * \note Performance optimization
  * In normal circumstances not the whole file has to be read to get the 
- * result. On update a checksum is written for each manber-block of
- * about 128k (but see \ref CS__APPROX_BLOCKSIZE_BITS); 
- * as soon as one is seen as changed the verification is stopped.
+ * result. On update a checksum is written for each manber-block of about 
+ * 128k (but see \ref CS__APPROX_BLOCKSIZE_BITS); as soon as one is seen as 
+ * changed the verification is stopped.
  * */
 int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 {

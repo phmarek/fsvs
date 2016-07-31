@@ -1,5 +1,5 @@
 ###########################################################################
- # Copyright (C) 2005-2006 Philipp Marek.                                #
+ # Copyright (C) 2005-2008 Philipp Marek.                                #
  #                                                                       #
  # This program is free software;  you can redistribute it and/or modify #
  # it under the terms of the GNU General Public License version 2 as #
@@ -11,14 +11,14 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.11/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 1124 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.12/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 1345 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
 CFLAGS	:= @CFLAGS@
 CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"' 
 LDFLAGS	:= @LDFLAGS@
-FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_ra-1 -lsvn_client-1 -lpcre -lgdbm
+FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_ra-1 -lpcre -lgdbm
 
 ifdef RPATH
 LDFLAGS	+= -Wl,-rpath,$(RPATH)
@@ -73,13 +73,30 @@ version-nnl:
 #../doc/USAGE: $(C_FILES) $(H_FILES)
 #.PHONY: ../doc/USAGE
 DOXDIR=../../www/doxygen/html/
+MANDIR=../../www/doxygen/man/man1/
+MANDEST=../doc/man/
 DOXFLAG=../../www/doxygen/html/index.html
 $(DOXFLAG):
 	( cat doxygen-data/Doxyfile ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
+	# Change the /§* to the correct /*
+	cd $(DOXDIR) && perl -i.bak -pe '1 while s#([/*])\xc2?\xa7([/*])#\1\2#;' *.html
+	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
+#	cd $(DOXDIR)/.. && zip -rq9 html-doc.zip html -x 'html/.svn/*' && tar -cf html-doc.tar --exclude .svn html && bzip2 -vkf9 html-doc.tar && gzip -vf9 html-doc.tar
+	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
+#	cd $(DOXDIR)/.. && zip -rq9 html-doc.zip html -x 'html/.svn/*' && tar -cf html-doc.tar --exclude .svn html && bzip2 -vkf9 html-doc.tar && gzip -vf9 html-doc.tar
 $(DOXDIR)/group__cmds.html: $(DOXFLAG)
 	touch $@
 $(DOXDIR)/group__ignpat.html: $(DOXFLAG)
 	touch $@
+
+$(MANDEST)/fsvs.1: $(MANDIR)/cmds.1
+	cp -a $< $@
+$(MANDEST)/fsvs-options.5: $(MANDIR)/options.1
+	cp -a $< $@
+$(MANDEST)/fsvs-howto-backup.5: $(MANDIR)/howto_backup.1
+	cp -a $< $@
+$(MANDEST)/fsvs-howto-master_local.5: $(MANDIR)/howto_master_local.1
+	cp -a $< $@
 
 ../doc/USAGE: $(DOXDIR)/group__cmds.html
 	dev/dox2txt.pl $< > $@
@@ -88,7 +105,8 @@ $(DOXDIR)/group__ignpat.html: $(DOXFLAG)
 doc.g-c: ../doc/USAGE
 	# Generate static text strings
 	( cat $< ; echo "end" ) | dev/make_doc.pl > $@
-docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c
+docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c $(MANDEST)/fsvs.1 
+# $(MANDEST)/fsvs-options.5 $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 .PHONY: docs $(DOXFLAG)
 
 
@@ -205,7 +223,7 @@ ifeq (@ENABLE_GCOV@, 1)
 endif
 
 ext-tests: $(DEST)
-	dev/permutate-all-tests.sh
+	dev/permutate-all-tests
 
 .PHONY:	run-tests ext-tests
 

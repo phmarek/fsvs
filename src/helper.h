@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -141,5 +141,12 @@ char *hlp__rev_to_string(svn_revnum_t rev);
 /** Function to compare two strings for \a max bytes, but treating \c '-' 
  * and \c '_' as equal. */
 int hlp__strncmp_uline_eq_dash(char *always_ul, char *other, int max);
+
+
+/** \a name is a subversion internal property. */
+int hlp__is_special_property_name(const char *name);
+/** Reads all data from \a stream and drops it. */
+int hlp__stream_md5(svn_stream_t *stream, 
+		unsigned char md5[APR_MD5_DIGESTSIZE]);
 
 #endif

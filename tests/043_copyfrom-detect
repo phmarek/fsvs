@@ -57,6 +57,7 @@ $BINq ci -m a
 sleep 1
 
 
+# Re-use the inode number.
 mv $fn1-22 $fn1-23
 # A simple move would find the identical MD5, so change the data.
 echo XX >> $fn1-23
@@ -91,17 +92,18 @@ function arg_check
 	arg=$2
   src=${3:-$fn1-a}
   dst=${4:-di2/asf}
+  msg=${5:-Argument usage check ($1)}
 	$BINdflt copyfrom-detect $arg > $log
   if [[ $(echo `sort < $log`) == "$dst md5:$src" ]]
   then
-    $SUCCESS "Argument usage check ($1)"
+    $SUCCESS "$msg"
   else
     echo "--- Expected:"
     echo "$dst"
     echo "  md5:$src"
 		echo "--- Got:"
   	cat $log
-    $ERROR "Arguments not parsed correctly ($1)."
+    $ERROR "$msg"
   fi
 }
 
@@ -118,3 +120,26 @@ arg_check 4 . "$WC/$fn1-a" "./asf"
 arg_check 5 "" "$WC/$fn1-a" "asf"
 cd ..
 
+
+cd $WC
+# Test that a copied entry has the correct md5 set, if it gets changed 
+# before commit.
+$BINq cp $fn1-a di2/asf
+date >> di2/asf
+echo $RANDOM $$ >> di2/asf
+$BINq ci -m "copy" # -d > $LOGDIR/043.ci
+sleep 1
+
+cat di2/asf > 6uhtr
+arg_check 6 6uhtr "$WC/di2/asf" 6uhtr "Committing copied with change"
+
+
+# Test for MD5 set on a straight copy - no changes transmitted.
+# Make "source" file unique
+echo $RANDOM $$ >> 6uhtr
+$BINdflt cp di2/asf 6uhtr
+$BINq ci -m "copy" # -d > $LOGDIR/043.ci
+sleep 1
+cat 6uhtr > bthtrgb
+arg_check 7 bthtrgb "$WC/6uhtr" bthtrgb "Committing copied without change"
+$BINq cp 6uhtr bthtrgb

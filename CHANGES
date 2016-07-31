@@ -1,3 +1,25 @@
+Changes since 1.1.11
+- Licence change to GPLv3.
+- Some cleanups
+- Documentation updated
+- Compatibility update for valgrind 3.3.
+- Bugfix for "fsvs info" on new entries.
+- Verbose "fsvs info" prints copyfrom source.
+- Fixed "fsvs ignore dump" to work in subdirectories; but now "fsvs urls"
+  *must* be used for initialization.
+- Bugfix for using an empty file as commit message. Thank you, Matthew.
+- Bugfix for a small memory leak (property lookup).
+- Rewrote parts of the copy/move handling, to make it work for directory 
+  copies, too.
+- Bugfix for copyfrom handling - variable was not always re-initialized.
+- Bugfixes for copy-detection
+- Bugfix for copied entries - MD5 was not initialized correctly.
+- Workaround for doxygen-misfeature of *always* interpreting /* and */.
+- Workaround for people using fsvs on https? URLs that cannot commit 
+  because a special property was already taken.
+- Extended tests may now be run in parallel.
+- Copy detection by file name and child entry list, too.
+
 Changes since 1.1.10
 - New option debug_output; if it starts with a "|", the string is taken
   as a command.
@@ -8,9 +30,9 @@ Changes since 1.1.10
 - Compatibility fix for http and https - doesn't like SVN_INVALID_REVNUM
   in svn_ra_get_log().
 - First attempt at finding duplicate files; but FSVS doesn't do anything with 
-	that information yet (just reports).
-	- identical files by MD5
-	- renamed files by inode
+  that information yet (just reports).
+  - identical files by MD5
+  - renamed files by inode
 - Small documentation updates and fixes.
 - Rewrote some internal parts for more clarity.
 - Other fixes and cleanups.
@@ -21,46 +43,46 @@ Changes since 1.1.10
   entries as directory size.
 - Documentation updates.
 - Fix for copyfrom-detect: take all known entries as source, not only the 
-	current arguments.
+  current arguments.
 - Bugfix for device ignores - uninitialized variable. Thank you, valgrind!
 - Optionally use valgrind in the tests - CHECKER=valgrind; and some 
-	suppressions for my debian machine.
+  suppressions for my debian machine.
 
 Changes since 1.1.9
 - Bugfix for multi-URL-operation with separated repositories - use the 
-	correct revision numbers.
+  correct revision numbers.
 - Bugfix for directories in $FSVS_WAA - create only needed ones.
-	But that also means that the (local) property storage changed to UTF8, 
-	where the names previously were stored in local encoding!
-	Currently non-ASCII-property names are broken!  (Tell me if you need 
-	"süch_nämes" - for -get and/or -list??)
+  But that also means that the (local) property storage changed to UTF8, 
+  where the names previously were stored in local encoding!
+  Currently non-ASCII-property names are broken!  (Tell me if you need 
+  "süch_nämes" - for -get and/or -list??)
 - Memory leak in revert fixed - now really.
 - Bugfix for cs__compare_file() ("st -C", "update", "commit" ...) - didn't 
-	recover into a zero-block after a few non-zero characters (was slow).
+  recover into a zero-block after a few non-zero characters (was slow).
 - Changed the internal ignore -- from $FSVS_WAA to $FSVS_WAA/*.
-	That allows to have $FSVS_WAA versioned (as it's needed), but reliably 
-	ignore entries below. (Still via inode numbers, so still fast.)
+  That allows to have $FSVS_WAA versioned (as it's needed), but reliably 
+  ignore entries below. (Still via inode numbers, so still fast.)
 - Bugfix for master/local operation, when dir from URL1 gets a new entry, 
-	which should be committed in URL2 -- so the directory has to be created 
-	in URL2.
+  which should be committed in URL2 -- so the directory has to be created 
+  in URL2.
 - Various small fixes and cleanups.
 - Using -q caused *more* output on errors.
 - Bugfix for duplicate URL names.
 - Error messages for invalid URL input now user-friendlier.
 - Support for "log -v", to show filenames
 - Removed the usleep() in the encoder loops (fsvs:update-pipe, 
-	fsvs:commit-pipe). 
-	For a 10MB file, encoder=cat: old time 7.1sec, new 0.33sec; using "dd 
-	bs=1024k" gets it down to 0.3sec (cat uses only a 1024 bytes buffer).
+  fsvs:commit-pipe). 
+  For a 10MB file, encoder=cat: old time 7.1sec, new 0.33sec; using "dd 
+  bs=1024k" gets it down to 0.3sec (cat uses only a 1024 bytes buffer).
 - Properties may no longer be set on unknown entries.
 - Property changes showed in status as "...." - now they get displayed in 
-	the meta-data column(s).
+  the meta-data column(s).
 - Status output changed; in certain cases (much too often) a "n" instead of 
-	"N" would be printed. Now corrected.
+  "N" would be printed. Now corrected.
 - Bugfix for "-f text" - if a directory structure was removed, the child 
-	wouldn't see the parent removed.
+  wouldn't see the parent removed.
 - Output beautification for sync-repos - use "" or the wc-path given on the 
-	command line, don't simply print the full path.
+  command line, don't simply print the full path.
 
 Changes since 1.1.8
 - Documentation updates
@@ -73,21 +95,21 @@ Changes since 1.1.8
 - Bugfix: the mtime for directories was not restored on uptime.
 - Fix for "sync-repos" printing the root directory twice.
 - Fix for sync-repos - if entries had no meta-data-properties set in the 
-	repository we take the local values, if they exist. 
+  repository we take the local values, if they exist. 
 - Memory leak in big recursive reverts fixed -- at least I hope that I got 
-	it.
+  it.
 - En/decoded entries (see fsvs:commit-pipe) now send another property - 
-	fsvs:original-md5.
+  fsvs:original-md5.
 - $WAA_CONF/*/config is now read, too.
 - Bugfix for "fsvs log" - endless loop, if the log message ends in a 
-	character >= \x80.
+  character >= \x80.
 - Bugfix for newly added files - on their first commit only an empty file 
-	(0 bytes length) was sent; subsequent commits were ok. Thank you, Ben.
+  (0 bytes length) was sent; subsequent commits were ok. Thank you, Ben.
 - Bugfix for recursive reverts - missing intermediate directories caused 
-	fsvs to stop, and meta-data was not correctly applied.
-	Fixed full recursive reverts of whole trees.
+  fsvs to stop, and meta-data was not correctly applied.
+  Fixed full recursive reverts of whole trees.
 - diff now prints the "Only in local filesystem" messages only with -v, and 
-	ignored files are ignored.
+  ignored files are ignored.
 - Master/Local test, and commit_to option.
 
 Changes since 1.1.7
@@ -95,14 +117,14 @@ Changes since 1.1.7
 - "softroot" option, used for recovery.
 - "fsvs help" had a small bug in terminal width calculation
 - Fix for action name matching; a string identical to some compare value is 
-	now an exact match, no ifs or elses.
+  now an exact match, no ifs or elses.
 - Bugfix for the options; the priority was not correctly set, so in certain
   cases the wrong option value would be used.
 - Bugfix for chroot jail - the locale was be taken from the real root 
-	directory, where it was most likely incompatible.
+  directory, where it was most likely incompatible.
 - The log output is colorized per default (on TTYs); done via ANSI 
-	sequences, as ncurses made some problems.
-	The log messages can now be indented, too.
+  sequences, as ncurses made some problems.
+  The log messages can now be indented, too.
 - Other small bugfixes
 
 Changes since 1.1.6
@@ -110,24 +132,24 @@ Changes since 1.1.6
 - Changed the format for warnings.
 - Bugfix for revert: a removed directory would not be re-created.
 - Bugfix plus enhancement: Allowing "-rREV" for revert, with a warning.
-	The status characters now show the status against BASE.
+  The status characters now show the status against BASE.
 - "configure.in" (and with it configure) has been moved to the parent 
-	directory; a small Makefile is there, too. Seems to be more standard to 
-	have that structure.
+  directory; a small Makefile is there, too. Seems to be more standard to 
+  have that structure.
 - Moved the test-directory up, too.
 - The default for the path printing is now parameter-relative.
 - The environment variable "FSVS_DIFF" has been renamed to "FSVS_DIFF_PRG".
-	New options for the diff procedure.
+  New options for the diff procedure.
 - Filter option, the same as "-f".
 - -v now lets warnings print their identification string.
 - New way of testing parts of the program - calling functions through gdb
 - The translation user/group name => id now uses a cache.
 - A commit of parts of a working copy root now set the check flag for 
-	encountered directories that have *not* been fully committed.
-	So a commit of "a/b/c" now shows the new entry "a/j", although the 
-	timestamp of "a" has been set during the commit.
+  encountered directories that have *not* been fully committed.
+  So a commit of "a/b/c" now shows the new entry "a/j", although the 
+  timestamp of "a" has been set during the commit.
 - Warning actions are now settable via options, and they are better 
-	documented.
+  documented.
 - Small bugfixes and cleanups.
 
 Changes since 1.1.5
@@ -136,7 +158,7 @@ Changes since 1.1.5
 - Some cleanups; the various internal caches are done via cache.c.
 - Bugfix for the case that a parameter is *exactly* a wc root.
 - Cleanups for the actions update, remote-status and sync-repos (and 
-	_build-new-list) - interpretation of the single path-parameter.
+  _build-new-list) - interpretation of the single path-parameter.
 - A verbose version call ("-v -V") now gives the compile options, too.
 - Support for configuration files.
 
@@ -144,51 +166,51 @@ Changes since 1.1.4
 - configure now fails if gdbm or pcre are not found.
 - Option for path display settings.
 - If no path arguments are given, the current directory is taken as the 
-	implicit parameter.
+  implicit parameter.
 - For new, added and unversioned entries no other flags than those are 
-	printed on "fsvs status" - they're kind of irrelevant, as they're implied.
+  printed on "fsvs status" - they're kind of irrelevant, as they're implied.
 - The WAA has been splitted into two areas.
 - The environment variable WAA was renamed to FSVS_WAA.
 - New environment variable FSVS_CONF.
 - Diff now knows "-v" for additional meta-data diff.
 - Some cleanups and small bugfixes.
 - A changed ctime is no longer seen as meta-data change - it's only an 
-	indicator for *possible* changes.
+  indicator for *possible* changes.
 - New parameter -f for filtering entries.
 
 
 Changes since 1.1.3
 - New and replaced entries now consistently have *only* the "N" flag - as 
-	the meta-data *has* to change.
-	Meta-data changes coming from the repository have now correct markings.
+  the meta-data *has* to change.
+  Meta-data changes coming from the repository have now correct markings.
 - Bugfix for filenames starting with a space. sscanf() would skip over the 
-	space, and the empty name would confuse fsvs.
+  space, and the empty name would confuse fsvs.
 - User interface enhancements; messages are no longer printed with "An 
-	error occurred". A few other small changes in output were done, too.
+  error occurred". A few other small changes in output were done, too.
 - Bugfix for ignore patterns with brackets "[]".
 - Bugfixes for commit - tell meta-data changes correctly, and don't send 
-	the fulltext if only meta-data has changed.
+  the fulltext if only meta-data has changed.
 - Some documentation update.
 - Corrected the handling of entries given on the command line - show 
-	information for deleted, too. Better checking if an entry has to exist.
+  information for deleted, too. Better checking if an entry has to exist.
 - "fsvs info" now uses the conventional way to use the arguments, and so
-	understands -R.
+  understands -R.
 - Bugfix for "fsvs status" - if no commit has happened, we should 
-	nonetheless provide status output.
+  nonetheless provide status output.
 - If we're near the 100% mark on the progress report, don't show it.
-	We'd get some time with always 99,9% when committing a big, new tree.
+  We'd get some time with always 99,9% when committing a big, new tree.
 - Bugfix for enumeration of more than one child of the root directory.
-	Ie. "fsvs status /etc /bin" gave an error.
+  Ie. "fsvs status /etc /bin" gave an error.
 - "fsvs info" now gives the number of known children.
 - Some code cleanups.
 
 Changes since 1.1.2.
 - FSVS_DEBUGLEVEL can be set (to eg. 1) to enable the debug output. The 
-	same as with -d, but doesn't change the commandline, and allows early 
-	debugging.
+  same as with -d, but doesn't change the commandline, and allows early 
+  debugging.
 - With "configure --with-chroot={path}" a chroot helper program is 
-	compiled. fsvs got a function to preload all necessary libraries in the 
-	chroot jail before returning into the "normal" filesystem.
+  compiled. fsvs got a function to preload all necessary libraries in the 
+  chroot jail before returning into the "normal" filesystem.
 - Implemented (non-)recursive diff.
 - The diff action now does a cleanup on SIGINT.
 - Diffs now include the header line "diff -u ...".
@@ -197,29 +219,29 @@ Changes since 1.1.1.
 - "proplist" showed the \0 at the end of key and value.
 - "fsvs revert" was a little bit re-written.
 - Major new feature: Recursive/non-recursive operations -- revert, status, 
-	commit.
+  commit.
 - Bugfix for diff: when an fsvs:update-pipe changed, the wrong decoder was 
-	be used.
+  be used.
 - Some cleanups. Eg. splitted the flags parameter of ops__traverse().
 - Still more doxygen documentation.
 
 Changes since 1.1.0.
 - Shell ignore patterns have changed - they now understand character 
-	classes and escaped characters, and they are anchored at the end, too.  
-	See the documentation.
+  classes and escaped characters, and they are anchored at the end, too.  
+  See the documentation.
 - For older changes please see
-	http://fsvs.tigris.org/source/browse/fsvs/tags/fsvs-1.1.0/fsvs/CHANGES?rev=725&view=markup
+  http://fsvs.tigris.org/source/browse/fsvs/tags/fsvs-1.1.0/fsvs/CHANGES?rev=725&view=markup
 - Bugfix for "fsvs info $WC" -- didn't find the working copy.
 - Allow arbitrary properties to be stored locally, and to be sent to the
-	repository on commit.
+  repository on commit.
 - Arbitrary property support: store them locally, provide commands for 
-	editing, and retrieve/store them from/in the repository.
+  editing, and retrieve/store them from/in the repository.
 - Special property "fsvs:commit-pipe" - for eg. encrypted backups
 - Special property "fsvs:update-pipe" - for automatic decryption
 - Make url__parse() accept a target revision, and store it persistent.
-	Made it dumpable.
+  Made it dumpable.
 - Bugfix for valgrind usage.
 - Bugfix for some weird /.././.././ constructions on the commandline,
-	test for that.
+  test for that.
 - Fixed a memory leak.
 - Some cleanups.

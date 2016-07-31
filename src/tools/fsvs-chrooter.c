@@ -2,7 +2,7 @@
  * Copyright (C) 2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -181,7 +181,7 @@
 	do {                                                              	\
 		fprintf(stderr, __VA_ARGS__);                                   	\
 		fprintf(stderr, "\n%s (%d)\n"                                   	\
-				"fsvs-chrooter (licensed under the GPLv2), (C) by Ph. Marek;"	\
+				"fsvs-chrooter (licensed under the GPLv3), (C) by Ph. Marek;"	\
 				" version " FSVS_VERSION "\n", 																\
 		strerror(errno), errno);                                        	\
 		exit(errno);                                                    	\

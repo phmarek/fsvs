@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -181,6 +181,38 @@ int ci__action(struct estat *sts,
 }
 
 
+/** Removes the flags saying that this entry was copied, recursively.
+ *
+ * Does stop on new copy-bases. 
+ *
+ * Is needed because a simple <tt>"cp -a"</tt> wouldn't even go down into 
+ * the child-entries - there's nothing to do there! */
+void ci___unset_copyflags(struct estat *root)
+{
+	struct estat **sts;
+
+	/* Delete the RF_ADD and RF_COPY_BASE flag, but set the FS_NEW status 
+	 * instead.  */
+	root->flags &= ~(RF_ADD | RF_COPY_BASE | RF_COPY_SUB);
+	/* Set the current url for this entry. */
+	root->url=current_url;
+
+	if (root->entry_type == FT_DIR && root->entry_count)
+	{
+		sts=root->by_inode;
+		while (*sts)
+		{
+			if (! ( (*sts)->flags & RF_COPY_BASE) )
+			{
+				ci___unset_copyflags(*sts);
+			}
+
+			sts++;
+		}
+	}
+}
+
+
 /** Send the user-defined properties.
  * See also \a ci__set_props(). */
 int ci___send_user_props(void *baton, 
@@ -208,25 +240,38 @@ int ci___send_user_props(void *baton,
 	{
 		STOPIF( status, NULL);
 
-		prp__first( db, &key);
-		while (key.dptr)
+		status=prp__first(db, &key);
+		while (status==0)
 		{
 			STOPIF( prp__fetch(db, key, &value), NULL);
 			str=svn_string_ncreate(value.dptr, value.dsize-1, pool);
 
-			DEBUGP("sending property %s=(%d)%.*s", key.dptr, 
-			value.dsize, value.dsize, value.dptr);
-			STOPIF_SVNERR( function, (baton, key.dptr, str, pool) );
+			if (hlp__is_special_property_name(key.dptr))
+			{
+				DEBUGP("ignoring %s - should not have been taken?", key.dptr);
+			}
+			else
+			{
+				DEBUGP("sending property %s=(%d)%.*s", key.dptr, 
+						value.dsize, value.dsize, value.dptr);
+				STOPIF_SVNERR( function, (baton, key.dptr, str, pool) );
+			}
 
-			/* Ignore errors - we'll surely get ENOENT. */
-			prp__next( db, &key, key);
+			IF_FREE(value.dptr);
+
+			status=prp__next( db, &key, &key);
 		}
+
+		/* Anything but ENOENT spells trouble. */
+		if (status != ENOENT)
+			STOPIF(status, NULL);
+		status=0;
 	}
 
 	if (props)
 		*props=db;
 	else
-		STOPIF(hsh__close(db), NULL);
+		STOPIF(hsh__close(db, status), NULL);
 
 ex:
 	return status;
@@ -249,7 +294,7 @@ svn_error_t *ci___set_props(void *baton,
 {
 	const char *ccp;
 	svn_string_t *str;
-	apr_status_t status;
+	int status;
 	svn_error_t *status_svn;
 
 
@@ -310,6 +355,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	hash_t db;
 	datum encoder_prop;
 	struct encoder_t *encoder;
+	int transfer_text;
 
 
 	str=NULL;
@@ -347,12 +393,29 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	DEBUGP("%s: status %s, flags %s", sts->name,
 			st__status_string(sts), 
       st__flags_string_fromint(sts->flags));
-	if (!(sts->entry_status & (FS_CHANGED | FS_NEW | FS_REMOVED)))
+
+	transfer_text= sts->entry_status & (FS_CHANGED | FS_NEW | FS_REMOVED);
+	/* In case the file is identical to the original copy source, we need not 
+	 * send the data to the server.
+	 * BUT we have to store the correct MD5 locally; as the source file may 
+	 * have changed, we re-calculate it - that has the additional advantage 
+	 * that the manber-hashes get written, for faster comparision next time.  
+	 *
+	 * I thought about using cs__compare_file() in the local check sequence 
+	 * to build a new file; but if anything goes wrong later, the file would 
+	 * be overwritten with the wrong data.
+	 * That's true if something goes wrong here, too.
+	 *
+	 * Another idea would be to build the new manber file with another name, 
+	 * and only rename if it actually was committed ... but there's a race, 
+	 * too. And we couldn't abort the check on the first changed bytes, and 
+	 * we'd need doubly the space, ...
+	 *
+	 * TODO: run the whole fsvs commit process against an unionfs, and use 
+	 * that for local transactions. */
+	if (!transfer_text && !(sts->flags & RF_COPY_BASE))
 	{
 		DEBUGP("File has not actually changed, skipping fulltext upload.");
-
-		/* mark file as commited */
-		STOPIF( cs__set_file_committed(sts), NULL);
 	}
 	else
 	{
@@ -386,12 +449,17 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 				if (sts->st.size >= CS__MIN_FILE_SIZE)
 					STOPIF( cs__new_manber_filter(sts, s_stream, &s_stream, pool), NULL );
 
-				status= prp__get(db, propval_commitpipe, &encoder_prop);
-
-				if (status == 0)
+				/* That's needed only for actually putting the data in the 
+				 * repository - for local re-calculating it isn't. */
+				if (transfer_text)
 				{
-					STOPIF( hlp__encode_filter(s_stream, encoder_prop.dptr, 0,
-								&s_stream, &encoder, pool), NULL );
+					status= prp__get(db, propval_commitpipe, &encoder_prop);
+
+					if (status == 0)
+					{
+						STOPIF( hlp__encode_filter(s_stream, encoder_prop.dptr, 0,
+									&s_stream, &encoder, pool), NULL );
+					}
 				}
 				break;
 			default:
@@ -403,22 +471,36 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 
 		BUG_ON(!s_stream);
 
-		STOPIF_SVNERR( editor->apply_textdelta,
-				(baton, 
-				 NULL, // checksum of old file,
-				 pool,
-				 &delta_handler,
-				 &delta_baton));
+		if (transfer_text)
+		{
+			DEBUGP("really sending ...");
+			STOPIF_SVNERR( editor->apply_textdelta,
+					(baton, 
+					 NULL, // checksum of old file,
+					 pool,
+					 &delta_handler,
+					 &delta_baton));
 
-		DEBUGP("sending ...");
-		STOPIF_SVNERR( svn_txdelta_send_stream,
-				(s_stream, 
-				 delta_handler,
-				 delta_baton,
-				 sts->md5, pool) );
-		DEBUGP("after sending encoder=%p", encoder);
+			/* If we're transferring the data, we always get an MD5 here. We can 
+			 * take the local value, if it had to be encoded. */
+			STOPIF_SVNERR( svn_txdelta_send_stream,
+					(s_stream, delta_handler,
+					 delta_baton,
+					 sts->md5, pool) );
+			DEBUGP("after sending encoder=%p", encoder);
+		}
+		else
+		{
+			DEBUGP("doing local MD5.");
+			/* For a non-changed entry, simply pass the data through. */
+			/* If the file is big enough for manber hashing, we need no second 
+			 * MD5 calculation ... further down we take the already computed 
+			 * value.  */
+			STOPIF( hlp__stream_md5(s_stream, encoder ? NULL : sts->md5), NULL);
+		}
 
 		STOPIF_SVNERR( svn_stream_close, (s_stream) );
+
 
 		/* If it's a special entry (device/symlink), set the special flag. */
 		if (str)
@@ -451,7 +533,7 @@ ex:
 		 * We could give them only if everything else worked ... */
 		apr_file_close(a_stream);
 	}
-	if (db) hsh__close(db);
+	if (db) hsh__close(db, status);
 	IF_FREE(encoder);
 
 	RETURN_SVNERR(status);
@@ -466,34 +548,40 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		apr_pool_t *pool)
 {
 	void *baton;
-	apr_status_t status;
+	int status;
 	struct estat *sts;
 	apr_pool_t *subpool;
 	int i, exists_now;
 	char *filename;
 	char* utf8_filename;
 	svn_error_t *status_svn;
-	struct stat dummy_stat64;
+	struct sstat_t dummy_stat64;
 	struct estat *src_sts;
 	char *src_path;
 	svn_revnum_t src_rev;
 
 
 	status=0;
-	src_path=NULL;
 	subpool=NULL;
 	DEBUGP("commit_dir with baton %p", dir_baton);
 	for(i=0; i<dir->entry_count; i++)
 	{
 		sts=dir->by_inode[i];
 
-		/* Did we change properties since last commit? Then we have something 
-		 * to do. */
-		if (sts->flags & RF_PUSHPROPS)
-			sts->entry_status |= FS_PROPERTIES;
+		if (sts->do_this_entry)
+		{
+			/* Did we change properties since last commit? Then we have something 
+			 * to do. */
+			if (sts->flags & RF_PUSHPROPS)
+				sts->entry_status |= FS_PROPERTIES;
+			/* TODO: better RF_ADD? Difference is N to n. */
+			if (sts->flags & RF_COPY_BASE)
+				sts->entry_status |= FS_NEW;
+		}
 
 		/* completely ignore item if nothing to be done */
-		if (!(sts->entry_status || sts->flags))
+		if (!(sts->entry_status || 
+					(sts->flags & RF___COMMIT_MASK)))
 			continue;
 
 		/* clear an old pool */
@@ -513,7 +601,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 
 		exists_now= !(sts->flags & RF_UNVERSION) && 
 			( (sts->entry_status & (FS_NEW | FS_CHANGED | FS_META_CHANGED)) ||
-				(sts->flags & (RF_ADD | RF_PUSHPROPS)) 
+				(sts->flags & (RF_ADD | RF_PUSHPROPS | RF_COPY_BASE)) 
 			);
 
 		if ( (sts->flags & RF_UNVERSION) ||
@@ -558,7 +646,8 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		 * So "Just Do It" (tm). */
 		/* access() would possibly be a bit lighter, but doesn't work
 		 * for broken symlinks. */
-		if (lstat(filename, &dummy_stat64) == -1)
+		/* TODO: Could we use FS_REMOVED here?? */
+		if (hlp__lstat(filename, &dummy_stat64))
 		{
 			/* If an entry doesn't exist, but *should*, as it's marked RF_ADD,
 			 * we fail (currently).
@@ -571,10 +660,19 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			continue;
 		}
 
+
 		/* We need a baton. */
 		baton=NULL;
-		if (!((sts->flags & RF_ADD) || 
-					(sts->entry_status & FS_NEW)) )
+		/* If this entry has the RF_ADD flag set, is the base entry for a copy, 
+		 * or is FS_NEW, it is new (as far as subversion is concerned).
+		 * If this is an implicitly copied entry, subversion already knows 
+		 * about it, so use open_* instead of add_*. */
+		if ((sts->flags & (RF_ADD | RF_COPY_BASE) ) || 
+				(sts->entry_status & FS_NEW) )
+		{
+			/* New entry, fetch handle via add_* below. */
+		}
+		else
 		{
 			status_svn=
 				(sts->entry_type == FT_DIR ?
@@ -585,16 +683,17 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 
 			if (status_svn)
 			{
-					DEBUGP("got error %d %d", status_svn->apr_err, SVN_ERR_FS_PATH_SYNTAX);
+				DEBUGP("got error %d %d", status_svn->apr_err, SVN_ERR_FS_PATH_SYNTAX);
 				/* In case we're having more than a single URL, it is possible that 
 				 * directories we got from URL1 get changed, and that these changes 
 				 * should be committed to URL2.
-				 * Now these directories need not exist in URL2 - we create them on demand.  
+				 * Now these directories need not exist in URL2 - we create them on 
+				 * demand.  
 				 * */
 				if (sts->entry_type == FT_DIR &&
-				(
-						status_svn->apr_err == SVN_ERR_FS_PATH_SYNTAX ||
-						status_svn->apr_err == SVN_ERR_FS_NOT_DIRECTORY ) &&
+						(
+						 status_svn->apr_err == SVN_ERR_FS_PATH_SYNTAX ||
+						 status_svn->apr_err == SVN_ERR_FS_NOT_DIRECTORY ) &&
 						urllist_count>1)
 				{
 					DEBUGP("dir %s didn't exist, trying to create", filename);
@@ -617,18 +716,25 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			DEBUGP("new %s (parent %p)", 
 					sts->name, dir_baton);
 
-			status=cm__get_source(sts, filename, NULL, 
-					&src_sts, NULL, &src_rev);
-			if (status == ENOENT)
+			/* Maybe that test should be folded into cm__get_source -- that would 
+			 * save the assignments in the else-branch.
+			 * But we'd have to check for ENOENT again - it's not allowed if 
+			 * RF_COPY_BASE is set, but possible if this flag is not set. So we'd  
+			 * not actually get much. */
+			if (sts->flags & RF_COPY_BASE)
 			{
-			  src_path=NULL;
-				src_rev=SVN_INVALID_REVNUM;
-			}
-			else
-			{
+				status=cm__get_source(sts, filename, NULL, 
+						&src_sts, NULL, &src_rev, 1);
+				BUG_ON(status == ENOENT, "copy but not copied?");
 				STOPIF(status, NULL);
 
 				STOPIF( urls__full_url( src_sts, NULL, &src_path), NULL);
+			}
+			else
+			{
+				/* Set values to "not copied". */
+				src_path=NULL;
+				src_rev=SVN_INVALID_REVNUM;
 			}
 
 			/* TODO: src_sts->entry_status newly added? Then remember for second  
@@ -652,12 +758,13 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			DEBUGP("baton for new %s %p (parent %p)", 
 					sts->name, baton, dir_baton);
 
-			/* Delete the RF_ADD flag, but set the FS_NEW status instead. */
-			sts->flags &= ~RF_ADD;
-			sts->entry_status = FS_NEW | FS_META_CHANGED;
-
-			/* Set the current url for this entry. */
-			sts->url=current_url;
+			/* If it's copy base, we need to clean up all flags below; else we 
+			 * just remove an (ev. set) add-flag. */
+			if (sts->flags & RF_COPY_BASE)
+				ci___unset_copyflags(sts);
+			else
+				sts->flags &= ~RF_ADD;
+			sts->entry_status |= FS_NEW | FS_META_CHANGED;
 		}
 
 
@@ -680,10 +787,14 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		 * In case a directory had many changed files it's possible that
 		 * the old filename cache is no longer valid, so get it afresh. */
 		STOPIF( ops__build_path(&filename, sts), NULL);
-		/* We already stat()ed this file, so just copy. */
-		hlp__copy_stats(&dummy_stat64, &(sts->st));
+		STOPIF( hlp__lstat(filename, &(sts->st)), NULL);
 
-		sts->url=current_url;
+		if (!sts->url || url__current_has_precedence(sts->url))
+		{
+			DEBUGP("setting URL of %s", filename);
+			sts->url=current_url;
+			sts->repos_rev = SET_REVNUM;
+		}
 	}
 
 
@@ -698,13 +809,20 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	if (dir->parent)
 	{
 		/* Do the meta-data and other properties of the current directory. */
-		// TODO			if (sts->do_full)
+		// TODO			if (sts->do_tree)
 		STOPIF( ci___send_user_props(dir_baton, dir, 
 					editor->change_dir_prop, NULL, pool), NULL);
 
 		if (dir->entry_status & (FS_META_CHANGED | FS_NEW))
 			STOPIF_SVNERR( ci___set_props, 
 					(dir_baton, dir, editor->change_dir_prop, pool) ); 
+
+		if (!dir->url || url__current_has_precedence(dir->url))
+		{
+			DEBUGP("setting URL");
+			dir->url=current_url;
+			dir->repos_rev=SET_REVNUM;
+		}
 	}
 
 
@@ -715,14 +833,11 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	 * structure must possibly be built in the repository, so we have to do 
 	 * each layer, and after a commit we take the current timestamp -- so we 
 	 * wouldn't see changes that happened before the partly commit.) */
-	if (dir->do_full_child)
+	if (dir->do_this_entry)
 		dir->flags &= ~RF_CHECK;
 	else
 		dir->flags |= RF_CHECK;
 
-	/* The root entry has no URL, so no revision. */
-	if (dir->parent)
-		dir->repos_rev = SET_REVNUM;
 
 ex:
 	if (subpool) 
@@ -790,7 +905,7 @@ ex:
  * are cached only as long as necessary. */
 int ci__work(struct estat *root, int argc, char *argv[])
 {
-	apr_status_t status;
+	int status;
 	svn_error_t *status_svn;
 	const svn_delta_editor_t *editor;
 	void *edit_baton;
@@ -864,13 +979,23 @@ int ci__work(struct estat *root, int argc, char *argv[])
 		STOPIF_CODE_ERR( fstat(commitmsg_fh, &st) == -1, errno,
 				"cannot estimate size of %s", opt_commitmsgfile);
 
-		DEBUGP("file is %llu bytes",  (t_ull)st.st_size);
-		opt_commitmsg=mmap(NULL, st.st_size, PROT_READ, MAP_SHARED,
-				commitmsg_fh, 0);
-		STOPIF_CODE_ERR(!opt_commitmsg, errno,
-				"mmap commit message (%s, %llu bytes)", 
-				opt_commitmsgfile, (t_ull)st.st_size);
+		if (st.st_size == 0)
+		{
+			DEBUGP("empty file");
+			opt_commitmsg="(none)";
+			/* We're not using some mapped memory */
+			opt_commitmsgfile=NULL;
+		}
+		else
+		{
+			DEBUGP("file is %llu bytes",  (t_ull)st.st_size);
 
+			opt_commitmsg=mmap(NULL, st.st_size, PROT_READ, MAP_SHARED,
+					commitmsg_fh, 0);
+			STOPIF_CODE_ERR(!opt_commitmsg, errno,
+					"mmap commit message (%s, %llu bytes)", 
+					opt_commitmsgfile, (t_ull)st.st_size);
+		}
 		close(commitmsg_fh);
 	}
 
@@ -925,6 +1050,9 @@ int ci__work(struct estat *root, int argc, char *argv[])
 			STOPIF( url__output_list(), NULL);
 		}
 	}
+	
+	STOPIF( cm__get_source(NULL, NULL, NULL, NULL, NULL, NULL, status), 
+			NULL);
 
 ex:
 	STOP_HANDLE_SVNERR(status_svn);

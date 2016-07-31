@@ -1,32 +1,85 @@
 Detailed Description
 
+   FSVS is a client for subversion repositories; it is designed for fast
+   versioning of big directory trees.
+
    The following commands are understood by FSVS:
-     * Local configuration and information:
-          + urls
-          + status
-          + info
-          + log
-          + diff
-     * Defining which entries to take:
-          + ignore
-          + unversion
-          + add
-     * Commands working with the repository:
-          + commit
-          + update
-          + checkout
-          + revert
-          + remote-status
-     * Property handling
-          + prop-get
-          + prop-set
-          + prop-list
-     * Additional commands used for recovery and debugging:
-          + export
-          + sync-repos.
+
+Local configuration and information:
+
+   urls
+          Define working copy base directories by their URL(s)
+
+   status
+          Get a list of changed entries
+
+   info
+          Display detailed information about single entries
+
+   log
+          Fetch the log messages from the repository
+
+   diff
+          Get differences between files (local and remote)
+
+   copyfrom-detect
+          Ask FSVS about probably copied/moved/renamed entries; see cp
+
+Defining which entries to take:
+
+   ignore
+          Define ignore patterns
+
+   unversion
+          Remove entries from versioning
+
+   add
+          Add entries that would be ignored
+
+   cp, mv
+          Tell FSVS that entries were copied.
+
+Defining which entries to take:
+
+   commit
+          Send changed data to the repository
+
+   update
+          Get updates from the repository
+
+   checkout
+          Fetch some part of the repository, and register it as working
+          copy
+
+   revert
+          Undo local changes
+
+   remote-status
+          Ask what an update would bring
+
+Defining which entries to take:
+
+   prop-set
+          Set user-defined properties
+
+   prop-get
+          Ask value of user-defined properties
+
+   prop-list
+          Get a list of user-defined properties
+
+Defining which entries to take:
+
+   export
+          Fetch some part of the repository
+
+   sync-repos
+          Drop local information about the entries, and fetch the current
+          list from the repository.
 
    Note:
-          Not all commands are ready for multi-url-operations.
+          Multi-url-operations are relatively new; there might be rough
+          edges.
 
 Universal options
 
@@ -344,21 +397,38 @@ cp
    DEST the corresponding source path is sent as copy source.
 
    Please note that this command works always on a directory structure -
-   if you mark a directory as copied, the whole structure is marked as
-   copy. That means that if some entries below the copy are missing, they
-   are mentioned as removed on the next commit.
+   if you say to copy a directory, the whole structure is marked as copy.
+   That means that if some entries below the copy are missing, they are
+   reported as removed from the copy on the next commit.
+   (Of course it is possible to mark files as copied, too; non-recursive
+   copies are not possible.)
 
-   For performance reasons no checks regarding the existance of paths is
-   made; as the given relations are used only on the next commit, they
-   don't need to be valid as they are recorded.
+   Note:
+          Or TODO: There will be differences in the exact usage - copy
+          will try to run the cp command, whereas copied will just
+          remember the relation.
 
    If this command are used without parameters, the currently defined
-   relations are printed.
+   relations are printed; please keep in mind that the key is the
+   destination name, ie. the 2nd line of each pair!
 
    The input format for load is newline-separated - first a SRC line,
-   followed by a DEST line, then an line with just a dot ("<tt>.</tt>") as
+   followed by a DEST line, then an line with just a dot (".") as
    delimiter. If you've got filenames with newlines or other special
    characters, you have to give the paths as arguments.
+
+   Internally the paths are stored relative to the working copy base
+   directory, and they're printed that way, too.
+
+   Later definitions are appended to the internal database; to undo
+   mistakes, use the revert action.
+
+   Note:
+          Important: User-defined properties like fsvs:commit-pipe are not
+          copied to the destinations, because of space/time issues
+          (traversing through entire subtrees, copying a lot of
+          property-files) and because it's not sure that this is really
+          wanted. TODO: option for copying properties?
 
    Todo:
           -0 like for xargs?
@@ -371,7 +441,7 @@ cp
    parameter for copyfrom relations, give some path, too, as in ./dump.
 
    Todo:
-          Filter for dump (patterns?), replace or append modes for load.
+          Filter for dump (patterns?).
 
 copyfrom-detect
 
@@ -423,6 +493,8 @@ copyfrom-detect
           Note: Not all filesystems have persistent inode numbers (eg. NFS) - so
           depending on your filesystems this might not be a good indicator!
 
+  name    The entry has the same name as another entry.
+
   manber  Analysing files of similar size shows some percentage of
           (variable-sized) common blocks (ignoring the order of the blocks).
 
@@ -431,7 +503,7 @@ copyfrom-detect
           files_in_dir2 - number_of_common_entries)
 
    Note:
-          Only md5 and inode is currently done.
+          Only md5, name and inode matching currently done.
           If too many possible matches are found, not all may be printed;
           only the indicator ... is shown at the end.
 
@@ -510,7 +582,7 @@ ignore
    existing entries would have to be unmarked with fsvs unversion.
    Normally it's better to use
 
-     fsvs ignore ./tmp/ **
+     fsvs ignore ./tmp/**
 
    as that takes the directory itself (which might be needed after restore
    as a mount point), but ignore all entries below.
@@ -522,20 +594,17 @@ ignore
 
      fsvs ignore ./proc
      fsvs ignore ./dev/pts
-     fsvs ignore './var/log/ *-*'
-     fsvs ignore './ **~'
-     fsvs ignore './ ** / *.bak'
-     fsvs ignore prepend 't./ **.txt'
-     fsvs ignore append 't./ **.svg'
-     fsvs ignore at=1 './ **.tmp'
+     fsvs ignore './var/log/*-*'
+     fsvs ignore './**~'
+     fsvs ignore './**/*.bak'
+     fsvs ignore prepend 't./**.txt'
+     fsvs ignore append 't./**.svg'
+     fsvs ignore at=1 './**.tmp'
      fsvs ignore dump
      fsvs ignore dump -v
-     echo "./ **.doc" | fsvs ignore load
+     echo "./**.doc" | fsvs ignore load
 
    Note:
-          Due to restriction in C-comment syntax the above cases have to
-          separate * and / to avoid breaking the code. * and / would
-          belong together.
           Please take care that your wildcard patterns are not expanded by
           the shell!
 
@@ -744,8 +813,8 @@ status
        splitted into 'P' (properties), 't' (time) and 'p' (permissions).
        If 'P' is shown for the non-verbose case, it means only property
        changes, ie. the entries filesystem meta-data is unchanged.
-     * A '+' is reserved for files with a copy-from history, and not
-       currently used.
+     * A '+' is printed for files with a copy-from history; to see the URL
+       of the copyfrom source, use -v twice.
 
    Here's a table with the characters and their positions:
 

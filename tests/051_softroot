@@ -1,0 +1,67 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+# We test the softroot feature, with the additional handicap
+# that we try to use it on a simulated snapshot.
+#
+# Szenario:
+# / is versioned; a snapshot is taken and mounted in some
+# directory. From there a commit gets done.
+# The WAA and CONF should be the 6666* ones (for /), so 
+# that revert/diff etc. for / work immediately after the commit.
+
+SRDIR=$WC/softroot
+DIR=/bin
+FILE=$DIR/ls
+
+if [[ ! -e $FILE ]]
+then
+  $WARN "Cannot test without $FILE"
+	exit
+fi
+
+# First we define / as base directory, and put some entries 
+# in the repository.
+# We have FSVS_WAA and _CONF defined, so let's go!
+
+cd /
+echo $REPURL | $BINq urls load
+# We take only this single entry from the root directory.
+echo './**' | $BINq ignore load
+# make sure there's no old data
+rm `$PATH2SPOOL . dir` || true
+$BINq add $FILE
+
+# Now something is in / that could be committed.
+
+# Populate the softroot - for real snapshots that would require 
+# LVM and a matching filesystem, so we cheat here.
+mkdir -p $SRDIR/$DIR
+cp -a $FILE $SRDIR/$DIR/
+
+# We commit via the "snapshot"
+# To do this, we fake the FSVS_WAA and FSVS_CONF directories to 
+# appear (to a strcmp) to be within the softroot, so they don't
+# get appended again.
+(
+	export FSVS_WAA=$SRDIR/../../../../../../$FSVS_WAA
+	export FSVS_CONF=$SRDIR/../../../../../../$FSVS_CONF
+	$BINq commit -m "x" -o softroot=$SRDIR $SRDIR
+)
+
+# Now owner and group will be different ... "cp -a" can't copy
+# them for normal users. So we look for text changes only.
+if [[ `$BINdflt st -C -o filter=text | wc -l` == 0 ]]
+then
+  $SUCCESS "Commit on softroot"
+else
+  $ERROR_NB "unexpected status output"
+	$BINdflt st -C -o filter=text
+  $ERROR_NB "Full output:"
+	$BINdflt st -C
+  $ERROR "Status output after commit on softroot"
+fi
+

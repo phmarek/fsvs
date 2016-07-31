@@ -2,7 +2,7 @@
  * Copyright (C) 2006-2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -32,7 +32,7 @@
 
 /** Whether the valgrind headers were found.
  * Then some initializers can specifically mark areas as initialized. */
-#undef HAVE_VALGRIND_VALGRIND_H
+#undef HAVE_VALGRIND
 
 /** If this is defined, some re-arrangements in struct-layout are made,
  * and additional bug-checking code may be included. */

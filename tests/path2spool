@@ -22,8 +22,8 @@ $conf=1, $file="" if ($file eq '^');
 # remove /./ and /.
 	s#/\./#/#g ||
 	s#/\.$#/#g ||
-# remove / at end
-	s#/+$##g ||
+# remove / at end; at least a single character (/) must be kept
+	s#(.)/+$#\1#g ||
 # change // to /
 	s#//+#/#g;
 # remove the softroot

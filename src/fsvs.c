@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -55,35 +55,57 @@
  * Some description of data structures, and similar.
  * */
 
-/** \defgroup cmds Command line actions and parameters
+/** \defgroup cmds FSVS - full system versioning for subversion repositories
  * \ingroup compat
  *
- * The following commands are understood by FSVS:
- * - Local configuration and information:
- *   - \ref urls
- *   - \ref status
- *   - \ref info
- *   - \ref log
- *   - \ref diff
- * - Defining which entries to take:
- *   - \ref ignore
- *   - \ref unversion
- *   - \ref add
- * - Commands working with the repository:
- *   - \ref commit
- *   - \ref update
- *   - \ref checkout
- *   - \ref revert
- *   - \ref remote-status
- * - Property handling
- *   - \ref prop-get
- *   - \ref prop-set
- *   - \ref prop-list
- * - Additional commands used for recovery and debugging:
- *   - \ref export
- *   - \ref sync-repos
+ * FSVS is a client for subversion repositories; it is designed
+ * for fast versioning of big directory trees.
  *
- * \note Not all commands are ready for multi-url-operations.
+ * The following commands are understood by FSVS:
+ *
+ * \section cmds_local Local configuration and information:
+ * <dl>
+ *   <dt>\ref urls<dd><tt>Define working copy base directories by their URL(s)</tt>
+ *   <dt>\ref status<dd><tt>Get a list of changed entries</tt>
+ *   <dt>\ref info<dd><tt>Display detailed information about single entries</tt>
+ *   <dt>\ref log<dd><tt>Fetch the log messages from the repository</tt>
+ *   <dt>\ref diff<dd><tt>Get differences between files (local and remote)</tt>
+ *   <dt>\ref copyfrom-detect<dd><tt>Ask FSVS about probably copied/moved/renamed entries; see \ref cp</tt>
+ * </dl>
+ *
+ * \section cmds_ Defining which entries to take:
+ * <dl>
+ *   <dt>\ref ignore<dd><tt>Define ignore patterns</tt>
+ *   <dt>\ref unversion<dd><tt>Remove entries from versioning</tt>
+ *   <dt>\ref add<dd><tt>Add entries that would be ignored</tt>
+ *   <dt>\ref cp, \ref mv<dd><tt>Tell FSVS that entries were copied.</tt>
+ * </dl>
+ *
+ * \section cmds_ Commands working with the repository:
+ * <dl>
+ *   <dt>\ref commit<dd><tt>Send changed data to the repository</tt>
+ *   <dt>\ref update<dd><tt>Get updates from the repository</tt>
+ *   <dt>\ref checkout<dd><tt>Fetch some part of the repository, and 
+ *     register it as working copy</tt>
+ *   <dt>\ref revert<dd><tt>Undo local changes</tt>
+ *   <dt>\ref remote-status<dd><tt>Ask what an \ref update would bring</tt>
+ * </dl>
+ *
+ * \section cmds_ Property handling
+ * <dl>
+ *   <dt>\ref prop-set<dd><tt>Set user-defined properties</tt>
+ *   <dt>\ref prop-get<dd><tt>Ask value of user-defined properties</tt>
+ *   <dt>\ref prop-list<dd><tt>Get a list of user-defined properties</tt>
+ * </dl>
+ *
+ * \section cmds_ Additional commands used for recovery and debugging:
+ * <dl>
+ *   <dt>\ref export<dd><tt>Fetch some part of the repository</tt>
+ *   <dt>\ref sync-repos<dd><tt>Drop local information about the entries, 
+ *     and fetch the current list from the repository.</tt>
+ * </dl>
+ *
+ * \note Multi-url-operations are relatively new; there might be rough edges.
  *
  * 
  * \section glob_opt Universal options
@@ -393,12 +415,13 @@ void _DEBUGP(const char *file, int line,
 
 /** -.
  * It checks the given status code, and (depending on the command line flag
- * \ref glob_opt_verb) prints only the first error or the whole call stack.
+ * \ref glob_opt_verb "-v") prints only the first error or the whole call 
+ * stack.
  * If \ref debuglevel is set, prints some more details - time, file and 
  * line.
  * Never called directly; only via some macros.
  *
- * In case the first character of the \a format is a "<tt>!</tt>", it's a 
+ * In case the first character of the \a format is a <tt>"!"</tt>, it's a 
  * user error - here we normally print only the message, without the error 
  * code line. The full details are available via \c -d and \c -v. */
 int _STOP(const char *file, int line, const char *function,
@@ -486,9 +509,9 @@ eol:
 /** For keyword expansion - the version string. */
 const char* Version(FILE *output)
 {
-	static const char Id[] ="$Id: fsvs.c 1220 2007-11-23 13:05:05Z pmarek $";
+	static const char Id[] ="$Id: fsvs.c 1347 2008-01-14 06:12:00Z pmarek $";
 
-	fprintf(output, "FSVS (licensed under the GPLv2), (C) by Ph. Marek;"
+	fprintf(output, "FSVS (licensed under the GPLv3), (C) by Ph. Marek;"
 			" version " FSVS_VERSION "\n");
 	if (opt_verbose>0)
 	{
@@ -536,7 +559,7 @@ const char* Version(FILE *output)
 				STRINGIFY(HAVE_O_DIRECTORY)
 #endif
 #ifdef O_DIRECTORY
-				STRINGIFY(O_DIRECTORY=)#O_DIRECTORY
+				STRINGIFY(O_DIRECTORY)
 #endif
 #ifdef HAVE_LINUX_KDEV_T_H
 				STRINGIFY(HAVE_LINUX_KDEV_T_H)
@@ -838,7 +861,7 @@ int main(int argc, char *args[])
 
 	/* Are we running in a chroot jail? Try to preload libraries, and escape.  
 	 * 
-	 * Originally there was an <tt>#ifdef CHROOTER_JAIL</tt> around this line.
+	 * Originally there was an "#ifdef CHROOTER_JAIL" around this line.
 	 * But if this is compiled in unconditionally a precompiled binary of 
 	 * your favourite distribution should work, too! (So there could be a 
 	 * script that fetches all needed libraries out of eg. debian-testing and 
@@ -944,7 +967,7 @@ int main(int argc, char *args[])
 
 				STOPIF( hlp__parse_rev(optarg, NULL, &opt_target_revision), NULL);
 				opt_target_revisions_given=1;
-				/* Don't parse if user said <tt>-r 21:</tt> */
+				/* Don't try to parse further if user said "-r 21:" */
 				if (cmd && *cmd)
 				{
 					STOPIF( hlp__parse_rev(cmd, NULL, &opt_target_revision2), NULL);

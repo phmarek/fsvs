@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -99,7 +99,7 @@ struct ignore_t {
 			 * at certainly not-matching strings.
 			 *
 			 * In case of something like \verbatim
-			 * 		dir / a* / b* / *.old
+			 * 		dir/a*§/b*§/§*.old
 			 * \endverbatim the directory \c dir and below should get this pattern, 
 			 * but on the subdir_list.
 			 * In case of a pattern with ** we have to give that to everyone
@@ -163,7 +163,9 @@ struct ignore_t {
 /** @} */
 
 
+/** The special value used for a not-yet-valid url_t::internal_number. */
 #define INVALID_INTERNAL_NUMBER (-1)
+/** All the data FSVS must know about an URL. */
 struct url_t {
 	/** The URL itself (http:// or svn:// or similar) */
 	char *url;
@@ -369,6 +371,9 @@ struct estat {
 	/** Flags for this entry. See \ref EntFlags for constant definitions. */
 	int flags;
 
+	/** Where this entry was copied from. */
+	struct estat *copyfrom_src;
+
 	/** Length of path up to here. Does not include the \c \\0. See \ref 
 	 * ops__calc_path_len. */
 	unsigned short path_len:14;
@@ -400,13 +405,13 @@ struct estat {
 
 	/** Flag saying whether this entry was specified by the user on the 
 	 * command line. */
-	int do_full:1;
+	int do_tree:1;
 	/** Like \a FS_CHILD_CHANGED - children of this entry must be handled.
 	 * \todo substitute by \a FS_CHILD_CHANGED? */
 	int do_a_child:1;
-	/** Flag derived from parents' \ref estat::do_full.
+	/** Flag derived from parents' \ref estat::do_tree.
 	 * Set for \b all entries which should be handled. */
-	int do_full_child:1;
+	int do_this_entry:1;
 
 	/** Which argument causes this path to be done. */
 	char *arg;
@@ -434,14 +439,26 @@ struct estat {
  * Needed in case this is the \b only change - else we would not commit 
  * this entry. */
 #define RF_PUSHPROPS (8)
+/** Set if this entry was marked as copy. 
+ * If it is a directory, the children will have the \c RF_COPY_SUB flag, 
+ * unless the copy attribute is not inherited, but they're themselves 
+ * copies from other entries. */
+#define RF_COPY_BASE (16)
+/** Set if this entry got implicitly copied (sub-entry). */
+#define RF_COPY_SUB (32)
 /** Whether this entry was just created by \a ops__traverse(). */
 #define RF_ISNEW (1<<19)
 /** Print this entry, even if not changed.
  * More or less the same as opt_verbose, but per entry. */
 #define RF_PRINT (1 << 20)
 
-/** Which of the above flags should be stored in the WAA. */
-#define RF___SAVE_MASK (RF_UNVERSION | RF_ADD | RF_CHECK | RF_PUSHPROPS)
+/** Which of the flags above should be stored in the WAA. */
+#define RF___SAVE_MASK (RF_UNVERSION | RF_ADD | RF_CHECK | \
+		RF_COPY_BASE | RF_COPY_SUB | RF_PUSHPROPS)
+/** Mask for commit-relevant flags.
+ * An entry with \c RF_COPY_BASE must (per definition) marked as \c RF_ADD; 
+ * and RF_PUSHPROPS gets folded into FS_PROPERTIES. */
+#define RF___COMMIT_MASK (RF_UNVERSION | RF_ADD)
 
 
 /** \anchor ent_types Entry types.
@@ -710,15 +727,15 @@ __attribute__ ((format (printf, 5, 6) ));
  * by the correct valgrind definitions if the valgrind headers are found
  * and fsvs is configured with \c --enable-debug. */
 /** @{ */
-#define VALGRIND_MAKE_NOACCESS(_qzz_addr,_qzz_len) do { } while(0)
-#define VALGRIND_MAKE_WRITABLE(_qzz_addr,_qzz_len) do { } while(0)
-#define VALGRIND_MAKE_READABLE(_qzz_addr,_qzz_len) do { } while(0)
+#define VALGRIND_MAKE_MEM_NOACCESS(_qzz_addr,_qzz_len) do { } while(0)
+#define VALGRIND_MAKE_MEM_UNDEFINED(_qzz_addr,_qzz_len) do { } while(0)
+#define VALGRIND_MAKE_MEM_DEFINED(_qzz_addr,_qzz_len) do { } while(0)
 
 #ifdef ENABLE_DEBUG
-#ifdef HAVE_VALGRIND_VALGRIND_H
-#undef VALGRIND_MAKE_NOACCESS
-#undef VALGRIND_MAKE_WRITABLE
-#undef VALGRIND_MAKE_READABLE
+#ifdef HAVE_VALGRIND
+#undef VALGRIND_MAKE_MEM_DEFINED
+#undef VALGRIND_MAKE_MEM_UNDEFINED
+#undef VALGRIND_MAKE_MEM_NOACCESS
 #include <valgrind/memcheck.h>
 #endif
 #endif

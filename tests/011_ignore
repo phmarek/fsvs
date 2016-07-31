@@ -95,6 +95,15 @@ else
   $ERROR '"ignore dump" gives bad number of lines'
 fi
 
+cd ign-dir1
+if [[ `$BINdflt ignore dump  | wc -l` -eq $PATTERN_COUNT ]]
+then
+  $SUCCESS '"ignore dump" works in subdirectories'
+else
+  $ERROR '"ignore dump" wrong in subdirs?'
+fi
+cd ..
+
 
 # Comparing strings with embedded newlines doesn't seem to work,
 # so we take the MD5 of the returned lists

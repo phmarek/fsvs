@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -1686,4 +1686,52 @@ int hlp__strncmp_uline_eq_dash(char *always_ul, char *other, int max)
 }
 
 
+/** -.
+ * */
+int hlp__is_special_property_name(const char *name)
+{
+	const char prop_pre_toignore[]="svn:entry";
+	const char prop_pre_toignore2[]="svn:wc:";
+
+	if (strncmp(name, prop_pre_toignore, strlen(prop_pre_toignore)) == 0 ||
+			strncmp(name, prop_pre_toignore2, strlen(prop_pre_toignore2)) == 0)
+		return 1;
+	return 0;
+}
+
+
+/** -.
+ * \a md5, if not \c NULL, must point to at least MD5_DIGEST_LENGTH bytes.  
+ * */
+int hlp__stream_md5(svn_stream_t *stream, unsigned char md5[APR_MD5_DIGESTSIZE])
+{
+	int status;
+	svn_error_t *status_svn;
+	const int buffer_size=16384;
+	char *buffer;
+	apr_size_t len;
+	apr_md5_ctx_t md5_ctx;
+
+
+	status=0;
+	buffer=malloc(buffer_size);
+	STOPIF_ENOMEM(!buffer);
+
+	if (md5)
+		apr_md5_init(&md5_ctx);
+
+	len=buffer_size;
+	while (len == buffer_size)
+	{
+		STOPIF_SVNERR( svn_stream_read, (stream, buffer, &len));
+		if (md5)
+			apr_md5_update(&md5_ctx, buffer, len);
+	}
+
+	if (md5)
+		apr_md5_final(md5, &md5_ctx);
+
+ex:
+	return status;
+}
 

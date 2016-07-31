@@ -1,7 +1,13 @@
 #!/bin/bash
 
 set -e
+$PREPARE_DEFAULT > /dev/null
 $INCLUDE_FUNCS
+
+cd $WC
+
+$BINq up
+
 cd $WC2
 
 $WC2_UP_ST_COMPARE

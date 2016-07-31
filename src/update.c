@@ -1,8 +1,8 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 
@@ -82,11 +82,12 @@ static unsigned tmp_len=0;
  * */
 int up__fetch_decoder(struct estat *sts)
 {
-	int status;
-  GDBM_FILE db;
+	int status, st2;
+	hash_t db;
 	datum value;
 
 
+	db=NULL;
 	status=0;
 	/* Need it, but don't have it? */
 	if (!action->needs_decoder || 
@@ -94,7 +95,7 @@ int up__fetch_decoder(struct estat *sts)
 
 	status=prp__open_byestat(sts, GDBM_READER, &db);
 	if (status == ENOENT)
-	  status=0;
+		status=0;
 	else
 	{
 		STOPIF(status, NULL);
@@ -108,10 +109,14 @@ int up__fetch_decoder(struct estat *sts)
 			STOPIF_ENOMEM( !sts->decoder );
 		}
 
-		STOPIF( hsh__close(db), NULL);
 	}
 
 	ex:
+	if (db)
+	{
+		st2=hsh__close(db, status);
+		if (!status) STOPIF(st2, NULL);
+	}
 	return status;
 }
 
@@ -137,7 +142,6 @@ int up__parse_prop(struct estat *sts,
 	apr_gid_t gid;
 	apr_time_t at;
 	svn_error_t *status_svn;
-	const char prop_pre_toignore[]="svn:entry";
 
 
 	/* We get the name and value in UTF8.
@@ -314,7 +318,7 @@ int up__parse_prop(struct estat *sts,
 		 * store them?? */
 		/* ignore svn:entry:* properties */
 		/* check for is_import_export */
-		if (strncmp(utf8_name, prop_pre_toignore, strlen(prop_pre_toignore)) != 0)
+		if (!hlp__is_special_property_name(utf8_name))
 		{
 			sts->remote_status |= FS_PROPERTIES;
 
@@ -591,7 +595,7 @@ int up__add_entry(struct estat *dir,
 	DEBUGP("add entry %s", path);
 	/* The path should be done by open_directory descending. 
 	 * We need only the file name. */
-	filename=ops___get_filename(path);
+	filename=ops__get_filename(path);
 	STOPIF( ops__find_entry_byname(dir, filename, &sts, 0),
 			"cannot lookup entry %s", path);
 

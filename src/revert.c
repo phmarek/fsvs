@@ -2,7 +2,7 @@
  * Copyright (C) 2006-2007 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
+ * it under the terms of the GNU General Public License version 3 as
  * published by the Free Software Foundation.
  ************************************************************************/
 #include <unistd.h>
@@ -43,7 +43,7 @@
  * 
  * If a directory is given on the command line \b all known entries <b>in 
  * this directory</b> are reverted to the old state; this behaviour can be 
- * modified with \ref glob_opt_rec, or see below.
+ * modified with \ref glob_opt_rec "-R/-N", or see below.
  *
  * The reverted entries are printed, along with the status they had \b 
  * before the revert (because the new status is \e unchanged).
