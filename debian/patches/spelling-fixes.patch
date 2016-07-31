@@ -1,0 +1,56 @@
+Author: Reiner Herrmann <reiner@reiner-h.de>
+Description: Fix spelling errors found by lintian
+
+--- a/doc/fsvs-options.5
++++ b/doc/fsvs-options.5
+@@ -596,7 +596,7 @@
+ .SH "Performance and tuning related options"
+ .PP
+ .SS "Change detection"
+-This options allows to specify the trade-off between speed and accuracy.
++This options allows one to specify the trade-off between speed and accuracy.
+ .PP
+ A file with a changed size can immediately be known as changed; but if only the modification time is changed, this is not so easy. Per default FSVS does a MD5 check on the file in this case; if you don't want that, or if you want to do the checksum calculation for \fBevery\fP file (in case a file has changed, but its mtime not), you can use this option to change FSVS' behaviour.
+ .PP
+--- a/doc/fsvs.1
++++ b/doc/fsvs.1
+@@ -116,7 +116,7 @@
+ .PP
+ \fC\fC\fC\fC\fC \fP\fP\fP\fP\fP
+ .SS "-f -- filter entries"
+-\fC\fC\fC\fC\fC This parameter allows to do a bit of filtering of entries, or, for some operations, modification of the work done on given entries.\fP\fP\fP\fP\fP
++\fC\fC\fC\fC\fC This parameter allows one to do a bit of filtering of entries, or, for some operations, modification of the work done on given entries.\fP\fP\fP\fP\fP
+ .PP
+ \fC\fC\fC\fC\fC It requires a specification at the end, which can be any combination of \fCany\fP, \fCtext\fP, \fCnew\fP, \fCdeleted\fP (or \fCremoved\fP), \fCmeta\fP, \fCmtime\fP, \fCgroup\fP, \fCmode\fP, \fCchanged\fP or \fCowner\fP; \fCdefault\fP or \fCdef\fP use the default value.\fP\fP\fP\fP\fP
+ .PP
+@@ -1094,7 +1094,7 @@
+ .IP "\(bu" 2
+ A \fC'x'\fP signifies a conflict.
+ .IP "\(bu" 2
+- The meta-data flag \fC'm'\fP shows meta-data changes like properties, modification timestamp and/or the rights (owner, group, mode); depending on the \fB-v/-q\fP command line parameters, it may be splitted into \fC'P'\fP (properties), \fC't'\fP (time) and \fC'p'\fP (permissions). 
++ The meta-data flag \fC'm'\fP shows meta-data changes like properties, modification timestamp and/or the rights (owner, group, mode); depending on the \fB-v/-q\fP command line parameters, it may be split into \fC'P'\fP (properties), \fC't'\fP (time) and \fC'p'\fP (permissions). 
+ .br
+  If \fC'P'\fP is shown for the non-verbose case, it means \fBonly\fP property changes, ie. the entries filesystem meta-data is unchanged.
+ .IP "\(bu" 2
+--- a/src/doc.g-c
++++ b/src/doc.g-c
+@@ -614,7 +614,7 @@
+   "     * A 'x' signifies a conflict.\n"
+   "     * The meta-data flag 'm' shows meta-data changes like properties,\n"
+   "       modification timestamp and/or the rights (owner, group, mode);\n"
+-  "       depending on the -v/-q command line parameters, it may be splitted\n"
++  "       depending on the -v/-q command line parameters, it may be split\n"
+   "       into 'P' (properties), 't' (time) and 'p' (permissions).\n"
+   "       If 'P' is shown for the non-verbose case, it means only property\n"
+   "       changes, ie. the entries filesystem meta-data is unchanged.\n"
+--- a/src/props.c
++++ b/src/props.c
+@@ -703,7 +703,7 @@
+ 		if (action->i_val == FS_REMOVED)
+ 		{
+ 			if (status == ENOENT) 
+-				DEBUGP("%s on %s didnt exist anyway", key.dptr, *normalized);
++				DEBUGP("%s on %s didn't exist anyway", key.dptr, *normalized);
+ 			else
+ 				change++;
+ 		}
