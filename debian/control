@@ -3,7 +3,7 @@ Section: admin
 Priority: optional
 Maintainer: Debian QA Group <packages@qa.debian.org>
 Build-Depends: debhelper (>= 9), libsvn-dev, libgdbm-dev, ctags, libdb-dev, libapr1-dev, libaprutil1-dev, libpcre3-dev
-Standards-Version: 3.9.4
+Standards-Version: 3.9.8
 Homepage: http://fsvs.tigris.org/
 
 Package: fsvs
