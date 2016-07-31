@@ -1,0 +1,23 @@
+Author: Reiner Herrmann <reiner@reiner-h.de>
+Description: Honour CPPFLAGS to support all hardening options
+
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -147,7 +147,7 @@
+ ################################ Rules ######################################
+ %.o:	%.c
+ #	@echo "     CC $<"
+-	$(CC) $(CFLAGS) -c -o $@ $<
++	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+ 
+ # if the Makefile has changed, the output will (at least sometimes)
+ # change, too.
+@@ -170,7 +170,7 @@
+ deps:	$(D_FILES)
+ .%.d:	%.c
+ #	@echo "     deps for $<"
+-	$(CC) $(CFLAGS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
++	$(CC) $(CPPFLAGS) $(CFLAGS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
+ include $(D_FILES)
+ 
+ tools/fsvs-chrooter: tools/fsvs-chrooter.c

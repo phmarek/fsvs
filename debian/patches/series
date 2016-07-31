@@ -5,3 +5,4 @@ we-will-do-fine-without-the-build-date.patch
 ld-as-needed.diff
 sort-source-files.patch
 spelling-fixes.patch
+honour_cppflags.patch

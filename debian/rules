@@ -1,10 +1,8 @@
 #!/usr/bin/make -f
-# -*- makefile -*-
 
-# Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-#export DESTDIR=$(CURDIR)/debian/tmp
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
 %:
 	dh $@
