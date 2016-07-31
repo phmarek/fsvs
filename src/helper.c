@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2009 Philipp Marek.
+ * Copyright (C) 2005-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -1271,6 +1271,9 @@ void hlp___encode_filter_child(int pipe_in[2], int pipe_out[2],
 	STOPIF_CODE_ERR(!WIFEXITED(i), ECANCELED,
 			"The command '%s' didn't exit normally", command);
 
+	/* Silence compiler warning. */
+	(void) status;
+
 	/* Don't do parent cleanups, just quit. */
 	_exit(0);
 ex:
@@ -1309,8 +1312,6 @@ int hlp__encode_filter(svn_stream_t *s_stream, const char *command,
 
 
 	DEBUGP("encode filter: %s", command);
-	status=0;
-
 	STOPIF( hlp__alloc( &encoder, sizeof(*encoder)), NULL);
 
 	new_str=svn_stream_create(encoder, pool);
@@ -1582,6 +1583,7 @@ int hlp__format_path(struct estat *sts, char *wc_relative_path,
 
 
 	status=0;
+	path=NULL;
 	switch (opt__get_int(OPT__PATH))
 	{
 		case PATH_WCRELATIVE:
@@ -1958,7 +1960,7 @@ ex:
 /** -.
  * If \a source is not \c NULL \a len bytes are copied.
  * The buffer is \b always \c \\0 terminated. */
-int hlp__strnalloc(int len, char **dest, const char const *source)
+int hlp__strnalloc(int len, char **dest, const char * const source)
 {
 	int status;
 
@@ -1974,7 +1976,7 @@ ex:
 
 /** -. */
 int hlp__strmnalloc(int len, char **dest, 
-		const char const *source, ...)
+		const char * source, ...)
 {
 	int status;
 	va_list vl;

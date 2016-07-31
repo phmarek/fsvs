@@ -11,8 +11,8 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.2.6/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 2467 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.2.7/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 2478 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
 CFLAGS	:= @CFLAGS@
@@ -169,8 +169,7 @@ endif
 deps:	$(D_FILES)
 .%.d:	%.c
 	@echo "     deps for $<"
-	@$(CC) $(INCS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
-#	$(CC) $(INCS) -MM -MF $@ $<
+	@$(CC) $(CFLAGS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
 include $(D_FILES)
 
 tools/fsvs-chrooter: tools/fsvs-chrooter.c

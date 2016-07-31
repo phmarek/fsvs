@@ -352,8 +352,6 @@ int sync__work(struct estat *root, int argc, char *argv[])
 	int status;
 	svn_error_t *status_svn;
 	svn_revnum_t rev;
-	char *strings;
-	int string_space;
 
 
 	status=0;
@@ -364,8 +362,6 @@ int sync__work(struct estat *root, int argc, char *argv[])
 	/* We cannot easily format the paths for arguments ... first, we don't 
 	 * have any (normally) */
 
-	string_space=0;
-	strings=NULL;
 	while ( ! ( status=url__iterator(&rev) ) )
 	{
 		if (opt__verbosity() > VERBOSITY_VERYQUIET)

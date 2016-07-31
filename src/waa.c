@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2009 Philipp Marek.
+ * Copyright (C) 2005-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -378,7 +378,7 @@ ex:
 
 
 /** Returns the MD5 of the given path, taking the softroot into account. */
-int waa___get_path_md5(const char const *path, 
+int waa___get_path_md5(const char * path, 
 		unsigned char digest[APR_MD5_DIGESTSIZE])
 {
 	int status;
@@ -769,11 +769,7 @@ int waa__make_info_file(char *directory, char *name, char *dest)
 		"\t";
 	static const char readme_2[]="\n";
 
-	inline int w(const char *buffer, int l)
-	{
-		return write(hdl, buffer, l) != l;
-	}
-
+#define w(_buffer, _l) (write(hdl, _buffer, _l) != _l)
 
 	STOPIF( waa__open(directory, name, O_CREAT | O_WRONLY, &hdl), NULL);
 	STOPIF_CODE_ERR( 
@@ -783,6 +779,8 @@ int waa__make_info_file(char *directory, char *name, char *dest)
 			errno,
 			"Cannot create the readme file.");
 	STOPIF( waa__close(hdl, 0), NULL);
+
+#undef w
 
 ex:
 	return status;
@@ -3005,7 +3003,7 @@ ex:
 /** -.
  * The \a dir must be absolute; this function makes an own copy, so the 
  * value will be unchanged. */
-int waa__set_working_copy(const char const *wc_dir)
+int waa__set_working_copy(const char * const wc_dir)
 {
 	int status;
 
@@ -3022,7 +3020,7 @@ ex:
 /** -.
  * The \a dir must be absolute; this function makes an own copy, so the 
  * value will be unchanged. */
-int waa__create_working_copy(const char const *wc_dir)
+int waa__create_working_copy(const char * const wc_dir)
 {
 	int status;
 	char *dir;

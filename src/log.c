@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2009 Philipp Marek.
+ * Copyright (C) 2007-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -404,7 +404,7 @@ int log__work(struct estat *root, int argc, char *argv[])
 		case 2:
 			opt__set_int(OPT__LOG_MAXREV, 
 					PRIO_DEFAULT,
-					abs(opt_target_revision-opt_target_revision2)+1);
+					labs(opt_target_revision-opt_target_revision2)+1);
 			break;
 		default:
 			BUG("how many");

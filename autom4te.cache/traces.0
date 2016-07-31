@@ -63,6 +63,9 @@ m4trace:configure.in:5: -1- m4_pattern_allow([^sharedstatedir$])
 m4trace:configure.in:5: -1- AC_SUBST([localstatedir], ['${prefix}/var'])
 m4trace:configure.in:5: -1- AC_SUBST_TRACE([localstatedir])
 m4trace:configure.in:5: -1- m4_pattern_allow([^localstatedir$])
+m4trace:configure.in:5: -1- AC_SUBST([runstatedir], ['${localstatedir}/run'])
+m4trace:configure.in:5: -1- AC_SUBST_TRACE([runstatedir])
+m4trace:configure.in:5: -1- m4_pattern_allow([^runstatedir$])
 m4trace:configure.in:5: -1- AC_SUBST([includedir], ['${prefix}/include'])
 m4trace:configure.in:5: -1- AC_SUBST_TRACE([includedir])
 m4trace:configure.in:5: -1- m4_pattern_allow([^includedir$])
@@ -403,7 +406,7 @@ m4trace:configure.in:169: -1- AC_DEFINE_TRACE_LITERAL([HAVE_VALGRIND])
 m4trace:configure.in:169: -1- m4_pattern_allow([^HAVE_VALGRIND$])
 m4trace:configure.in:169: -1- AH_OUTPUT([HAVE_VALGRIND], [/* compatible valgrind version found */
 @%:@undef HAVE_VALGRIND])
-m4trace:configure.in:180: -1- _m4_warn([cross], [AC_RUN_IFELSE called without default to allow cross compiling], [../../lib/autoconf/general.m4:2748: AC_RUN_IFELSE is expanded from...
+m4trace:configure.in:180: -1- _m4_warn([cross], [AC_RUN_IFELSE called without default to allow cross compiling], [../../lib/autoconf/general.m4:2759: AC_RUN_IFELSE is expanded from...
 configure.in:180: the top level])
 m4trace:configure.in:194: -1- AH_OUTPUT([HAVE_LINUX_KDEV_T_H], [/* Define to 1 if you have the <linux/kdev_t.h> header file. */
 @%:@undef HAVE_LINUX_KDEV_T_H])

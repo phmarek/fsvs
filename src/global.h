@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <apr_md5.h>
 #include <apr_file_io.h>
+#include <apr_version.h>
 #include <subversion-1/svn_ra.h>
 #include <subversion-1/svn_string.h>
 #include <pcre.h>
