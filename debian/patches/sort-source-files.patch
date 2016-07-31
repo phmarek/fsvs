@@ -1,0 +1,15 @@
+Author: Reiner Herrmann <reiner@reiner-h.de>
+Description: Sort source files for deterministic linking order
+ Required for reproducible building.
+
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -41,7 +41,7 @@
+ 
+ 
+ 
+-C_FILES	:= $(wildcard *.c)
++C_FILES	:= $(sort $(wildcard *.c))
+ H_FILES	:= $(wildcard *.h)
+ D_FILES := $(C_FILES:%.c=.%.d)
+ DEST	:= fsvs
