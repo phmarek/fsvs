@@ -5,7 +5,7 @@ $PREPARE_DEFAULT > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
-LOG=041.options
+LOG=$LOGDIR/041.options
 
 # step 1: empty settings file.
 CONF=$FSVS_CONF/config
@@ -29,14 +29,29 @@ touch empty-file
 echo 'path=absolute' > $CONF
 if ! $BINdflt st > $LOG
 then
-	$ERROR "Reading config-file fails"
+	$ERROR "Reading config-file fails (1)"
 fi
 
 if grep "$WC1/empty-file" < $LOG > /dev/null
 then
-	$SUCCESS "Parameter read and understood."
+	$SUCCESS "Parameter path read and understood."
 else
-	$ERROR "Parameter not read"
+	$ERROR "Parameter path not read"
+fi
+
+
+# The file is only touched, so filter=text shouldn't find it.
+echo 'filter=text' > $CONF
+if ! $BINdflt st > $LOG
+then
+	$ERROR "Reading config-file fails (2)"
+fi
+
+if [[ `wc -l < $LOG` -eq 0 ]]
+then
+	$SUCCESS "Parameter filter read and understood."
+else
+	$ERROR "Parameter filter not read"
 fi
 
 

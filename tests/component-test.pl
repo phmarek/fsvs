@@ -6,7 +6,8 @@ $logfile=shift;
 
 $|=1;
 
-$pid = open2(RDR, WTR, 'gdb ' . $ENV{"BINdflt"} . ' 2>&1');
+# Don't try $BINdflt - that might have valgrind or similar in front.
+$pid = open2(RDR, WTR, 'gdb ' . $ENV{"BIN_FULLPATH"} . ' 2>&1');
 $gdb_prompt_delimiter = "GDB-delim-$$-" . time;
 
 $ign=Exch("set pagination off\nset prompt $gdb_prompt_delimiter\\n");

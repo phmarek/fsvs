@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/052.hard
+
+
+mkdir X
+for a in *
+do
+  test -d "$a" || ln "$a" X/$RANDOM-$a
+done
+
+$BINq st
+$BINq ci -m"Just hardlinks" -odelay=yes
+
+$WC2_UP_ST_COMPARE
+
+
+if [[ "$UID" == 0 ]]
+then
+	mkdir G
+
+	$INFO "Testing bind mounts"
+	mount --bind tree G
+# We use a sub-shell, so that the mount is surely removed.
+  el=$(
+		$BINq ci -mbind_mount -odelay=yes > $logfile 2>&1 &&
+		$WC2_UP_ST_COMPARE > $logfile 2>&1 &&
+		echo OK=$?
+	)
+  umount G
+	if [[ "$el" -ne 0 ]]
+	then
+	  cat $logfile
+	  $ERROR "Bind mount didn't work"
+	fi
+
+# Now the same, but tell it's copied.
+	$INFO "Testing bind mounts as copy"
+	mkdir H
+	$BINdflt cp tree H
+	mount --bind tree H
+# We use a sub-shell, so that the mount is surely removed.
+  el=$(
+		$BINq ci -mbind_copy -odelay=yes > $logfile 2>&1 &&
+		$WC2_UP_ST_COMPARE > $logfile 2>&1 &&
+		echo OK=$?
+	)
+  umount H
+	if [[ "$el" -ne 0 ]]
+	then
+	  cat $logfile
+	  $ERROR "Bind mount, telling as copy, didn't work"
+	fi
+
+  $SUCCESS "Bind mounts work."
+else
+  $WARN "Cannot test binding mounts as user"
+fi
+

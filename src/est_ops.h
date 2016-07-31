@@ -54,7 +54,7 @@ int ops__allocate(int needed, struct estat **where, int *count);
 /** Frees the memory associated with this entry and all its children. */
 int ops__free_entry(struct estat **sts_p);
 /** Frees all "marked" entries in the given directory at once. */
-int ops__free_marked(struct estat *dir);
+int ops__free_marked(struct estat *dir, int fast_mode);
 /** Appends the array of \a count \a new_entries as children to \a dir. */
 int ops__new_entries(struct estat *dir,
 		int count,

@@ -17,6 +17,7 @@
 #include "waa.h"
 #include "est_ops.h"
 #include "helper.h"
+#include "warnings.h"
 #include "direnum.h"
 #include "ignore.h"
 
@@ -99,7 +100,7 @@
 
 /**
  * \defgroup ignpat_dev Developers' reference
- * \ingroup ignpat
+ * \ingroup add_unv
  * 
  * Internal structure, and some explanations.
  *
@@ -173,8 +174,10 @@
  **/
 
 
-/** \defgroup ignpat Ignore patterns - user part
- * \ingroup add_unv_ign
+/** \defgroup ignpat Using ignore patterns
+ * \ingroup userdoc
+ *
+ * This part answers the "why" and "how" for ignoring entries.
  *
  * \section ignpat_why Why should I ignore files?
  *
@@ -221,20 +224,44 @@
  * (but take the directory itself, so that upon restore it gets created
  * as a mountpoint), and all entries matching \c *~ in and below
  * \c /home .
- * 
- *
  *
  * \note The patterns are anchored at the beginning and the end. So a 
  * pattern <tt>./sys</tt> will match \b only a file or directory named \c 
  * sys. If you want to exclude a directories' files, but not the directory 
  * itself, use something like <tt>./dir/§*</tt> or <tt>./dir/§**</tt>
  * 
+ *
+ * \subsection ignpat_shell_abs Absolute shell patterns
+ *
+ * There's another way to specify shell patterns - using absolute paths.
+ * The syntax is similar to normal shell patterns; but instead of the 
+ * <tt>./</tt> prefix the full path, starting with \c /, is used.
+ *
+ * \code
+ *		 /etc/§**.dpkg-old
+ *		 /etc/§**.dpkg-bak
+ *		 /§**.bak
+ *		 /§**~
+ * \endcode
+ *
+ * The advantage of using full paths is that a later \c dump and \c load in 
+ * another working copy (eg. when moving from versioning \c /etc to \c /) 
+ * does simply work; the patterns don't have to be modified.
+ *
+ * Internally this simply tries to remove the working copy base directory 
+ * at the start of the patterns; then they are processed as usually.
+ *
+ * If a pattern does \b not match the wc base, and neither has the 
+ * wild-wildcard prefix \c /§**, a \ref warn_ign_abs_not_base "warning" is 
+ * issued; this can be handled as usual.
+ *
+ * 
  * 
  * \section ignpat_pcre PCRE-patterns
  * 
  * PCRE stands for Perl Compatible Regular Expressions; you can read about
  * them with <tt>man pcre</tt> (if the manpages are installed), and/or
- * asdfasdgasdgahsgkjashg <tt>perldoc perlre</tt> (if perldoc is installed)
+ * <tt>perldoc perlre</tt> (if perldoc is installed)
  * 
  * These patterns have the form \c PCRE:{pattern} (with \c PCRE in
  * uppercase, to distinguish from modifiers).
@@ -358,6 +385,20 @@ static struct ignore_t *ignore_list=NULL;
 static char *memory;
 
 
+/** The various strings that define the pattern types.
+ * @{ */
+static const char 
+	pcre_prefix[]="PCRE:",
+	dev_prefix[]="DEVICE:",
+	inode_prefix[]="INODE:",
+	norm_prefix[]= { '.', PATH_SEPARATOR, 0 },
+	/* The second PATH_SEPARATOR is not needed. */
+	wildcard_prefix[]= { PATH_SEPARATOR, '*', '*', 0 },
+	/* Should that be "//" to make a clearer difference? */
+	abs_shell_prefix[]= { PATH_SEPARATOR, 0 };
+/** @} */
+
+
 /** Processes a character class in shell ignore patterns.
  * */
 int ign___translate_bracketed_expr(char *end_of_buffer,
@@ -441,15 +482,65 @@ int ign__compile_pattern(struct ignore_t *ignore)
 	status=0;
 	if (ignore->type == PT_PCRE)
 		dest=ignore->compare_string;
-	else if (ignore->type == PT_SHELL)
+	else if (ignore->type == PT_SHELL ||
+			ignore->type == PT_SHELL_ABS)
 	{
 		ignore->has_wildwildcard=0;
 		/* translate shell-like syntax into pcre */
-		src=ignore->compare_string;
-		len=strlen(ignore->pattern)*5+16;
+
+		len=strlen(ignore->compare_string)*5+16;
 		buffer=malloc(len);
 		STOPIF_ENOMEM(!buffer);
+
 		dest=buffer;
+		src=ignore->compare_string;
+
+		if (ignore->type == PT_SHELL_ABS)
+		{
+			/* Strip the wc-path away, and put a . in front. */
+
+			/* The pattern must 
+			 * - match all characters of the wc path, or
+			 * - start with a wild-wildcard ('/ **') - it's valid everywhere.
+			 *
+			 * If it only has a single wildcard it's not allowed - it would have 
+			 * different meanings depending on the wc base:
+			 *   pattern:  / * /dir/
+			 *   matches:  /etc/x/dir/    for wc base  /etc
+			 *   or        /x/dir         "   "  "     /
+			 * So we don't allow that. */
+			if (strncmp(src, wc_path, wc_path_len) == 0)
+			{
+				/* Special case for wc base = / */
+				src += 1+ (wc_path_len == 1 ? 0 : wc_path_len);
+			}
+			else if (strncmp(src, wildcard_prefix, strlen(wildcard_prefix)) == 0)
+			{
+				/* Has wildcard at start ... just consume the PATH_SEPARATOR, as 
+				 * that's included in the norm_prefix.  */
+				src++;
+			}
+			else
+				STOPIF( wa__warn(WRN__IGNPAT_WCBASE, EINVAL,
+						"The absolute shell pattern\n"
+						"  \"%s\"\n"
+						"does neither have the working copy base path\n"
+						"  \"%s\"\n"
+						"nor a wildcard path (like \"%s\") at the beginning;\n"
+						"maybe you want a wc-relative pattern, "
+						"starting with \"%s\"?",
+						src, wc_path, wildcard_prefix, norm_prefix), NULL);
+
+			/* Before:  /etc/X11/?      /etc/X11/?
+			 * wc_path: /etc            /
+			 * After:      ./X11/?     ./etc/X11/?
+			 * */
+			/* As norm_prefix is const, the compile should remove the strlen() by 
+			 * the value. */
+			strncpy(dest, norm_prefix, strlen(norm_prefix));
+			dest+=strlen(norm_prefix);
+		}
+
 		backslashed = 0;
 		do
 		{
@@ -461,67 +552,85 @@ int ign__compile_pattern(struct ignore_t *ignore)
 			}
 			else
 			{
-			switch(*src)
-			{
-				case '*':
-					if (src[1] == '*')
-					{
-						ignore->has_wildwildcard=1;
-						/* anything */
+				switch(*src)
+				{
+					case '*':
+						if (src[1] == '*')
+						{
+							ignore->has_wildwildcard=1;
+							if (dest[-1] == PATH_SEPARATOR && src[2] == PATH_SEPARATOR)
+							{
+								/* Case 1: "/§**§/xxx"; this gets transformed to
+								 * "/(.*§/)?", so that *no* directory level is possible, too. */
+								*(dest++) = '(';
+								*(dest++) = '.';
+								*(dest++) = '*';
+								*(dest++) = PATH_SEPARATOR;
+								*(dest++) = ')';
+								*(dest++) = '?';
+								/* Eat the two "*"s, and the PATH_SEPARATOR. */
+								src+=3; 
+							}
+							else
+							{
+								/* Case 2: "/ ** xxx", without a PATH_SEPARATOR after the 
+								 * "**". */
+								*(dest++) = '.';
+								*(dest++) = '*';
+								while (*src == '*') src++;
+							}
+						}
+						else
+						{
+							/* one directory level */
+							*(dest++) = '[';
+							*(dest++) = '^';
+							*(dest++) = PATH_SEPARATOR;
+							*(dest++) = ']';
+							*(dest++) = '*';
+							src++;
+						}
+						break;
+					case '?':
 						*(dest++) = '.';
-						*(dest++) = '*';
-						while (*src == '*') src++;
-					}
-					else
-					{
-						/* one directory level */
-						*(dest++) = '[';
-						*(dest++) = '^';
-						*(dest++) = PATH_SEPARATOR;
-						*(dest++) = ']';
-						*(dest++) = '*';
 						src++;
-					}
-					break;
-				case '?':
-					*(dest++) = '.';
-					src++;
-					break;
-				case '[':
-					// processed bracket expression and advanced src and dest pointers
-					STOPIF(ign___translate_bracketed_expr(buffer + len, &src, &dest),
-								 "processing a bracket expression failed");
-					break;
-				case '0' ... '9':
-				case 'a' ... 'z':
-				case 'A' ... 'Z':
-				/* Note that here it's not a PATH_SEPARATOR, but the simple 
-				 * character -- on Windows there'd be a \, which would trash the 
-				 * regular expression! Although we'd have some of these problems on 
-				 * Windows ...*/
-				case '/': 
-				case '-':
-					*(dest++) = *(src++);
-					break;
-				case '\\':
-					backslashed = 1; // enter escaped mode
-					*(dest++) = *(src++);
-					break;
-					/* . and all other special characters { ( ] ) } + # " \ $
-					 * get escaped. */
-				case '.':
-				default:
-					*(dest++) = '\\';
-					*(dest++) = *(src++);
-					break;
-			}
+						break;
+					case '[':
+						// processed bracket expression and advanced src and dest pointers
+						STOPIF(ign___translate_bracketed_expr(buffer + len, &src, &dest),
+								"processing a bracket expression failed");
+						break;
+					case '0' ... '9':
+					case 'a' ... 'z':
+					case 'A' ... 'Z':
+						/* Note that here it's not a PATH_SEPARATOR, but the simple 
+						 * character -- on Windows there'd be a \, which would trash the 
+						 * regular expression! Although we'd have some of these problems on 
+						 * Windows ...*/
+					case '/': 
+					case '-':
+						*(dest++) = *(src++);
+						break;
+					case '\\':
+						backslashed = 1; // enter escaped mode
+						*(dest++) = *(src++);
+						break;
+						/* . and all other special characters { ( ] ) } + # " \ $
+						 * get escaped. */
+					case '.':
+					default:
+						*(dest++) = '\\';
+						*(dest++) = *(src++);
+						break;
+				}
 			}
 
 			/* Ensure that there is sufficient space in the buffer to process the 
 			 * next character. A "*" might create up to 5 characters in dest, the 
 			 * directory matching patterns appended last will add up to five, and 
-			 * we have a terminating '\0'. */
-			STOPIF_CODE_ERR( buffer+len - dest < 11, ENOSPC,
+			 * we have a terminating '\0'.
+			 * Plus add a few. */
+			STOPIF_CODE_ERR( buffer+len - dest < 6+5+1+6, ENOSPC,
 					"not enough space in buffer");
 		} while (*src);
 
@@ -566,15 +675,15 @@ int ign__compile_pattern(struct ignore_t *ignore)
 			&err, &offset, NULL);
 
 	STOPIF_CODE_ERR( !ignore->compiled, EINVAL,
-			"pattern <%s> not valid; error <%s> at offset %d.",
-			ignore->pattern, err, offset);
+			"pattern \"%s\" (from \"%s\") not valid; error %s at offset %d.",
+			dest, ignore->pattern, err, offset);
 
 	/* Patterns are used often - so it should be okay to study them.
 	 * Although it may not help much?
 	 * Performance testing! */
 	ignore->extra = pcre_study(ignore->compiled, 0, &err);
 	STOPIF_CODE_ERR( err, EINVAL,
-			"pattern <%s> not studied; error <%s>.",
+			"pattern \"%s\" not studied; error %s.",
 			ignore->pattern, err);
 
 ex:
@@ -586,13 +695,7 @@ ex:
  * */
 int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 {
-	const char 
-		pcre_prefix[]="PCRE:",
-		dev_prefix[]="DEVICE:",
-		inode_prefix[]="INODE:",
-		norm_prefix[]="./";
 	int status, stop;
-	int mj, mn;
 	char *cp;
 
 
@@ -702,6 +805,11 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 	}
 	else if (strncmp(inode_prefix, pattern, strlen(inode_prefix)) == 0)
 	{
+#ifdef DEVICE_NODES_DISABLED
+		DEVICE_NODES_DISABLED();
+#else
+		int mj, mn;
+
 		ignore->type=PT_INODE;
 		ignore->compare_string = pattern;
 		pattern+=strlen(inode_prefix);
@@ -722,6 +830,7 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 		STOPIF_CODE_ERR( cp == pattern || *cp!= 0, EINVAL,
 				"garbage after inode in %s?", ignore->pattern);
 
+#endif
 		status=0;
 	}
 	else
@@ -738,13 +847,19 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 			DEBUGP("shell pattern matching");
 			/* DON'T pattern+=strlen(norm_prefix) - it's needed for matching ! */
 		}
+		else if (strncmp(pattern, abs_shell_prefix, strlen(abs_shell_prefix)) == 0)
+		{
+			ignore->type=PT_SHELL_ABS;
+			DEBUGP("absolute shell pattern matching");
+		}
 		else
 			STOPIF_CODE_ERR(1, EINVAL, 
-					"expected %s at beginning of pattern!", norm_prefix);
+					"!Expected a shell pattern, starting with \"%s\" or \"%s\"!",
+					norm_prefix, abs_shell_prefix);
 
 
 		STOPIF_CODE_ERR( strlen(pattern)<3, EINVAL,
-			"pattern %s too short!", ignore->pattern);
+			"!Pattern \"%s\" too short!", ignore->pattern);
 
 		/* count number of PATH_SEPARATORs */
 		cp=strchr(pattern, PATH_SEPARATOR);
@@ -774,7 +889,7 @@ int ign__load_list(char *dir)
 
 
 	fh=-1;
-	status=waa__open_byext(dir, WAA__IGNORE_EXT, 0, &fh);
+	status=waa__open_byext(dir, WAA__IGNORE_EXT, WAA__READ, &fh);
 	if (status == ENOENT)
 	{
 		DEBUGP("no ignore list found");
@@ -792,12 +907,12 @@ int ign__load_list(char *dir)
 	 * Always close the file. Check close() return code afterwards. */
 	status=errno;
 	l=close(fh);
-	STOPIF_CODE_ERR( !memory, status, "mmap failed");
+	STOPIF_CODE_ERR( memory == MAP_FAILED, status, "mmap failed");
 	STOPIF_CODE_ERR( l, errno, "close() failed");
 
 
 	/* make header \0 terminated */
-	cp=strchr(memory, '\n');
+	cp=memchr(memory, '\n', st.st_size);
 	if (!cp)
 	{
 		/* This means no entries.
@@ -853,6 +968,9 @@ ex:
  * */
 inline int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
 {
+#ifdef DEVICE_NODES_DISABLED
+	DEVICE_NODES_DISABLED();
+#else
 	int mj, mn;
 
 	mj=(int)MAJOR(st->dev);
@@ -864,6 +982,7 @@ inline int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
 	if (!ign->has_minor) return 0;
 	if (mn > ign->minor) return +1;
 	if (mn < ign->minor) return -1;
+#endif
 
 	return 0;
 }
@@ -969,7 +1088,8 @@ int ign__is_ignore(struct estat *sts,
 			}
 #endif
 
-			if (ign->type == PT_SHELL || ign->type == PT_PCRE)
+			if (ign->type == PT_SHELL || ign->type == PT_PCRE ||
+					ign->type == PT_SHELL_ABS)
 			{
 				DEBUGP("matching %s against %s",
 						cp, ign->pattern);
@@ -1054,7 +1174,7 @@ int ign__save_ignorelist(char *basedir)
 
 	DEBUGP("saving ignore list");
 	fh=-1;
-	STOPIF( waa__open_byext(basedir, WAA__IGNORE_EXT, 1, &fh), NULL);
+	STOPIF( waa__open_byext(basedir, WAA__IGNORE_EXT, WAA__WRITE, &fh), NULL);
 
 	/* do header */
 	for(i=l=0; i<used_ignore_entries; i++)
@@ -1299,6 +1419,7 @@ ex:
 }
 
 
+#if 0
 inline int ign___do_parent_list(struct ignore_t ***target, int next_index,
 		struct ignore_t **source,
 		struct estat *sts,
@@ -1340,6 +1461,7 @@ ex:
 	return next_index;
 }
 
+
 /* Here we have to find the possibly matching entries.
  * All entries of the parent directory are looked at,
  * and the possible subdirectory-entries of the parent.
@@ -1355,7 +1477,6 @@ int ign__set_ignorelist(struct estat *sts)
 	/* TODO TODO - see below */
 	return 0;
 
-#if 0
 	int status,i, act, sub;
 	struct estat *parent;
 	char *path;
@@ -1418,6 +1539,6 @@ int ign__set_ignorelist(struct estat *sts)
 
 ex:
 	return status;
-#endif
 }
+#endif
 

@@ -27,6 +27,7 @@
 #include "helper.h"
 #include "waa.h"
 #include "options.h"
+#include "cp_mv.h"
 #include "status.h"
 #include "url.h"
 #include "warnings.h"
@@ -55,50 +56,66 @@
  * Some description of data structures, and similar.
  * */
 
-/** \defgroup cmds FSVS - full system versioning for subversion repositories
- * \ingroup compat
+/** \defgroup userdoc Documentation for users
  *
- * FSVS is a client for subversion repositories; it is designed
+ * Here you find the basic documentations for FSVS. */
+
+
+/** \defgroup cmds Commands and command line parameters
+ * \ingroup userdoc
+ *
+ * fsvs is a client for subversion repositories; it is designed
  * for fast versioning of big directory trees.
  *
- * The following commands are understood by FSVS:
+ * \section cmds_synopsis SYNOPSIS
+ *
+ * <tt>fsvs command [options] [args]</tt>
+ *
+ *
+ * The following commands are understood by \c fsvs:
  *
  * \section cmds_local Local configuration and information:
  * <dl>
- *   <dt>\ref urls<dd><tt>Define working copy base directories by their URL(s)</tt>
+ *   <dt>\ref urls<dd><tt>Define working copy base 
+ *   directories by their URL(s)</tt>
  *   <dt>\ref status<dd><tt>Get a list of changed entries</tt>
- *   <dt>\ref info<dd><tt>Display detailed information about single entries</tt>
+ *   <dt>\ref info<dd><tt>Display detailed information about 
+ *   single entries</tt>
  *   <dt>\ref log<dd><tt>Fetch the log messages from the repository</tt>
- *   <dt>\ref diff<dd><tt>Get differences between files (local and remote)</tt>
- *   <dt>\ref copyfrom-detect<dd><tt>Ask FSVS about probably copied/moved/renamed entries; see \ref cp</tt>
+ *   <dt>\ref diff<dd><tt>Get differences between files (local and 
+ *   remote)</tt>
+ *   <dt>\ref cpfd "copyfrom-detect"<dd><tt>Ask \c fsvs about probably 
+ *   copied/moved/renamed entries; see \ref cp</tt>
  * </dl>
  *
- * \section cmds_ Defining which entries to take:
+ * \section cmds_au Defining which entries to take:
  * <dl>
  *   <dt>\ref ignore<dd><tt>Define ignore patterns</tt>
  *   <dt>\ref unversion<dd><tt>Remove entries from versioning</tt>
  *   <dt>\ref add<dd><tt>Add entries that would be ignored</tt>
- *   <dt>\ref cp, \ref mv<dd><tt>Tell FSVS that entries were copied.</tt>
+ *   <dt>\ref cp, \ref mv<dd><tt>Tell \c fsvs that entries were 
+ *   copied.</tt>
  * </dl>
  *
- * \section cmds_ Commands working with the repository:
+ * \section cmds_rep Commands working with the repository:
  * <dl>
  *   <dt>\ref commit<dd><tt>Send changed data to the repository</tt>
  *   <dt>\ref update<dd><tt>Get updates from the repository</tt>
  *   <dt>\ref checkout<dd><tt>Fetch some part of the repository, and 
  *     register it as working copy</tt>
  *   <dt>\ref revert<dd><tt>Undo local changes</tt>
- *   <dt>\ref remote-status<dd><tt>Ask what an \ref update would bring</tt>
+ *   <dt>\ref remote-status<dd><tt>Ask what an \ref update 
+ *   would bring</tt>
  * </dl>
  *
- * \section cmds_ Property handling
+ * \section cmds_prop Property handling
  * <dl>
  *   <dt>\ref prop-set<dd><tt>Set user-defined properties</tt>
  *   <dt>\ref prop-get<dd><tt>Ask value of user-defined properties</tt>
  *   <dt>\ref prop-list<dd><tt>Get a list of user-defined properties</tt>
  * </dl>
  *
- * \section cmds_ Additional commands used for recovery and debugging:
+ * \section cmds_rec Additional commands used for recovery and debugging:
  * <dl>
  *   <dt>\ref export<dd><tt>Fetch some part of the repository</tt>
  *   <dt>\ref sync-repos<dd><tt>Drop local information about the entries, 
@@ -108,10 +125,13 @@
  * \note Multi-url-operations are relatively new; there might be rough edges.
  *
  * 
+ *
  * \section glob_opt Universal options
+ *
  *
  * \subsection glob_opt_version -V -- show version
  * \c -V makes \c fsvs print the version and a copyright notice, and exit.
+ *
  *
  * \subsection glob_opt_deb -d and -D -- debugging
  * If \c fsvs was compiled using \c --enable-debug you can enable printing 
@@ -141,16 +161,19 @@
  *   fsvs -o debug_output='| tail -200 > /tmp/debug.log' -d ....
  * \endcode
  *
+ *
  * \subsection glob_opt_rec -N, -R -- recursion
  * The \c -N and \c -R switches in effect just decrement/increment a  
  * counter; the behavious is chosen depending on that. So <tt>-N -N -N 
  * -R -R</tt> is equivalent to \c -N. 
+ *
  *
  * \subsection glob_opt_verb -q, -v -- verbose/quiet
  * Like the options for recursive behaviour (\c -R and \c -N) \c -v and \c 
  * -q just inc/decrement a counter. The higher the value, the more verbose.
  * \n Currently only the values \c -1 (quiet), \c 0 (normal), and \c +1 
  * (verbose) are used.
+ *
  *
  * \subsection glob_opt_chksum -C -- checksum
  * \c -C increments the checksum flag.
@@ -266,6 +289,10 @@
  * It is normally not allowed to set a property with the \ref prop-set 
  * action with a name matching some reserved prefixes.
  *
+ * <tr><td>\anchor warn_ign_abs_not_base \e ignpat-wcbase<td>
+ * This warning is issued if an \ref ignpat_shell_abs "absolute ignore 
+ * pattern" does not match the working copy base directory. 
+ *
  * <tr><td>\e diff-status<td>
  * GNU diff has defined that it returns an exit code 2 in case of an error; 
  * sadly it returns that also for binary files, so that a simply <tt>fsvs 
@@ -276,7 +303,27 @@
  *
  * </table>
  *
- * Also an environment variable \c FSVS_WARNINGS is used and parsed.
+ * Also an environment variable \c FSVS_WARNINGS is used and parsed; it is 
+ * simply a whitespace-separated list of option specifications.
+ *
+ *
+ * \subsection glob_opt_urls -u URLname[@revision] -- select URLs
+ *
+ * Some commands' operations can be reduced to a subset of defined URLs; 
+ * the \ref update command is the best example.
+ * 
+ * If you have more than a single URL in use for your working copy, and \c 
+ * update updates \b all entries from \b all URLs. By using this parameter 
+ * you can tell FSVS to update only a single URL.
+ *
+ * The parameter can be used repeatedly; the value can have multiple URLs, 
+ * separated by whitespace or one of \c ",;".
+ *
+ * \code
+ *   fsvs up -u base_install,boot@32 -u gcc
+ * \endcode
+ * This would get \c HEAD of \c base_install and \c gcc, and set the target 
+ * revision of the \c boot URL at 32.
  *
  *
  * \subsection glob_options -o [name[=value]] -- other options
@@ -288,6 +335,8 @@
  * */
 
 
+/** -.
+ * */
 char parm_dump[]="dump",
 		 parm_load[]="load";
 
@@ -331,6 +380,9 @@ char *local_codeset;
 apr_pool_t *global_pool;
 
 struct url_t *current_url;
+
+/* For Solaris, which doesn't have one ... */
+char **environ=NULL;
 
 
 /** -.
@@ -444,13 +496,12 @@ int _STOP(const char *file, int line, const char *function,
 	if (is_usererror) format++;
 
 
-	if (already_stopping++)
-	{
-		/* Unless verbose only the first line is printed. */
-		if (opt_verbose<=0) 
-			return error_number;
-	}
-	else
+	/* With verbose all lines are printed; else only the first non-empty. */
+	if (opt_verbose<=0 && 
+			( already_stopping || !format )) 
+		return error_number;
+
+	if (! (already_stopping++))
 	{
 		/* flush STDOUT and others */
 		fflush(NULL);
@@ -509,13 +560,17 @@ eol:
 /** For keyword expansion - the version string. */
 const char* Version(FILE *output)
 {
-	static const char Id[] ="$Id: fsvs.c 1347 2008-01-14 06:12:00Z pmarek $";
+	static const char Id[] ="$Id: fsvs.c 1578 2008-04-02 05:25:13Z pmarek $";
 
 	fprintf(output, "FSVS (licensed under the GPLv3), (C) by Ph. Marek;"
 			" version " FSVS_VERSION "\n");
 	if (opt_verbose>0)
 	{
-		fprintf(output, "compile options:\n\t"
+		fprintf(output, "compiled on " __DATE__ " " __TIME__ 
+				", with options:\n\t"
+#ifdef HAVE_VALGRIND
+				STRINGIFY(HAVE_VALGRIND)
+#endif
 #ifdef HAVE_VALGRIND_VALGRIND_H
 				STRINGIFY(HAVE_VALGRIND_VALGRIND_H)
 #endif
@@ -563,6 +618,12 @@ const char* Version(FILE *output)
 #endif
 #ifdef HAVE_LINUX_KDEV_T_H
 				STRINGIFY(HAVE_LINUX_KDEV_T_H)
+#endif
+#ifdef ENABLE_DEV_FAKE
+				STRINGIFY(ENABLE_DEV_FAKE)
+#endif
+#ifdef DEVICE_NODES_DISABLED
+				STRINGIFY(DEVICE_NODES_DISABLED)
 #endif
 				"\n");
 	}
@@ -732,6 +793,8 @@ ex:
 	if (pipes[1] != -1) close(pipes[1]);
 }
 
+
+/// FSVS GCOV MARK: sigPipe should not be executed
 /** Handler for SIGPIPE.
  * We give the running action a single chance to catch an \c EPIPE, to 
  * clean up on open files and similar; if it doesn't take this chance, the 
@@ -791,8 +854,86 @@ void *_do_component_tests(int a)
  *   We want all options processed, and then the paths (or other parameters)
  *   in a clean list.
  * - And calls the main action.
+ *
+ * <h1>How the parameters get mungled - example</h1>
+ *
+ * On entry we have eg. this:
+ * \dot
+ * digraph {
+ *   rankdir=LR;
+ *   node [shape=rectangle, fontsize=10];
+ *
+ *   parm [shape=record,
+ *     label="{ { <0>fsvs | <1>update | <2>-u | <3>baseinstall | <4>/bin }}"]
+ *
+ *   list [shape=record,
+ *     label="{ args | { <0>0 | <1>1 | <2>2 | <3>3 | <4>4 | NULL } }" ];
+ *
+ *   list:0:e -> parm:0:w;
+ *   list:1:e -> parm:1:w;
+ *   list:2:e -> parm:2:w;
+ *   list:3:e -> parm:3:w;
+ *   list:4:e -> parm:4:w;
+ *
+ *   N1 [label="NULL", shape=plaintext];
+ *   N2 [label="NULL", shape=plaintext];
+ *   url__parm_list -> N1;
+ *
+ *   program_name -> N2;
+ * }
+ * \enddot
+ *
+ * After command line parsing we have:
+ * \dot
+ * digraph {
+ *   rankdir=LR;
+ *   node [shape=rectangle, fontsize=10];
+ *
+ *   parm [shape=record,
+ *     label="{ { <0>fsvs | <1>update | <2>-u | <3>baseinstall | <4>/bin }}"]
+*
+ *   list [shape=record,
+ *     label="{ args | { <0>0 | <1>1 | NULL | <3>3 | <4>4 | NULL }}" ];
+ *
+ *   list:0:e -> parm:1:w;
+ *   list:1:e -> parm:4:w;
+ *   list:3:e -> parm:3:w;
+ *   list:4:e -> parm:4:w;
+ *
+ *   program_name -> parm:0:w;
+ *
+ *   ulist [shape=record,
+ *     label="{ url__parm_list | { <0>0 | NULL } }" ];
+ *   ulist:0:e -> parm:3:w;
+ * }
+ * \enddot
+ *
+ *
+ * <h2>Argumentation for parsing the urllist</h2>
+ *
+ * I'd have liked to keep the \ref url__parm_list in the original \a args 
+ * as well; but we cannot easily let it start at the end, and putting it 
+ * just after the non-parameter arguments
+ * - might run out of space before some argument (because two extra \c NULL 
+ *   pointers are needed, and only a single one is provided on startup),
+ * - and we'd have to move the pointers around every time we find a 
+ *   non-option argument.
+ *
+ * Consider the case <tt>[fsvs, update, /bin/, -uURLa, -uURLb, /lib, 
+ * NULL]</tt>.
+ * That would be transformed to
+ * -# <tt>[update, NULL, /bin/, -uURLa, -uURLb, /lib, NULL]</tt>
+ * -# <tt>[update, /bin/, NULL, -uURLa, -uURLb, /lib, NULL]</tt>
+ * -# And now we'd have to do <tt>[update, /bin/, NULL, -uURLa, NULL, 
+ *  -uURLb, /lib, NULL]</tt>; this is too long.
+ *   We could reuse the \c NULL at the end ... but that's not that fine, 
+ *   either -- the \ref url__parm_list wouldn't be terminated.
+ *
+ * So we go the simple route - allocate an array of pointers, and store 
+ * them there.
+ *
  * */
-int main(int argc, char *args[])
+int main(int argc, char *args[], char *env[])
 {
 	struct estat root = { };
 	int status, help;
@@ -804,6 +945,7 @@ int main(int argc, char *args[])
 
 	help=0;
 	eo_args=1;
+	environ=env;
 	program_name=args[0];
 #ifdef ENABLE_DEBUG
 	/* If STDOUT and STDIN are on a terminal, we could possibly be 
@@ -873,7 +1015,7 @@ int main(int argc, char *args[])
 
 	/* Load options from environment variables. */
 	STOPIF( opt__load_env(environ), NULL);
-	STOPIF( waa__save_cwd(&start_path, &start_path_len, NULL), NULL);
+	STOPIF( waa__save_cwd(&start_path, &start_path_len, 0), NULL);
 
 	STOPIF( wa__init(), NULL);
 
@@ -898,7 +1040,7 @@ int main(int argc, char *args[])
 		 * end-of-arguments.
 		 * And we reorder to the front of the array, so that the various
 		 * parts can parse their data. */
-		status=getopt(argc, args, "+a:VhdvCm:F:D:qf:r:W:NRo:?");
+		status=getopt(argc, args, "+a:VhdvCm:F:D:qf:r:W:NRo:u:?");
 		if (status == -1) 
 		{
 			DEBUGP("no argument at optind=%d of %d",optind, argc);
@@ -934,11 +1076,24 @@ int main(int argc, char *args[])
 				opt_checksum++;
 				break;
 			case 'o':
-				STOPIF( opt__parse( optarg, NULL, PRIO_CMDLINE), 
-						"!Cannot parse option string '%s'", optarg);
+				STOPIF( opt__parse( optarg, NULL, PRIO_CMDLINE, 0), 
+						"!Cannot parse option string '%s'.", optarg);
 				break;
 			case 'f':
 				STOPIF( opt__parse_option(OPT__FILTER, PRIO_CMDLINE, optarg), NULL);
+				break;
+
+			case 'u':
+				/* Why is a new command line parameter necessary?
+				 * Some functions want URLs \b and some filename parameter (eg.  
+				 * update, to define the wc base), and we have to separate them.
+				 *
+				 * As update will take an arbitrary number of URLs and filenames, 
+				 * there's no easy way to tell them apart; and we have to do that 
+				 * _before_ we know the wc base, so we cannot just try to lstat() 
+				 * them; and we know the URLs (and their names) only _after- we 
+				 * know the wc root. So we would have to guess here.  */
+				STOPIF( url__store_url_name(optarg), NULL);
 				break;
 
 				/* Maybe we should warn if -R or -N are used for commands that 
@@ -1043,14 +1198,6 @@ int main(int argc, char *args[])
 		DEBUGP("argument %d: %s", eo_args, args[eo_args]);
 
 
-	/* If this command is not filtered, output all entries. */
-	if (!action->only_opt_filter ||
-			opt__get_int(OPT__FILTER) == 0) 
-		opt__set_int(OPT__FILTER, PRIO_MUSTHAVE, FILTER__ALL);
-	DEBUGP("filter has mask 0x%X (%s)", 
-			opt__get_int(OPT__FILTER),
-			st__status_string_fromint(opt__get_int(OPT__FILTER)));
-
 	/* waa__init() depends on some global settings, so do here. */
 	STOPIF( waa__init(), NULL);
 
@@ -1083,6 +1230,10 @@ int main(int argc, char *args[])
 	STOPIF( action->work(&root, argc-optind, args+optind), 
 			"action %s failed", action->name[0]);
 
+	/* Remove copyfrom records in the database, if any to do. */
+	STOPIF( cm__get_source(NULL, NULL, NULL, NULL, status), 
+			NULL);
+
 	/* Maybe we should try that even if we failed? 
 	 * Would make sense in that the warnings might be helpful in determining
 	 * the cause of a problem.
@@ -1103,4 +1254,4 @@ ex:
 	return 0;
 }
 
-/* vim: set cinoptions=*200 : */
+/* vim: set cinoptions=*200 fo-=a : */

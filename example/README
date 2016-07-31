@@ -1,0 +1,17 @@
+
+This is an example setup for versioning /etc in 
+debian-based systems.
+
+         --- NO WARRANTY OF ANY KIND ---
+
+BEWARE! You might end up putting configuration files,
+that should be kept secret, into the repository!
+I defined filtering for the few I know - but you'd 
+better check yourself!
+
+If you want to see the fruits of your versioning efforts,
+put yourself into the sysver group, and use subcommander
+or any other GUI you like.
+
+TODO: Write some better documentation.
+

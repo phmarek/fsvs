@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -116,7 +116,7 @@
 
 
 /** \defgroup s_p_n Special property names
- * \ingroup props
+ * \ingroup userdoc
  *
  * \section fsvs_props Special FSVS properties. 
  *
@@ -639,13 +639,46 @@ int prp__s_work(struct estat *root, int argc, char *argv[])
 	STOPIF( waa__output_tree(root), NULL);
 
 ex:
-if (db)
+	if (db)
 	{
 		st2=hsh__close(db, status);
 		db=NULL;
 		if (!status && st2)
 			STOPIF( st2, NULL);
 	}
+	return status;
+}
+
+
+/**  -.
+ * \a data and \a len are optional output parameters, ie. may be \c NULL.
+ * if \a data is used, it \b must be free()d.
+ *
+ * Returns \c ENOENT silently. */
+int prp__open_get_close(struct estat *sts, char *name, 
+		char **data, int *len)
+{
+	int status;
+	hash_t props;
+  datum value;
+
+	props=NULL;
+
+	status=prp__open_byestat(sts, GDBM_READER, &props);
+	if (status == ENOENT) goto ex;
+	STOPIF(status, NULL);
+
+	status=prp__get(props, name, &value);
+	if (status == ENOENT) goto ex;
+	STOPIF(status, NULL);
+
+	if (len) *len=value.dsize;
+	if (data) *data=value.dptr;
+	else IF_FREE(value.dptr);
+
+ex:
+	if (props)
+		hsh__close(props, status);
 	return status;
 }
 

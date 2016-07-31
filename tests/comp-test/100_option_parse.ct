@@ -10,23 +10,39 @@ print opt__list[OPT__FILTER].i_val
 print opt__list[OPT__FILTER].prio
 
 set buffer="filter=any"
-call opt__parse(buffer, 0, 1)
+call opt__parse(buffer, 0, 1, 0)
 #= -1
 print opt__list[OPT__FILTER].i_val
 
 set buffer="filter\0none;text"
-call opt__parse(buffer, buffer+7, 2)
-#= 5
+call opt__parse(buffer, buffer+7, 2, 0)
+#= 7
 print opt__list[OPT__FILTER].i_val
 
 set buffer="filter=none"
-call opt__parse(buffer, 0, 3)
+call opt__parse(buffer, 0, 3, 0)
 #= 0
 print opt__list[OPT__FILTER].i_val
 
 
 call strcpy(buffer, "filter=mtime,owner:group")
-call opt__parse(buffer, 0, 4)
+call opt__parse(buffer, 0, 4, 0)
 #= 0xe0
 print /x opt__list[OPT__FILTER].i_val
+
+
+set buffer="delay=no"
+call opt__parse(buffer, 0, 1, 0)
+#= 0
+print opt__list[OPT__DELAY].i_val
+
+set buffer="delay=yes"
+call opt__parse(buffer, 0, 2, 0)
+#= -1
+print opt__list[OPT__DELAY].i_val
+
+set buffer="delay=commit,update,checkout,revert"
+call opt__parse(buffer, 0, 3, 0)
+#= 15
+print opt__list[OPT__DELAY].i_val
 

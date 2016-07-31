@@ -6,8 +6,9 @@ $INCLUDE_FUNCS
 cd $WC
 
 tmp=$LOGDIR/014.fsvs-test.tmp
+sleep 1
 
-for filename in new-file1 ' ' new-file2
+for filename in new-file1 ' ' new-file2 $STG_UTF8 $STG_LOC
 do
 	if [[ `$BINdflt st | wc -l` -ne 0 ]]
 	then
@@ -16,10 +17,6 @@ do
 		exit 1
 	fi
 
-	# The sleeps in here should be longer than the filesystem granularity.
-	# Mostly <= 1 second, only on FAT (VFAT) 2 seconds ...
-	# But running the tests on such is not possible (chmod, chown)
-	sleep 1
 	touch "$filename"
 	if [[ `$BINdflt st | wc -l` -ne 2 ]]
 	then
@@ -30,7 +27,7 @@ do
 	fi
 
 	echo "     ci"
-	$BINdflt ci -m "$filename-$RANDOM" > $tmp
+	$BINdflt ci -m "$filename-$RANDOM" -o delay=yes > $tmp
 	if [[ `grep -F "N...         0  ./$filename" < $tmp > /dev/null` ]]
 	then
 		$ERROR_NB "expected '$filename' as new"
@@ -53,7 +50,6 @@ do
 done
 
 
-sleep 1
 echo "delete a file"
 rm $filename
 if [[ `$BINdflt st $filename | wc -l` -ne 1 ]]

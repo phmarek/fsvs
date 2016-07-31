@@ -678,7 +678,7 @@ int cs___update_manber(struct t_manber_data *mb_f,
 			 * Do it now.
 			 * */
 			STOPIF( ops__build_path(&filename, mb_f->sts), NULL);
-			STOPIF( waa__open_byext(filename, WAA__FILE_MD5s_EXT, 1,
+			STOPIF( waa__open_byext(filename, WAA__FILE_MD5s_EXT, WAA__WRITE,
 						&	cs___manber.manber_fd), NULL );
 			DEBUGP("now doing manber-hashing for %s...", filename);
 		}
@@ -928,7 +928,7 @@ int cs__read_manber_hashes(struct estat *sts, struct cs__manber_hashes *data)
 
 	STOPIF( ops__build_path(&filename, sts), NULL);
 	/* It's ok if there's no md5s file. simply return ENOENT. */
-	status=waa__open_byext(filename, WAA__FILE_MD5s_EXT, 0, &fh);
+	status=waa__open_byext(filename, WAA__FILE_MD5s_EXT, WAA__READ, &fh);
 	if (status == ENOENT) goto ex;
 	STOPIF( status, "reading md5s-file for %s", filename);
 

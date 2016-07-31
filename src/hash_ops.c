@@ -223,13 +223,15 @@ int hsh___new_bare(char *wcfile, char *name, int gdbm_mode,
 		if (status != ENOENT)
 			STOPIF(status, "Cannot open database file %s", cp);
 	}
+	else
+	{
+		/* Temporary files can be removed immediately. */
+		if (gdbm_mode == HASH_TEMPORARY)
+			STOPIF_CODE_ERR( unlink(cp) == -1, errno,
+					"Removing database file '%s'", cp);
 
-	/* Temporary files can be removed immediately. */
-	if (gdbm_mode == HASH_TEMPORARY)
-		STOPIF_CODE_ERR( unlink(cp) == -1, errno,
-				"Removing database file '%s'", cp);
-
-	if (fname_out) *fname_out=strdup(cp);
+		if (fname_out) *fname_out=strdup(cp);
+	}
 
 ex:
 	if (status)

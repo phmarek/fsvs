@@ -1,0 +1,3 @@
+#!/bin/sh
+
+/var/lib/fsvs-versioning/scripts/commit.sh "Commit per cron.daily"

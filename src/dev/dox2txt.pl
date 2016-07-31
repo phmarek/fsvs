@@ -11,9 +11,10 @@ while (<STDIN>)
 # I'd thought lynx had an option to not print these?
 # yes ... -nonumbers.
 	s#\[\d+\]##;
+	next if m#^\[#;
 
 
-	$p=m#^Detailed Description# .. m#^\s*Modules#;
+	$p=m#^\w# .. m#^\s*_{30,}#;
 	print if ($p =~ m#^\d+$#);
 }
 

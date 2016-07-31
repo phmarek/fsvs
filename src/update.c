@@ -22,18 +22,18 @@
  * \section update
  *
  * \code
- * fsvs update [-r rev] [working copy base]
+ * ## invalid ## fsvs update [-r rev] [working copy base]
+ * fsvs update [-u url@rev ...] [working copy base]
  * \endcode
  *
- * This command does an update on \b all URLs for the current working copy.
+ * This command does an update on all specified URLs for the current 
+ * working copy, or, if none is given via \ref glob_opt_urls "-u", \b all 
+ * URLs.
  *
  * It first reads all changes in the repositories, overlays them (so that
  * only the highest-priority entries are used), and fetches all necessary
  * changes.
  *
- * Currently all URLS are update to the same revision (given per \c -r 
- * or \c HEAD by default) - although there'll be a way to update only some,
- * and to a specific revision.
  * */
 
 
@@ -743,7 +743,7 @@ svn_error_t *up__delete_entry(const char *utf8_path,
 
 	change=sts->entry_status;
 	sts->remote_status=FS_REMOVED;
-	STOPIF( st__rm_status(sts, filename), NULL);
+	STOPIF( st__rm_status(sts), NULL);
 
 	if (!action->is_compare)
 	{
@@ -873,7 +873,7 @@ svn_error_t *up__close_directory(
 	STOPIF( hlp__lstat( filename, &(sts->st)),
 			"Cannot lstat('%s')", filename);
 	/* finished, report to user */
-	STOPIF( st__status(sts, filename), NULL);
+	STOPIF( st__status(sts), NULL);
 
 	/* Mark this directory for being checked next time. */
 	sts->flags |= RF_CHECK;
@@ -1084,8 +1084,12 @@ into_stringbufs:
 					NULL);
 
 		if (sts->decoder)
+		{
 			STOPIF( hlp__encode_filter(svn_s_tgt, sts->decoder, 1, 
 						&svn_s_tgt, &encoder, sts->filehandle_pool), NULL);
+			/* If the file gets decoded, use the original MD5 for comparision. */
+			encoder->output_md5= &(sts->md5);
+		}
 	}
 
 	STOPIF( hlp__local2utf8(filename, &fn_utf8, -1), NULL );
@@ -1094,14 +1098,10 @@ into_stringbufs:
 			fn_utf8, pool,
 			handler, handler_baton);
 
-	/* If the file got decoded, use the original MD5 for comparision. */
-	if (encoder)
-	  memcpy(sts->md5, encoder->md5, sizeof(sts->md5));
 
 	sts->remote_status |= FS_CHANGED;
 
 ex:
-	IF_FREE(encoder);
 	RETURN_SVNERR(status);
 }
 
@@ -1185,7 +1185,7 @@ svn_error_t *up__close_file(void *file_baton,
 	}
 
 	/* finished, report to user */
-	STOPIF( st__status(sts, filename), NULL);
+	STOPIF( st__status(sts), NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -1298,6 +1298,7 @@ int up__work(struct estat *root, int argc, char *argv[])
 	svn_error_t *status_svn;
 	svn_revnum_t rev;
 	int i;
+	time_t delay_start;
 
 
 	status=0;
@@ -1308,6 +1309,8 @@ int up__work(struct estat *root, int argc, char *argv[])
 
 	STOPIF_CODE_ERR(!urllist_count, EINVAL,
 			"There's no URL defined");
+	
+	STOPIF( url__mark_todo(), NULL);
 
 	STOPIF_CODE_ERR( argc != 0, EINVAL,
 			"Cannot do partial updates!");
@@ -1323,10 +1326,11 @@ int up__work(struct estat *root, int argc, char *argv[])
 	for(i=0; i<urllist_count; i++)
 	{
 		current_url=urllist[i];
-		STOPIF( url__open_session(&session), NULL);
+		if (!url__to_be_handled(current_url)) continue;
 
 		DEBUGP("doing URL %s", current_url->url);
 
+		STOPIF( url__open_session(&session), NULL);
 
 		if (opt_target_revisions_given)
 			rev=opt_target_revision;
@@ -1372,8 +1376,10 @@ int up__work(struct estat *root, int argc, char *argv[])
 
 		/* See the comment at the end of commit.c - atomicity for writing
 		 * these files. */
+		delay_start=time(NULL);
 		STOPIF( waa__output_tree(root), NULL);
 		STOPIF( url__output_list(), NULL);
+		STOPIF( hlp__delay(delay_start, DELAY_UPDATE), NULL);
 	}
 
 

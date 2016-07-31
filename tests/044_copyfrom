@@ -21,7 +21,9 @@ copydb=`$PATH2SPOOL . Copy`
 touch 1 4 5 s
 $BINq ci -mx
 
-touch 2 3 6
+# If these file had a different timestamp, the revert below would only 
+# change this; but we want the copy relations to be removed.
+touch -r 1 2 3 6
 $BINdflt cp 1 2
 $BINdflt cp 5 6
 $BINdflt cp ./4 $WC/3
@@ -30,7 +32,7 @@ then
   $ERROR "Expected a copyfrom database at $copydb"
 fi
 
-if [[ $(echo `$BINdflt cp dump | sort`) == '. . 1 2 3 4 5 6' ]]
+if [[ $(echo `$BINdflt cp dump | sort`) == ". . 2 3 6 $REPURL/1 $REPURL/4 $REPURL/5" ]]
 then
   $SUCCESS "Setting and overwriting copyfrom information works."
 else
@@ -53,7 +55,7 @@ $BINq sync-repos
   echo 2
 ) | $BINdflt cp load
 # we still have the values of the last copy operations
-if [[ $(echo `$BINdflt cp dump | sort`) == '. . 1 2 3 4 5 6' ]]
+if [[ $(echo `$BINdflt cp dump | sort`) == ". . 2 3 6 $REPURL/1 $REPURL/4 $REPURL/5" ]]
 then
   $SUCCESS "Loading copyfrom information works."
 else
@@ -61,31 +63,36 @@ else
   $ERROR "Loading copyfrom fails."
 fi
 
-# This doesn't work, as the copyfrom information is added, not replaced.
-# TODO: Implement revert for such entries, and test here.
-rm $copydb
-$BINq sync-repos
-# $BINdflt revert *
-## if [[ `true | $BINdflt cp load -v` == "0 copyfrom relations loaded." ]]
-## then
-##   $SUCCESS "Purging copyfrom works"
-## else
-##   $ERROR "Purging copyfrom fails"
-## fi
+# A "true | fsvs cp load" doesn't work, as the copyfrom information is 
+# added, not replaced. So we revert.
+$BINdflt revert .
+if [[ `$BINdflt cp dump -v` == "No copyfrom information was written." ]]
+then
+  $SUCCESS "Purging copyfrom works"
+else
+  $ERROR "Purging copyfrom fails"
+fi
+
+if [[ `true | $BINdflt cp load -v` == "0 copyfrom relations loaded." ]]
+then
+  $SUCCESS "Nothing loaded."
+else
+  $ERROR "Loading nothing on empty copy database fails"
+fi
+
 
 
 ######################################################
 # Test copyfrom on commits.
 
 seq 1 100 > $fn1
-$BINq ci -m "file1"
+$BINq ci -m "file1" -o delay=yes
 # Now the copyfrom relation file should be cleaned up.
 if [[ -s $copydb ]]
 then
   $ERROR "Expected copyfrom database at $copydb to be deleted"
 fi
 
-sleep 1
 
 
 function Status
@@ -116,7 +123,7 @@ Status ".m.+" $fn2 "...+" $fn3 "D..." $fn1
 $BINq ci -m "file2" $fn2
 # Status ".m.+" $fn2 "...+" $fn3 "D..." $fn1
 
-if [[ $(echo `$BINdflt cp dump | sort`) == "$fn1 $fn3" ]]
+if [[ $(echo `$BINdflt cp dump | sort`) == "$fn3 $REPURL/$fn1" ]]
 then
   $SUCCESS "On commit correct entries purged."
 else
@@ -215,15 +222,51 @@ CopyLog $src $dest "Empty dir was copied"
 
 # Now try the same, but not starting in the wc root:
 # Copy definition wc/a/b/c => wc/a/e/f
-mkdir -p a/b
-echo $$ $RANDOM $RANDOM > a/b/c
+dirname=aergheanrgerkgergwergwergwa
+pre=a/b
+fulldir=$dirname/$dirname/$dirname/$dirname/$dirname
+full=$fulldir/gggg
+mkdir -p $pre/d/$fulldir
+echo $$ $RANDOM $RANDOM > $pre/c
+echo $RANDOM > $pre/d/$full
 $BINq ci -m "prep"
-mkdir -p a/e
-cp a/b/c a/e/f
+
+mkdir -p a/e a/g
+cp $pre/c a/e/f
+cp -r $pre/d a/g/d
+# copy the file
 ( cd a ; $BINq cp b/c ../a/e/f )
-$BINq ci -m "copy"
+( cd a ; $BINq cp b/d ../a/g/d )
+
+# Test diff for *long* filenames.
+echo $$-$RANDOM > a/g/d/$full
+$BINdflt diff a/g/d/$full > $logfile
+if [[ `egrep "^[+-]" $logfile | wc -l` -eq 4 ]]
+then
+  $SUCCESS "Diff for long copied entries with long names works."
+else
+  $ERROR "Diff for long copied entries with long names"
+fi
+
+$BINq ci -m "copy" -o delay=yes
 
 CopyLog a/b/c a/e/f "Copy definition below wc root"
 
 $WC2_UP_ST_COMPARE
 
+cp -r a with_subs
+$BINq cp a with_subs
+
+# Currently copying a copied file that's not committed is not possible.
+mkdir will_error
+if $BINdflt cp with_subs will_error
+then
+  $ERROR "Unexpected exit status of copying copied, uncommitted entry."
+else
+  $SUCCESS "Expected exit status of copying copied, uncommitted entry."
+fi
+
+
+$BINq ci -m "subs"
+
+$WC2_UP_ST_COMPARE

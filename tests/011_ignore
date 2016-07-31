@@ -29,13 +29,18 @@ test -e $ign_file && rm $ign_file
 find . -depth -iname "*$PREFIX*$POSTFIX" -exec rm -rf {} \;
 
 # create some files
-# Matrix:            shell          pcre
-#  ignored           s.i.IGN        p.i.IGN
-#  taken             s.t.TAKE       s.t.TAKE
+# Matrix:            shell          shell-abs      pcre
+#  ignored           s.i.IGN        S.i.IGN        p.i.IGN
+#  taken             s.t.TAKE       S.t.TAKE       p.t.TAKE
 function M()
 {
   test -d "$1" || mkdir -p $1
-  for p in s p e
+  # s for shell
+  # p for perl
+  # e for wild-wildcard
+	# A for absolute
+	# S for absolute, root-based
+  for p in s p e S A
   do
     for t in $TAKE $IGNORE
     do
@@ -53,9 +58,7 @@ for d in $DIRLIST
 do
   mkdir -p $d
 done
-$BINq ci -m "create dirs"
-
-sleep 1 # so that we get changed mtimes on the directories ...
+$BINq ci -m "create dirs" -o delay=yes
 
 $WC2_UP_ST_COMPARE
 
@@ -67,22 +70,26 @@ do
   M $d
 done
 
+
 all_new=`$BINdflt st | grep $POSTFIX | wc -l`
 take_new=`$BINdflt st | grep $POSTFIX | grep $TAKE | wc -l`
 take_new_list=`$BINdflt st | grep $POSTFIX | grep $TAKE`
 echo $all_new new files, $take_new to take.
 
-PATTERN_COUNT=11
+PATTERN_COUNT=15
 # We need the patterns in the order take, ignore.
 # Test the --prepend here, too.
 $BIN ignore "./**$PREFIX-s**" "PCRE:.*$PREFIX-p\."
 $BIN ignore prepend "t./**$PREFIX-s.$TAKE**" "tPCRE:.*$PREFIX-p\.$TAKE"
 $BIN ignore at=1 "ti./*/dir/*/W?LD/**/$PREFIX-s.$TAKE**"
 $BIN ignore at=1 "ti./**/$PREFIX-[ef].$TAKE**"
+$BIN ignore "t/**$PREFIX-S.$TAKE**" "/**$PREFIX-S**"
+$BIN ignore "t$WC/**$PREFIX-A.$TAKE**" "$WC/**$PREFIX-A**"
 $BIN ignore "i./**/$PREFIX-[ef]**"
 $BIN ignore prepend "DEVICE:<0" "DEVICE:>=0xff:0xff"
 
-ignored_file=`ls $PREFIX*$IGNORE*$POSTFIX | head -1`
+ignored_file=$PREFIX-perinode-$POSTFIX
+touch $ignored_file
 $BIN ignore prepend `perl -e '@f=stat(shift); $f[1] || die $!; printf "INODE:%d:%d:%d", $f[0] >> 8, $f[0] & 0xff, $f[1];' $ignored_file`
 
 # this should never match
@@ -126,8 +133,8 @@ filt_new=`$BINdflt st | grep $POSTFIX | wc -l`
 echo $filt_new after filtering.
 if [[ $filt_new -ne $take_new ]]
 then
-  $BINdflt st
-  $ERROR "   mismatch!"
+  $BINdflt st | grep $POSTFIX
+  $ERROR "   mismatch - $filt_new got, $take_new expected!"
 fi
 
 echo "Testing for files which should not be found ..."
@@ -214,6 +221,21 @@ rm $file
 
 $WC2_UP_ST_COMPARE
 
+
+# Create a directory tree, where something deep within is ignored.
+# Get a defined state
+$BINq ci -m1 -odelay=yes
+mkdir -p a/b/c/d/e/f/g/h
+touch a/b/c/d/e/f/g/h/$STG_UTF8
+$BINdflt ignore '/**/a/**/c/*/e/f'
+if $BINdflt st | grep "$STG_UTF8"
+then
+  $ERROR "Deep ignores in build_tree doesn't work."
+else
+  $SUCCESS "Deep ignores in build_tree work."
+fi
+
+
 # Now we put the WAA in there and test again, to see whether it gets 
 # correctly ignored.
 new=$WC/waa
@@ -225,4 +247,24 @@ then
 else
   $ERROR "WAA would get versioned"
 fi
+
+
+# Test whether the absolute patterns warn
+bad=/$RANDOM-$RANDOM/does-not-exist
+if $BINdflt ignore "$bad" -o ignpat-wcbase=stop 2>/dev/null
+then
+  $ERROR "Bad absolute ignore pattern taken"
+fi
+if ! $BINdflt ignore "$bad" -W ignpat-wcbase=ignore
+then
+  $ERROR "Bad absolute ignore pattern not taken"
+fi
+# Pattern already saved, a simple dump should do the trick
+if [[ `( $BINdflt ignore dump -W ignpat-wcbase=always 2>&1 ; true )` != *"WARNING: The absolute shell pattern"*"$bad"*"does neither have the working copy base path"*"nor a wildcard path"* ]]
+then
+	$BINdflt ignore dump -W ignpat-wcbase=always
+  $ERROR "Bad absolute ignore pattern warning not given?"
+fi
+
+$SUCCESS "Absolute ignore pattern warnings tests"
 

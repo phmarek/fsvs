@@ -6,17 +6,19 @@
  * published by the Free Software Foundation.
  ************************************************************************/
 
-#include <apr_md5.h>
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <dlfcn.h>
 #include <netdb.h>
+#include <time.h>
 #include <sys/types.h>
 #include <grp.h>
 #include <poll.h>
 #include <pwd.h>
+#include <apr_file_io.h>
+#include <apr_md5.h>
 
 #include "global.h"
 #include "waa.h"
@@ -423,7 +425,7 @@ int hlp__fstat(int fd, struct sstat_t *st)
  * arguments. */
 char *hlp__pathcopy(char *dst, int *len, ...)
 {
-	const char ps[]={ PATH_SEPARATOR, 0 };
+	static const char ps[]={ PATH_SEPARATOR, 0 };
 	int had_path;
 	char *dest;
 	const char *src;
@@ -570,7 +572,7 @@ char *hlp__pathcopy(char *dst, int *len, ...)
  * If it is \c NULL, the string must end here. */
 int hlp__parse_rev(char *stg, char **eos, svn_revnum_t *rev)
 {
-	const char head[]="HEAD";
+	static const char head[]="HEAD";
 	int status;
 	int inval;
 	char *end;
@@ -601,6 +603,12 @@ ex:
 
 /** -.
  * Has a few buffers for these operations.
+ *
+ * The cache is statically allocated, as we cannot return \c ENOMEM.
+ *
+ * If we cannot store a cache during querying, we'll return the value, but 
+ * forget that we already know it.
+ *
  * \todo Keep most-used? */
 const char *hlp__get_grname(gid_t gid, char *not_found)
 {
@@ -620,7 +628,12 @@ const char *hlp__get_grname(gid_t gid, char *not_found)
 
 
 /** -.
- * Has a few buffers for these operations. */
+ * Has a few buffers for these operations; the cache is statically 
+ * allocated, as we cannot return \c ENOMEM.
+ *
+ * If we cannot store a cache during querying, we'll return the value, but 
+ * forget that we already know it.
+ * */
 const char *hlp__get_uname(uid_t uid, char *not_found)
 {
 	struct passwd *pw;
@@ -779,7 +792,7 @@ ex:
  */
 int hlp__safe_print(FILE *output, char *string, int maxlen)
 {
-	const char to_encode[32]= {
+	static const char to_encode[32]= {
 		'0',   0,   0,   0,   0,   0,   0,   0,
 		'b', 't', 'n',   0,   0, 'r',   0,   0,
 		'f',   0,   0,   0,   0,   0,   0,   0,
@@ -853,8 +866,10 @@ int hlp___encoder_waiter(struct encoder_t *encoder)
 		[1] = { .events=POLLOUT, .fd=encoder->pipe_in, },
 	};
 
+
 	status=0;
-	/* Max. 0.1 sec ... could we wait indefinitely? */
+	/* We cannot wait indefinitely, because we don't get any close event yet.  
+	 * */
 	STOPIF_CODE_ERR( poll(poll_data, 
 				sizeof(poll_data)/sizeof(poll_data[0]), 
 				100) == -1, errno,
@@ -866,8 +881,8 @@ ex:
 
 
 /** Writer function for an encoder.
- * We have to write the full amount through the pipe - possibly in some 
- * chunks.
+ * We have to write the full buffer through the pipe before returning - 
+ * possibly in some chunks.
  * */ 
 svn_error_t *hlp___encode_write(void *baton,
 		const char *data, apr_size_t *len)
@@ -882,7 +897,7 @@ svn_error_t *hlp___encode_write(void *baton,
 	status=0;
 	write_pos=0;
 	bytes_left= len ? *len : 0;
-	/* If we get data==NULL, we go on until we an eof. */
+	/* If we get data==NULL, we go on until we get an eof. */
 	while (data ? (bytes_left || encoder->bytes_left) : !encoder->eof)
 	{
 		/* Try to give the child process some data. */
@@ -929,7 +944,7 @@ svn_error_t *hlp___encode_write(void *baton,
 				STOPIF_CODE_ERR( close(encoder->pipe_out) == -1, errno,
 						"Cannot close connection to child");
 				DEBUGP("child %d finished", encoder->child);
-				encoder->pipe_out=-1;
+				encoder->pipe_out=EOF;
 				encoder->eof=1;
 			}
 			else
@@ -977,8 +992,8 @@ ex:
 
 
 /** Reader function for an encoder.
- * If we have a \c svn_stream_t reader, it has to get the full data 
- * delivered, meaning we must not return a short read.
+ * A \c svn_stream_t reader gets as much data as it requested; a short read 
+ * would be interpreted as EOF.
  * */ 
 svn_error_t *hlp___encode_read(void *baton,
 		char *data, apr_size_t *len)
@@ -987,9 +1002,11 @@ svn_error_t *hlp___encode_read(void *baton,
 	svn_error_t *status_svn;
 	int read_pos, bytes_left;
 	struct encoder_t *encoder=baton;
+	int ign_count;
 
 
 	status=0;
+	ign_count=1;
 	read_pos=0;
 	bytes_left=*len;
 	while (bytes_left && !encoder->eof)
@@ -1058,8 +1075,11 @@ svn_error_t *hlp___encode_read(void *baton,
 		/* Try to read some data. */
 		status = recv(encoder->pipe_out, data+read_pos,
 				bytes_left, MSG_DONTWAIT);
-		DEBUGP("receiving bytes from child %d: %d; %d", 
-				encoder->child, status, errno);
+		if (status==-1 && errno==EAGAIN && ign_count>0)
+			ign_count--;
+		else
+			DEBUGP("receiving bytes from child %d: %d; %d", 
+					encoder->child, status, errno);
 		if (status==0)
 		{
 			encoder->eof=1;
@@ -1073,6 +1093,7 @@ svn_error_t *hlp___encode_read(void *baton,
 				status=errno;
 				if (status == EAGAIN)
 				{
+					if (ign_count == 0) ign_count=20;
 					/* Just wait, we might get data later. */
 				}
 				else
@@ -1103,15 +1124,18 @@ svn_error_t *hlp___encode_close(void *baton)
 	svn_error_t *status_svn;
 	int retval;
 	struct encoder_t *encoder=baton;
+	md5_digest_t md5;
 
 
-	if (encoder->is_writer)
+	DEBUGP("closing connections for %d", encoder->child);
+
+	if (encoder->is_writer && encoder->pipe_in!=EOF)
 	{
-		DEBUGP("closing connections");
 		/* We close STDIN of the child, and wait until there's no more data 
 		 * left. Then we close STDOUT. */
 		STOPIF_CODE_ERR( close(encoder->pipe_in) == -1, errno,
 				"Cannot close connection to child");
+		encoder->pipe_in=EOF;
 
 		STOPIF_SVNERR( hlp___encode_write, (baton, NULL, NULL));
 		STOPIF_SVNERR( svn_stream_close, (encoder->orig) );
@@ -1124,23 +1148,36 @@ svn_error_t *hlp___encode_close(void *baton)
 	/* waitpid() returns the child pid */
 	status=0;
 
-	apr_md5_final(encoder->md5, &encoder->md5_ctx);
-	DEBUGP("encode end gives MD5 of %s", cs__md52hex(encoder->md5));
+	apr_md5_final(md5, &encoder->md5_ctx);
+	memcpy(encoder->output_md5, md5, sizeof(*encoder->output_md5));
+	DEBUGP("encode end gives MD5 of %s", cs__md52hex(md5));
 
 	STOPIF_CODE_ERR(retval != 0, ECHILD, 
 			"Child process returned 0x%X", retval);
 
 ex:
+	IF_FREE(encoder);
+
 	RETURN_SVNERR(status);
 }
 
 
 /** -.
- * When data is written into \a s_stream, it is piped as \c STDIN into \a 
- * command, and its \c STDOUT can be read back with \c output.
+ * For \a is_writer data gets written into \a s_stream, gets piped as \c 
+ * STDIN into \a command, and the resulting \c STDOUT can be read back with 
+ * \a output; if \a is_writer is zero, data must be read from \a output to  
+ * get processed.
  *
- * After finishing that the returned pointer \a *encoder_out can be used to 
- * retrieve the MD5, and must be \c free()d. */
+ * After finishing the returned pointer \a *encoder_out can be used to 
+ * retrieve the MD5. 
+ * 
+ * \a *encoder_out must not be \c free()d; delta editors that store data 
+ * locally get driven by the subversion libraries, and the only place where 
+ * we can be sure that it's no longer in use is when the streams get 
+ * closed. Therefore the \c free()ing has to be done in 
+ * hlp___encode_close(); callers that want to get the final MD5 can set the 
+ * \c encoder->output_md5 pointer to the destination address.
+ * */
 int hlp__encode_filter(svn_stream_t *s_stream, const char *command, 
 		int is_writer,
 		svn_stream_t **output, 
@@ -1252,9 +1289,10 @@ int hlp__encode_filter(svn_stream_t *s_stream, const char *command,
 	encoder->bytes_left=0;
 	encoder->eof=0;
 	encoder->is_writer=is_writer;
+	encoder->output_md5=NULL;
 	apr_md5_init(& encoder->md5_ctx);
 
-	if (encoder_out) *encoder_out = encoder;
+	*encoder_out = encoder;
 
 	*output=new_str;
 ex:
@@ -1270,9 +1308,9 @@ int hlp__chrooter(void)
 	int status;
 	char *libs, *root, *cwd;
 	int fd, len;
-	const char delim[]=" \r\n\t\f";
-	const char so_pre[]="lib";
-	const char so_post[]=".so";
+	static const char delim[]=" \r\n\t\f";
+	static const char so_pre[]="lib";
+	static const char so_post[]=".so";
 	void *hdl;
 	char filename[128];
 
@@ -1474,7 +1512,7 @@ int hlp__format_path(struct estat *sts, char *wc_relative_path,
 	static struct cache_entry_t *cache=NULL;
 	char *path, **env, *cp, *match;
 	struct estat *parent_with_arg;
-	const char ps[2]= { PATH_SEPARATOR, 0};
+	static const char ps[2]= { PATH_SEPARATOR, 0};
 	int len, sts_rel_len, max_len;
 
 
@@ -1690,8 +1728,8 @@ int hlp__strncmp_uline_eq_dash(char *always_ul, char *other, int max)
  * */
 int hlp__is_special_property_name(const char *name)
 {
-	const char prop_pre_toignore[]="svn:entry";
-	const char prop_pre_toignore2[]="svn:wc:";
+	static const char prop_pre_toignore[]="svn:entry";
+	static const char prop_pre_toignore2[]="svn:wc:";
 
 	if (strncmp(name, prop_pre_toignore, strlen(prop_pre_toignore)) == 0 ||
 			strncmp(name, prop_pre_toignore2, strlen(prop_pre_toignore2)) == 0)
@@ -1719,6 +1757,7 @@ int hlp__stream_md5(svn_stream_t *stream, unsigned char md5[APR_MD5_DIGESTSIZE])
 
 	if (md5)
 		apr_md5_init(&md5_ctx);
+	DEBUGP("doing stream md5");
 
 	len=buffer_size;
 	while (len == buffer_size)
@@ -1735,3 +1774,68 @@ ex:
 	return status;
 }
 
+
+/** Delays execution until the next second.
+ * Needed because of filesystem granularities; FSVS only stores seconds, 
+ * not more. */
+int hlp__delay(time_t start, enum opt__delay_e which)
+{
+	if (opt__get_int(OPT__DELAY) & which)
+	{
+		DEBUGP("waiting ...");
+		if (!start) start=time(NULL);
+
+		/* We delay with 25ms accuracy. */
+		while (time(NULL) == start)
+			usleep(25000);
+	}
+
+	return 0;
+}
+
+
+/** -.
+ * We could either generate a name ourself, or just use this function - and 
+ * have in mind that we open and close a file, just to overwrite it 
+ * immediately.
+ *
+ * But by using that function we get the behaviour that 
+ * subversion users already know. */
+int hlp__rename_to_unique(char *fn, char *extension, 
+		const char **unique_name, 
+		apr_pool_t *pool)
+{
+	int status;
+	svn_error_t *status_svn;
+	apr_file_t *tmp_f;
+
+
+	STOPIF_SVNERR( svn_io_open_unique_file2,
+			(&tmp_f, unique_name, fn, extension, 
+			 svn_io_file_del_on_close, pool));
+	STOPIF( apr_file_close(tmp_f), NULL);
+
+	DEBUGP("got unique name for local file: %s", *unique_name);
+
+	if (rename(fn, *unique_name) == -1)
+	{
+		/* Remember error. */
+		status=errno;
+		DEBUGP("renaming %s to %s gives an error %d.", 
+				fn, *unique_name, status);
+
+		/* The rename() should kill the file.
+		 * But if it fails, we'd keep that file here - and that's not 
+		 * ncessary. */
+		if (unlink(*unique_name) == -1)
+			/* On error just put a debug message - we'll fail either way. */
+			DEBUGP("Cannot unlink %s: %d", *unique_name, errno);
+
+		STOPIF(status, 
+				"Cannot rename local file to unique name %s", 
+				*unique_name);
+	}
+
+ex:
+	return status;
+}

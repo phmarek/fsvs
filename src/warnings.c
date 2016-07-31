@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2007 Philipp Marek.
+ * Copyright (C) 2006-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -56,6 +56,8 @@ static struct wa__warnings wa___warn_options[_WRN__LAST_INDEX]=
 
 	[WRN__DIFF_EXIT_STATUS]			=	{ "diff-status", WA__IGNORE },
 
+	[WRN__IGNPAT_WCBASE]				=	{ "ignpat-wcbase", WA__WARN_ALWAYS },
+
 	[WRN__TEST_WARNING]					=	{ "_test-warning", WA__IGNORE },
 };
 
@@ -66,14 +68,12 @@ static FILE *warn_out;
 
 /** -.
  * */
-int wa__init(void)
+int wa__split_process(char *warn, int prio)
 {
-	char *warn, *input;
 	int status;
+	char *input;
 
 	status=0;
-	warn=getenv(WARNINGS_ENV);
-
 	input=warn;
 	while (warn && *warn)
 	{
@@ -83,9 +83,30 @@ int wa__init(void)
 		/* As per the strtok() rules - input only set on first call. */
 		input=NULL;
 
-		STOPIF( wa__set_warn_option(warn, PRIO_ENV),
-				"From environment variable %s", WARNINGS_ENV);
+		STOPIF( wa__set_warn_option(warn, prio),
+				"In string %s", warn);
 	}
+
+ex:
+	return status;
+}
+
+
+/** -.
+ *
+ * \todo Deprecate, as FSVS_WARNING is allowed?
+ * */
+int wa__init(void)
+{
+	int status;
+	char *warn;
+
+	status=0;
+	warn=getenv(WARNINGS_ENV);
+
+	if (warn)
+		STOPIF( wa__split_process(warn, PRIO_ENV), 
+				"From environment variable %s", WARNINGS_ENV);
 
 ex:
 	return status;
@@ -94,10 +115,10 @@ ex:
 
 /**
  * -.
- * The given string is of the format \e warning = \e action (without 
- * whitespace).
- * \a action can be any of the warning_action_e numbers; warning is the
- * startstring of any of the \ref wa___warn_options.
+ * The given string is of the format \c warning=action.
+ *
+ * \a action can be any of the wa__warn_action_text[] strings; \a warning 
+ * is the startstring of any of the \ref wa___warn_options.
  * If more than one warnings matches this string, all are set to the given
  * action.
  * The command line option looks like this: \c -Wmeta-mtime=ignore. */
@@ -124,8 +145,10 @@ int wa__set_warn_option(char *stg, enum opt__prio_e prio)
 			"The warning action specification '%s' is invalid",
 			delim+1);
 
-	/* Look for option(s) */
-	status=ENOENT;
+	/* Look for option(s).
+	 * If we return ENOENT it looks to opt__load_env() as if it's simply no 
+	 * valid key - and gets ignored. So we return EINVAL. */
+	status=EINVAL;
 	len=delim-stg;
 	warning=wa___warn_options;
 	for(index=0; index<_WRN__LAST_INDEX; index++, warning++)
@@ -231,7 +254,7 @@ int wa__summary(void)
 	for(i=0; i<_WRN__LAST_INDEX; i++)
 	{
 		DEBUGP("%d# %s: %dx",
-		i,
+				i,
 				wa___warn_options[i].text,
 				wa___warn_options[i].count);
 

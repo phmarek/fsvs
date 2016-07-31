@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2008 Philipp Marek.
+ * Copyright (C) 2005-2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -304,7 +304,7 @@ svn_error_t *cb___delete_entry(const char *utf8_path,
 		sts->remote_status = FS_REMOVED;
 
 		if (action->repos_feedback)
-			STOPIF( action->repos_feedback(sts, NULL), NULL);
+			STOPIF( action->repos_feedback(sts), NULL);
 
 		/** Allow lower priority entries to be seen. 
 		 * A bit of a hack. 
@@ -404,6 +404,21 @@ ex:
 }
 
 
+int cb___close(struct estat *sts)
+{
+	int status;
+
+	status=0;
+	sts->repos_rev = cb___dest_rev;
+
+	if (action->repos_feedback)
+	  STOPIF( action->repos_feedback(sts), NULL);
+
+ex:
+	return status;
+}
+
+
 svn_error_t *cb___close_directory(
 		void *dir_baton,
 		apr_pool_t *pool)
@@ -411,11 +426,7 @@ svn_error_t *cb___close_directory(
 	struct estat *sts=dir_baton;
 	int status;
 
-	status=0;
-	sts->repos_rev = cb___dest_rev;
-
-	if (action->repos_feedback)
-	  STOPIF( action->repos_feedback(sts, NULL), NULL);
+	STOPIF( cb___close(sts), NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -546,15 +557,12 @@ svn_error_t *cb___close_file(void *file_baton,
 		const char *text_checksum,
 		apr_pool_t *pool)
 {
-	struct estat *sts UNUSED=file_baton;
+	struct estat *sts=file_baton;
 	int status;
 
-	status=0;
-	if (sts->remote_status)
-		sts->repos_rev = cb___dest_rev;
 
-	if (action->repos_feedback)
-	  STOPIF( action->repos_feedback(sts, NULL), NULL);
+	STOPIF( cb___close(sts), NULL);
+
 
 	BUG_ON(S_ISDIR(sts->st.mode));
 	if (!S_ISDIR(sts->st.mode) && text_checksum)

@@ -1,9 +1,10 @@
-Detailed Description
+Commands and command line parameters
 
-   FSVS is a client for subversion repositories; it is designed for fast
-   versioning of big directory trees.
+SYNOPSIS
 
-   The following commands are understood by FSVS:
+   fsvs command [options] [args]
+
+   The following commands are understood by fsvs:
 
 Local configuration and information:
 
@@ -23,7 +24,7 @@ Local configuration and information:
           Get differences between files (local and remote)
 
    copyfrom-detect
-          Ask FSVS about probably copied/moved/renamed entries; see cp
+          Ask fsvs about probably copied/moved/renamed entries; see cp
 
 Defining which entries to take:
 
@@ -37,9 +38,9 @@ Defining which entries to take:
           Add entries that would be ignored
 
    cp, mv
-          Tell FSVS that entries were copied.
+          Tell fsvs that entries were copied.
 
-Defining which entries to take:
+Commands working with the repository:
 
    commit
           Send changed data to the repository
@@ -57,7 +58,7 @@ Defining which entries to take:
    remote-status
           Ask what an update would bring
 
-Defining which entries to take:
+Property handling
 
    prop-set
           Set user-defined properties
@@ -68,7 +69,7 @@ Defining which entries to take:
    prop-list
           Get a list of user-defined properties
 
-Defining which entries to take:
+Additional commands used for recovery and debugging:
 
    export
           Fetch some part of the repository
@@ -83,17 +84,16 @@ Defining which entries to take:
 
 Universal options
 
-  -V -- show version
+-V -- show version
 
    -V makes fsvs print the version and a copyright notice, and exit.
 
-  -d and -D -- debugging
+-d and -D -- debugging
 
    If fsvs was compiled using --enable-debug you can enable printing of
    debug messages (to STDOUT) with -d. Per default all messages are
    printed; if you're only interested in a subset, you can use -D
    start-of-function-name.
-
       fsvs -d -D waa_ status
 
    would call the status action, printing all debug messages of all WAA
@@ -113,23 +113,22 @@ Universal options
           debug_output=... -d.
 
    An example: writing the last 200 lines of debug output into a file.
-
    fsvs -o debug_output='| tail -200 > /tmp/debug.log' -d ....
 
-  -N, -R -- recursion
+-N, -R -- recursion
 
    The -N and -R switches in effect just decrement/increment a counter;
    the behavious is chosen depending on that. So -N -N -N -R -R is
    equivalent to -N.
 
-  -q, -v -- verbose/quiet
+-q, -v -- verbose/quiet
 
    Like the options for recursive behaviour (-R and -N) -v and -q just
    inc/decrement a counter. The higher the value, the more verbose.
    Currently only the values -1 (quiet), 0 (normal), and +1 (verbose) are
    used.
 
-  -C -- checksum
+-C -- checksum
 
    -C increments the checksum flag. Normally status tells that a file has
    possible modification, if its mtime has changed but its size not. Using
@@ -137,7 +136,6 @@ Universal options
    modifications.
 
    The values are
-
    0 Normal operations
    1 Check files for modifications if possibly changed
    2 Do an MD5 verification for all files, and check all directories for
@@ -151,7 +149,7 @@ Universal options
           commit and update set the checksum flag to at least 1, to avoid
           missing changed files.
 
-  -f -- filter entries
+-f -- filter entries
 
    This parameter allows to do a bit of filtering of entries, or, for some
    operations, modification of the work done on given entries.
@@ -177,7 +175,7 @@ Universal options
    deleted entries. If the value after all commandline parsing is none, it
    is reset to the default.
 
-  -W warning=action -- set warnings
+-W warning=action -- set warnings
 
    Here you can define the behaviour for certain situations that should
    not normally happen, but which you might encounter.
@@ -200,7 +198,6 @@ Universal options
    the user of possible problems.
 
    The following situations can be handled with this:
-
    meta-mtime, meta-user, meta-group, meta-umask These warnings are issued
    if a meta-data property that was fetched from the repository couldn't
    be parsed. This can only happen if some other program or a user changes
@@ -232,6 +229,9 @@ Universal options
    propname-reserved It is normally not allowed to set a property with the
    prop-set action with a name matching some reserved prefixes.
 
+   ignpat-wcbase This warning is issued if an absolute ignore pattern"
+   does not match the working copy base directory.
+
    diff-status GNU diff has defined that it returns an exit code 2 in case
    of an error; sadly it returns that also for binary files, so that a
    simply fsvs diff some-binary-file text-file would abort without
@@ -239,15 +239,33 @@ Universal options
    per default ignored, but can be used by setting this option to eg.
    stop.
 
-   Also an environment variable FSVS_WARNINGS is used and parsed.
+   Also an environment variable FSVS_WARNINGS is used and parsed; it is
+   simply a whitespace-separated list of option specifications.
 
-  -o [name[=value]] -- other options
+-u URLname[@revision] -- select URLs
+
+   Some commands' operations can be reduced to a subset of defined URLs;
+   the update command is the best example.
+
+   If you have more than a single URL in use for your working copy, and
+   update updates all entries from all URLs. By using this parameter you
+   can tell FSVS to update only a single URL.
+
+   The parameter can be used repeatedly; the value can have multiple URLs,
+   separated by whitespace or one of ",;".
+
+   fsvs up -u base_install,boot@32 -u gcc
+
+   This would get HEAD of base_install and gcc, and set the target
+   revision of the boot URL at 32.
+
+-o [name[=value]] -- other options
 
    This is used for setting some seldom used option, for which default can
    be set in a configuration file (to be implemented, currently only
    command-line).
 
-   For a list of these please see Further options for FSVS.
+   For a list of these please see Further options for FSVS..
 
 add
 
@@ -258,7 +276,7 @@ add
    repository on the next commit, just like other new entries, and will
    therefore be reported as New .
 
-  Example
+Example
 
    Say, you're versioning your home directory, and gave an ignore pattern
    of ./.* to ignore all .* entries in your home-directory. Now you want
@@ -266,13 +284,11 @@ add
    other data.
 
    So you tell fsvs to not ignore these entries:
-
     fsvs add .bashrc .ssh/config .kde3
 
    Now the entries below .kde3 would match your earlier ./.* pattern (as a
    match at the beginning is sufficient), so you have to insert a negative
    ignore pattern (a take pattern):
-
     fsvs ignore --insert t./.kde3
 
    Now a fsvs st would show your entries as New , and the next commit will
@@ -292,23 +308,20 @@ unversion
    they will show up as New again, and you get another chance at ignoring
    them.
 
-  Example
+Example
 
    Say, you're versioning your home directory, and found that you no
    longer want .bash_history and .sh_history versioned. So you do
-
     fsvs unversion .bash_history .sh_history
 
    and these files will be reported as d (will be deleted, but only in the
    repository).
 
    Then you do a
-
     fsvs commit
 
    Now fsvs would report these files as New , as it does no longer know
    anything about them; but that can be cured by
-
     fsvs ignore "./.*sh_history"
 
    Now these two files won't be shown as New , either.
@@ -337,7 +350,6 @@ checkout
    directory path), and does an checkout of these URLs.
 
    Example:
-
  fsvs checkout . http://svn/repos/installation/machine-1/trunk
 
    The distinction whether a directory is given or not is done based on
@@ -373,7 +385,6 @@ commit
    non-related changes, you'd like them to be in separate commits.
 
    So you simply run these commands:
-
  fsvs commit -m "Added some host" /etc/hosts
  fsvs commit -m "Tweaked default runlevel" /etc/inittab
 
@@ -389,12 +400,16 @@ commit
 
 cp
 
- fsvs cp SRC DEST
+ fsvs cp [-r rev] SRC DEST
  fsvs cp dump
  fsvs cp load
 
-   This command marks DEST as a copy of SRC, so that on the next commit of
-   DEST the corresponding source path is sent as copy source.
+   This command marks DEST as a copy of SRC at revision rev, so that on
+   the next commit of DEST the corresponding source path is sent as copy
+   source.
+
+   The default value for rev is BASE, ie. the revision the SRC (locally)
+   is at.
 
    Please note that this command works always on a directory structure -
    if you say to copy a directory, the whole structure is marked as copy.
@@ -433,12 +448,34 @@ cp
    Todo:
           -0 like for xargs?
 
+   Todo:
+          Are different revision numbers for load necessary? Should dump
+          print the source revision number?
+
+   Todo:
+          Copying from URLs means update from there
+
    Note:
           As subversion currently treats a rename as copy+delete, the mv
           command is an alias to cp.
 
    If you have a need to give the filenames dump or load as first
    parameter for copyfrom relations, give some path, too, as in ./dump.
+
+   Note:
+          The source is internally stored as URL with revision number,
+          because else an operation like
+   $ fsvs cp a b
+   $ rm a/1
+   $ fsvs ci a
+   $ fsvs ci b
+
+          would fail - FSVS would send the wrong (too recent!) revision
+          number as source, and so the local filelist would get
+          inconsistent with the repository.
+          But it is not implementd to give an URL as copyfrom source
+          directly - we'd have to fetch a list (and possibly the data!)
+          from the repository.
 
    Todo:
           Filter for dump (patterns?).
@@ -467,7 +504,6 @@ copyfrom-detect
    matching blocks, and the count of possibly copied entries is printed.
 
    Example:
-
    $ fsvs copyfrom-list -v
    newfile1
      md5:oldfileA
@@ -484,7 +520,6 @@ copyfrom-detect
    3 copyfrom relations found.
 
    The abbreviations are:
-
   md5     The MD5 of the new file is identical to that of one or more already
           committed files; there is no percentage.
 
@@ -500,7 +535,7 @@ copyfrom-detect
 
   dirlist The new directory has similar files to the old directory.
           The percentage is (number_of_common_entries)/(files_in_dir1 +
-          files_in_dir2 - number_of_common_entries)
+          files_in_dir2 - number_of_common_entries).
 
    Note:
           Only md5, name and inode matching currently done.
@@ -528,6 +563,9 @@ diff
    the changes in all files in the current directory.
 
    The output for non-files is not defined.
+
+   For entries marked as copy the diff against the (clean) source entry is
+   printed.
 
    Please see also Options relating to the "diff" action and Using
    colordiff.
@@ -575,23 +613,20 @@ ignore
    match is restricted to the directory.
 
    So:
-
      fsvs ignore ./tmp
 
    ignores the directory tmp; but if it has already been committed,
    existing entries would have to be unmarked with fsvs unversion.
    Normally it's better to use
-
      fsvs ignore ./tmp/**
 
    as that takes the directory itself (which might be needed after restore
    as a mount point), but ignore all entries below.
 
-   Other special variants are available, see the documentation Ignore
-   patterns - user part .
+   Other special variants are available, see the documentation Using
+   ignore patterns .
 
    Examples:
-
      fsvs ignore ./proc
      fsvs ignore ./dev/pts
      fsvs ignore './var/log/*-*'
@@ -620,7 +655,6 @@ info
    and revision a working copy is currently at.
 
    Example:
-
      $ fsvs info
      URL: file:
      ....       200  .
@@ -651,7 +685,7 @@ log
    are shown; if no values are given, the logs are given starting from
    HEAD downwards.
 
-   If you use the -v-option, you get the files changed in each revision
+   If you use the -v -option, you get the files changed in each revision
    printed, too.
 
    Currently at most 100 log messages are shown.
@@ -718,59 +752,103 @@ remote-status
    Per default it compares to HEAD, but you can choose another revision
    with the -r parameter.
 
+resolve
+
+ fsvs resolve PATH [PATH...]
+
+   When FSVS tries to update local files which have been changed, a
+   conflict might occur. (For various ways of handling these please see
+   the conflict option.)
+
+   This command lets you mark such conflicts as resolved.
+
 revert
 
  fsvs revert [-rRev] [-R] PATH [PATH...]
 
-   This command replaces a local entry with its repository version.
+   This command undoes local modifications:
+     * An entry that is marked to be unversioned gets this flag removed.
+     * For a already versioned entry (existing in the repository), the
+       local entry is replaced with its repository version, and its status
+       and flags are cleared.
+     * An entry that is a copy destination, but modified, gets reverted to
+       the copy source data.
+     * An unmodified direct copy destination entry, and other uncommitted
+       entries with special flags (manually added, or defined as copied),
+       are changed back to "<i>N</i>"ew -- the copy definition and the
+       special status is removed.
+       Please note that on implicitly copied entries (entries that are
+       marked as copied because some parent directory is the base of a
+       copy) cannot be un-copied; they can only be reverted to their
+       original (copied-from) data, or removed.
+
+   See also HOWTO: Understand the entries' statii.
 
    If a directory is given on the command line all known entries in this
    directory are reverted to the old state; this behaviour can be modified
-   with -N, -R -- recursion, or see below.
+   with -R/-N, or see below.
 
    The reverted entries are printed, along with the status they had before
-   the revert (because the new status is unchanged).
+   the revert (because the new status is per definition unchanged).
 
-   If a revision is given, its data is taken; furthermore, the new status
-   of that entry is shown.
+   If a revision is given, the entries' data is taken from this revision;
+   furthermore, the new status of that entry is shown.
    Note:
           Please note that mixed revision working copies are not possible;
           the BASE revision is not changed, and a simple revert without a
           revision arguments gives you that.
 
-  Difference to update
+Difference to update
 
    If you find that something doesn't work as it should, you can revert
    entries until you are satisfied, and directly commit the new state.
 
    In contrast, if you update to an older version, you
      * cannot choose single entries (no mixed revision working copies),
-     * and you cannot commit the old version with changes, if later
-       changes would conflict in the repository.
+     * and you cannot commit the old version with changes, as later
+       changes will create conflicts in the repository.
 
-  Currently only known (already versioned) entries
+Currently only known entries are handled.
 
-   are handled. If you need a switch (like --delete in rsync(1) ) to
-   remove unknown (new, not yet versioned) entries, to get the directory
-   in the exact state it is in the repository, say so.
+   If you need a switch (like --delete in rsync(1) ) to remove unknown
+   (new, not yet versioned) entries, to get the directory in the exact
+   state it is in the repository, say so.
 
-  If a path is specified whose parent is missing, \c
+   Todo:
+          Another limitation is that just-deleted just-committed entries
+          cannot be fetched via revert, as FSVS no longer knows about
+          them.
+          TODO: If a revision is given, take a look there, and ignore the
+          local data?
+
+If a path is specified whose parent is missing, \c
 
    fsvs complains. We plan to provide a switch (probably -p), which would
    create (a sparse) tree up to this entry.
 
-  Recursive behaviour
+Recursive behaviour
 
    When the user specifies a non-directory entry (file, device, symlink),
    this entry is reverted to the old state. This is the easy case.
 
    If the user specifies a directory entry, see this table for the
    restoration results:
-
    command line switch                        result
    -N                  this directory only (meta-data),
    none                this directory, and direct children of the directory,
    -R                  this directory, and the complete tree below.
+
+Working with copied entries
+
+   If an entry is marked as copied from another entry (and not
+   committed!), a revert will undo the copy setting - which will make the
+   entry unknown again, and reported as new on the next invocations.
+
+   If a directory structure was copied, and the current entry is just a
+   implicitly copied entry, revert would take the copy source as
+   reference, and get the file data from there.
+
+   Summary: Only the base of a copy can be un-copied.
 
 status
 
@@ -809,19 +887,19 @@ status
        opt_checksum.
      * The meta-data flag 'm' shows meta-data changes like properties,
        modification timestamp and/or the rights (owner, group, mode);
-       depending on the verbose/quiet command line parameters, it may be
-       splitted into 'P' (properties), 't' (time) and 'p' (permissions).
+       depending on the -v/-q command line parameters, it may be splitted
+       into 'P' (properties), 't' (time) and 'p' (permissions).
        If 'P' is shown for the non-verbose case, it means only property
        changes, ie. the entries filesystem meta-data is unchanged.
      * A '+' is printed for files with a copy-from history; to see the URL
        of the copyfrom source, use -v twice.
+     * A 'x' signifies a conflict.
 
    Here's a table with the characters and their positions:
-
  *   Without -v    With -v
  *     ....         ......
  *     NmC?         NtpPC?
- *     DP !         D    !
+ *     DPx!         D   x!
  *     R  +         R    +
  *     d            d
  *     n            n
@@ -871,17 +949,15 @@ sync-repos
 
 update
 
- fsvs update [-r rev] [working copy base]
+ ## invalid ## fsvs update [-r rev] [working copy base]
+ fsvs update [-u url@rev ...] [working copy base]
 
-   This command does an update on all URLs for the current working copy.
+   This command does an update on all specified URLs for the current
+   working copy, or, if none is given via -u, all URLs.
 
    It first reads all changes in the repositories, overlays them (so that
    only the highest-priority entries are used), and fetches all necessary
    changes.
-
-   Currently all URLS are update to the same revision (given per -r or
-   HEAD by default) - although there'll be a way to update only some, and
-   to a specific revision.
 
 urls
 
@@ -894,11 +970,10 @@ urls
    this directory and against the given URL.
 
    Example:
-
  fsvs urls http://svn/repos/installation/machine-1/trunk
 
    For a format definition of the URLs please see the chapter Format of
-   URLs .
+   URLs.
 
    Note:
           If there are already URLs defined, and use that command later
@@ -907,22 +982,21 @@ urls
           given list! If you want to start afresh, use something like
  echo "" | fsvs urls load
 
-  Loading URLs
+Loading URLs
 
    You can load a list of URLs from STDIN; use the load subcommand for
    that.
 
    Example:
-
  ( echo 'N:local,prio:10,http://svn/repos/install/machine-1/trunk' ;
      echo 'P:50,name:common,http://svn/repos/install/common/trunk' ) |
    fsvs urls load
 
    Empty lines are ignored.
 
-  Dumping the defined URLs
+Dumping the defined URLs
 
-   To see which URLs are in use for the current WC, you can use dump .
+   To see which URLs are in use for the current WC, you can use dump.
 
    As an optional parameter you can give a format statement; p , n , r, t
    and u are substituted by the priority, name, current revision, target
@@ -930,10 +1004,9 @@ urls
    and a few \ sequences are recognized.
 
    Example:
-
  fsvs urls dump "  %u %n:%p\\n"
    http://svn/repos/installation/machine-1/trunk local:10
    http://svn/repos/installation/common/trunk common:50
 
-   The default format is "N:%n,P:%p,D:%t,%u\\n" .
-
+   The default format is "N:%n,P:%p,D:%t,%u\\n"; for a more readable
+   version you can use -v.

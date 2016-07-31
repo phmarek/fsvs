@@ -1,5 +1,7 @@
 /**
 	\defgroup howto A small collection of HOW-TOs
+	\ingroup userdoc
+	
 
 	Here you see a small collection of HOW-TOs.
 	These aim to give you a small overview about common tasks.
@@ -10,7 +12,7 @@
 */
  
 /**
-	\defgroup howto_backup Backup
+	\defgroup howto_backup HOWTO: Backup
 	\ingroup howto
 
 	This document is a step-by-step explanation how to do backups using \c fsvs.

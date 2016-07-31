@@ -16,9 +16,8 @@ do
 	echo $f > $f-same
 done
 # commit some of the files
-$BINdflt ci -m 1 -q
+$BINdflt ci -m 1 -q -o delay=yes
 ( cd $WC2 && $BINq up )
-sleep 1
 
 for n in new changed
 do
@@ -35,23 +34,22 @@ rmdir 1/2/3/4/5/d
 
 function check
 {
-	cmd=$1
-	shift
-	msg=$3
-	$BINdflt $cmd $1 > $LOGFILE
-	if [[ `wc -l < $LOGFILE` -ne $2 ]]
+# Action, Parameter, Nr. of expected lines, Message
+	msg="$4"
+	$BINdflt $1 $2 > $LOGFILE
+	if [[ `wc -l < $LOGFILE` -ne "$3" ]]
 	then
 		$ERROR "$msg failed - wrong number of output lines."
 	fi
 
-	shift 3
+	shift 4
 	while [[ "$1" != "" ]]
 	do
 		if [[ `grep $1 < $LOGFILE | wc -l` -ne $2 ]]
 		then
 			$ERROR_NB "$msg"
 			cat $LOGFILE
-			$ERROR "expected $2 $1."
+			$ERROR "expected $2*$1."
 		fi
 		shift 2
 	done
@@ -89,13 +87,12 @@ status ". -v" 17 "Verbose status after revert" new 3 changed 3 same 3 "-F ......
 
 # Don't try this at home!
 rm -r *
-revert ". -R" 15 "Full revert" changed 3 same 3 /d 1 new 0 dir 8 5/6 3
+revert ". -R -o delay=yes" 15 "Full revert" changed 3 same 3 /d 1 new 0 dir 8 5/6 3
 # Now the status is empty - all is like it was.
 status "." 0 "Rec st after full revert" changed 0 new 0 same 0 "-F ......" 0
 status ". -v" 14 "Rec verb st after full revert" changed 3 new 0 same 3 "-F ......" 14 /d 1
 $WC2_UP_ST_COMPARE
 
-sleep 1
 for f in $list
 do
 	echo something-else > $f-changed
@@ -103,10 +100,9 @@ do
 done
 
 # Directories whose entries got changed get a new mtime.
-revert ". -R" 10 "Full revert 2" changed 3 same 3 /d 0 new 0 ./1/2 8
+revert ". -R -o delay=yes" 10 "Full revert 2" changed 3 same 3 /d 0 new 0 ./1/2 8
 # But that doesn't work for the root directory ... so we touch it, then we 
 # know exactly what to test for.
-sleep 1
 touch .
 # Now the status is (nearly) empty - all is like it was.
 status "." 1 "Rec st after full revert 2" changed 0 new 0 same 0 "-F ...." 0 "-F .m.." 1

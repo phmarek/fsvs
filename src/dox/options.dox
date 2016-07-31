@@ -1,36 +1,62 @@
 /**
-\defgroup options Further options for FSVS
-\ingroup compat
+\defgroup options Further options for FSVS.
+\ingroup userdoc
 
-Some other options can be set for FSVS.
+List of settings that modify FSVS' behaviour.
 
-\note Not all configuration files are read yet; currently only \c 
-$FSVS_CONF/config is used.
+FSVS understands some other options, that modify its behaviour.
 
-These are read from the configuration files \c $FSVS_CONF/fsvs.conf and (if 
-\c $HOME is set) \c $HOME/.fsvs.conf or can be set on the commandline via 
-\c -o.
 
-The (planned) priorities are
-- Command line \e (highest)
-- Environment variables. These are named as <tt>FSVS_<i>{upper-case option 
-	name}</i></tt>.
-- \c $HOME/.fsvs/wc-dir/config
-- \c $FSVS_CONF/wc-dir/config
-- \c $HOME/.fsvs/config
-- \c $FSVS_CONF/config
-- Default value, compiled in \e (lowest)
+\section o__list Short list of options
+
+FSVS currently knows:<UL>
+<LI>\c colordiff - \ref o_colordiff
+<LI>\c commit_to - \ref o_commit_to
+<LI>\c conflict - \ref o_conflict
+<LI>\c copyfrom_exp - \ref o_copyfrom_exp
+<LI>\c debug_output - \ref o_debug_output
+<LI>\c delay - \ref o_delay
+<LI>\c diff_prg, \c diff_opt, \c diff_extra - \ref o_diff
+<LI>\c dir_sort - \ref o_dir_sort
+<LI>\c empty_commit - \ref o_empty_commit
+<LI>\c filter - \ref o_filter, but see \ref glob_opt_filter "-f".
+<LI>\c log_output - \ref o_logoutput
+<LI>\c merge_prg, \c merge_opt - \ref o_merge
+<LI>\c path - \ref o_opt_path
+<LI>\c softroot - \ref o_softroot
+<LI>\c stat_color - \ref o_status_color
+<LI>\c warning - \ref o_warnings, but see \ref glob_opt_warnings "-W".  
+</UL>
+
+
+\section o__prio Priorities for option setting
+
+The priorities are<ul>
+<li>Command line \e (highest)
+<li>Environment variables. These are named as <tt>FSVS_</tt><i>{upper-case 
+option name}</i>.
+<li><tt>$HOME/.fsvs/wc-dir/config</tt>
+<li><tt>$FSVS_CONF/wc-dir/config</tt>
+<li><tt>$HOME/.fsvs/config</tt>
+<li><tt>$FSVS_CONF/config</tt>
+<li>Default value, compiled in \e (lowest)
+</ul>
+
 \note The \c $HOME-dependent configuration files are not implemented 
 currently. Volunteers?
 
-Furthermore there are "intelligent" run-time dependent settings, 
-like turning off colour output when the output is redirected. Their
+Furthermore there are "intelligent" run-time dependent settings, like 
+turning off colour output when the output is redirected. Their
 priority is just below the command line - so they can always be 
 overridden if necessary.
 
-Example for the commandline:
+
+\section o__examples Examples
+
+Using the commandline:
 \code
 	 fsvs -o path=environment
+	 fsvs -opath=environment
 \endcode
 Using environment variables:
 \code
@@ -157,7 +183,7 @@ There are several option values:
 
 The call is done as
 \code
-	$ diff_prg $diff_opt $file1 --label "$label1" $file2 --label "$label2" diff_extra
+	$diff_prg $diff_opt $file1 --label "$label1" $file2 --label "$label2" diff_extra
 \endcode
 
 \note In \c diff_opt you should use only use command line flags without 
@@ -305,5 +331,116 @@ example:
 
 See \ref glob_opt_deb "-d".
 
-*/
-// vi: filetype=doxygen spell spelllang=en_us formatoptions+=ta : 
+Example:
+\code
+	 fsvs -o debug_output=/tmp/debug.out -d st /etc
+\endcode
+
+
+\section o_empty_commit Doing empty commits
+
+In the default settings FSVS will happily create empty commits, ie.  
+revisions without any changed entry. These just have a revision number, an 
+author and a timestamp; this is nice if FSVS is run via CRON, and you want 
+to see when FSVS gets run.
+
+If you would like to avoid such revisions, set this option to \c no; then 
+such commits will be avoided.
+
+Example:
+\code
+		fsvs commit -o empty_commit=no -m "cron" /etc
+\endcode
+
+
+\section o_copyfrom_exp Avoiding expensive compares on \ref cpfd "copyfrom-detect"
+
+If you've got big files that are seen as new, doing the MD5 comparison can 
+be time consuming. So there's the option \c copyfrom_exp, which takes the 
+usual \c yes (default) and \c no arguments.
+
+\code
+		fsvs copyfrom-detect -o copyfrom_exp=no some_directory
+\endcode
+
+
+\section o_delay Waiting for a time change after working copy operations
+
+If you're using \c fsvs in automated systems, you might see that changes 
+that happen in the same second as a commit are not seen with \ref status 
+later; this is because the timestamp granularity of \c fsvs is 1 second.
+
+For backward compatibility the default value is \c no (don't delay).
+You can set it to any combination of<ul>
+<li>\c commit,
+<li>\c update,
+<li>\c revert and/or
+<li>\c checkout;</ul>
+for \c yes all of these actions are delayed until the clock seconds change.
+
+Example how to set that option via an environment variable:
+\code
+		export FSVS_DELAY=commit,revert
+\endcode
+
+
+\section o_conflict How to resolve conflicts on update
+
+If you start an update, but one of the entries that was changed in the 
+repository is changed locally too, you get a conflict.
+
+
+There are some ways to resolve a conflict:<UL>
+
+<LI>\c local - Just take the local entry, ignore the repository.
+
+<LI>\c remote - Overwrite any local change with the remote version.
+
+<LI>\c both - Keep the local modifications in the file renamed to 
+<tt><i>filename</i>.mine</tt>, and save the repository version as 
+<tt><i>filename</i>.r<i>XXX</i></tt>, ie.  put the revision number after 
+the filename.
+
+These files will be seen as \c New; the conflict must be solved manually, 
+and the resolution made known to FSVS via \ref resolve.
+
+\note As there's no known \e good version after this renaming, a zero byte 
+file gets created. \n
+Any \ref resolve "resolve" or \ref revert "revert" command would make that 
+current, and the changes that are kept in <tt><i>filename</i>.mine</tt> 
+would be lost! \n
+You could only \ref revert to the last repository version, ie. the data of
+<tt><i>filename</i>.r<i>XXX</i></tt>.
+
+
+<LI>\c merge - Call the program \c merge with the common ancestor, the 
+local and the remote version.
+
+If it is a clean merge, no further work is necessary; else you'll get the 
+(partly) merged file, and the two other versions just like with the \c both 
+variant, and have to tell FSVS that the conflict is resolved by \ref 
+resolve.
+</ul>
+
+\note As in the subversion command line client \c svn the auxiliary files 
+are seen as new, although that might change in the future (so that they 
+automatically get ignored).
+
+
+\section o_merge Options regarding the "merge" programm
+
+Like with \ref o_diff "diff", the \c merge operation is not done internally 
+in FSVS.
+
+To have better control
+- <tt>merge_prg</tt>: The executable name, default <tt>"merge"</tt>.
+- <tt>merge_opt</tt>: The default options, default <tt>"-A"</tt>.
+
+The option \c "-p" is always used:
+\code
+	$merge_prg $merge_opt -p $file1 $common $file2
+\endcode
+
+
+ */
+// vi: filetype=doxygen spell spelllang=en_gb formatoptions+=ta : 

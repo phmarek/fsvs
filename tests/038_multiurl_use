@@ -48,6 +48,7 @@ cd $WC_MASTER
 mkdir bin
 echo got ya > bin/ls
 echo something > root-file
+echo is_base > is_base
 $BINq urls $REP_MASTER
 $BINq ci -m "master"
 
@@ -72,8 +73,9 @@ function makeLocal
 # We have to load, as the (wrong) /trunk was already set by prepare
 	echo "$_rep" | $BINq urls load
 	echo "Set URL $_rep for ${!_loc}"
+	echo "is $which" > is_$which
 # Make some empty revisions, so that the revision numbers surely disagree
-  for a in 1 2 3 4 5 6 7 8 9 10 11 12 13
+  for a in a `seq 1 $(($RANDOM % 14))`
 	do
 	  $BINq ci -m $a > /dev/null
 	done
@@ -106,6 +108,7 @@ function Set
 	which=$1
 	num=$2
 	where=$3
+	delay=$4
   _p=$where$which
   cd "${!_p}"
 
@@ -113,11 +116,14 @@ function Set
   echo $which$num > $file1
 	test -d etc || mkdir etc
 	echo $which$num > $file2
-	$BINq ci -m "change local $which - $num"
+# We generate a unix-mode here; maybe we should just take a random number?
+	perl -e '($fn, $data, $nr)=@ARGV; chmod( 0600+unpack("C*",$data)-97+$nr, $fn ) || die $!' $file2 $num $which
+	ls -la $file2
+	$BINq ci -m "change local $which - $num" $delay
+	echo ":: Set $which to $num"
 }
 Set 1 a WC_LOCAL
-Set 2 a WC_LOCAL
-sleep 1
+Set 2 a WC_LOCAL -odelay=yes
 
 ####################################################
 ##### Verify 1
@@ -128,17 +134,25 @@ function Verify
 	num=$2
 	where=$3
   _p=$where$which
+  update_parm=$4
   cd "${!_p}"
 
 # get data
-	$BINq up
+	$BINq up $update_parm
 
-# verify
+# verify data
 	if [[ x`cat $file1`x`cat $file2`x == x${which}${num}x${which}${num}x ]]
 	then
 		$SUCCESS "Working copy local-$which correctly updated ($num)"
 	else
 		$ERROR "Wrong data in $which ($num)"
+	fi
+
+# verify mode
+	ls -la $file2
+  if ! $BINdflt info $file2 | egrep "Status:.*0x0 .unmodified"
+	then
+	  $ERROR "Wrong mode for ${!_p}$file2"
 	fi
 }
 Verify 1 a WC_MACHINE
@@ -148,8 +162,7 @@ Verify 2 a WC_MACHINE
 ##### Set/verify again
 ####################################################
 Set 1 b WC_LOCAL
-Set 2 b WC_LOCAL
-sleep 1
+Set 2 b WC_LOCAL -odelay=yes
 Verify 1 b WC_MACHINE
 Verify 2 b WC_MACHINE
 
@@ -158,14 +171,23 @@ Verify 2 b WC_MACHINE
 ####################################################
 $INFO "Committing locals from machines"
 Set 1 t WC_MACHINE
-Set 2 t WC_MACHINE
-sleep 1
+Set 2 t WC_MACHINE -odelay=yes
 
 ####################################################
 ##### Verify the data in the repository
 ####################################################
 Verify 1 t WC_LOCAL
 Verify 2 t WC_LOCAL
+
+
+$INFO "Doing partial update"
+# Now do a single-URL-update
+Set 1 g WC_LOCAL
+# Has still to be at the old data.
+Verify 1 t WC_MACHINE -ubase
+Verify 1 g WC_MACHINE -ulocal
+$SUCCESS "Partial update works"
+
 
 # TODO: Get both ways of repository numbers - local higher than base, and 
 # vice-versa.

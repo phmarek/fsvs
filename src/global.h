@@ -69,8 +69,8 @@ typedef unsigned long t_ul;
 /** @} */
 
 
-/** \addtogroup PatTypes Pattern types.
- * \ingroup ignpat
+/** \anchor PatTypes
+ * \name Pattern types.
  *
  * The ignore/take specifications can be in several forms; please
  * see the doc/IGNORING documentation.  */
@@ -79,12 +79,15 @@ typedef unsigned long t_ul;
 #define PT_PCRE (2)
 #define PT_DEVICE (3)
 #define PT_INODE (4)
+#define PT_SHELL_ABS (5)
 
 /**  Data storage for ignore patterns. */
 struct ignore_t {
-	/** The pattern string as given by the user */
+	/** The pattern string as given by the user, including flags. */
 	char *pattern,
-			 /** The \e compiled pattern, eg. translated from shell to PCRE. */
+			 /** The calculated pattern string.
+				* Does no longer include the flags (like \e take), and shell syntax 
+				* is converted to PCRE. */
 			 *compare_string;
 
 	union {
@@ -195,6 +198,9 @@ struct url_t {
 	svn_ra_session_t *session;
 	/** The pool this session was allocated in. */
 	apr_pool_t *pool;
+	/** Flag saying whether this URL should be done.
+	 * Should not be queried directly, but by using url__to_be_handled().  */
+	int to_be_handled;
 };
 
 
@@ -271,6 +277,8 @@ struct estat {
 	/** Revision of this entry. Currently only the value in the root entry is 
 	 * used; this will be moved to \c * \ref url and removed from here. */
 	svn_revnum_t repos_rev;
+	/** The revision number before updating. */
+	svn_revnum_t old_rev;
 
 	/** The parent of this entry, used for tree walking.
 	 * Must be \c NULL for the root entry and the root entry alone. */
@@ -355,9 +363,11 @@ struct estat {
 		struct {
 			/** Used in waa__input_tree() and waa__update_tree(). */
 			unsigned child_index;
-			/** Update for a directory. Defined with child_index,
-			 * as this is used while looping in waa__update_tree() and would 
-			 * overwrite the parent's dir_pool. */
+			/** Local pool while updating a directory.
+			 * For the children in a directory we have to create subpools in \ref 
+			 * up__apply_textdelta(); the local \c pool argument is too 
+			 * short-lived, they have to have at least the lifetime of their 
+			 * parent directories. */
 			apr_pool_t *dir_pool;
 		};
 		/* output_tree */
@@ -370,9 +380,6 @@ struct estat {
 	/** \name Common variables for all types of entries. */
 	/** Flags for this entry. See \ref EntFlags for constant definitions. */
 	int flags;
-
-	/** Where this entry was copied from. */
-	struct estat *copyfrom_src;
 
 	/** Length of path up to here. Does not include the \c \\0. See \ref 
 	 * ops__calc_path_len. */
@@ -446,6 +453,8 @@ struct estat {
 #define RF_COPY_BASE (16)
 /** Set if this entry got implicitly copied (sub-entry). */
 #define RF_COPY_SUB (32)
+/** Has this entry a conflict? */
+#define RF_CONFLICT (64)
 /** Whether this entry was just created by \a ops__traverse(). */
 #define RF_ISNEW (1<<19)
 /** Print this entry, even if not changed.
@@ -454,11 +463,12 @@ struct estat {
 
 /** Which of the flags above should be stored in the WAA. */
 #define RF___SAVE_MASK (RF_UNVERSION | RF_ADD | RF_CHECK | \
-		RF_COPY_BASE | RF_COPY_SUB | RF_PUSHPROPS)
+		RF_COPY_BASE | RF_COPY_SUB | RF_PUSHPROPS | RF_CONFLICT)
 /** Mask for commit-relevant flags.
  * An entry with \c RF_COPY_BASE must (per definition) marked as \c RF_ADD; 
  * and RF_PUSHPROPS gets folded into FS_PROPERTIES. */
-#define RF___COMMIT_MASK (RF_UNVERSION | RF_ADD)
+#define RF___COMMIT_MASK (RF_UNVERSION | RF_ADD | RF_COPY_BASE | RF_PUSHPROPS)
+#define RF___IS_COPY (RF_COPY_BASE | RF_COPY_SUB)
 
 
 /** \anchor ent_types Entry types.
@@ -833,7 +843,7 @@ extern char propname_mtime[],
 
 
 /** \addtogroup cmds_strings Common command line strings
- * \ingroup cmds
+ * \ingroup compat
  *
  * These strings may have to be localized some time, that's why they're
  * defined in this place. */
@@ -859,5 +869,8 @@ extern int start_path_len;
 #define ANSI__WHITE "\x1b[1;37m"
 #define ANSI__NORMAL "\x1b[0;0m"
 /** @} */
+
+/** For Solaris */
+extern char **environ;
 
 #endif

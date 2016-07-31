@@ -1,0 +1,168 @@
+/**
+  \defgroup howto_entry_statii HOWTO: Understand the entries' statii
+	\ingroup howto
+
+	Transitions between the various statii.
+
+	Here is a small overview about the various entry-statii and their
+	change conditions.
+
+	If you find any mismatches between this graphic and FSVS behaviour, 
+	don't hesitate to ask on the dev@ mailing list.
+
+	\dot
+	digraph {
+		// use tooltip?
+		// Note: the labelangle is manually optimized for the current 
+		// ordering - which isn't stable, so it might go wrong.
+
+		edge [fontname=Arial,
+				 fontsize=7,
+				 labeldistance=0];
+		node [shape=box,
+				 fontname=Arial,
+				 fontsize=9];
+
+		subgraph cluster_2 {
+			color=white;
+
+			// --------------- Statii
+			{
+				rank=same;
+				node [style=bold];
+				New;
+				Not_existing [label="Not existing"];
+			}
+
+			Ignored;
+
+			Deleted;
+
+			{
+				rank=same;
+				Added;
+				CopiedU [label="Copied,\nunchanged"];
+			}
+
+			{
+				rank=same;
+				Changed;
+				Committed [color=green, style=bold];
+			}
+
+			Unversioned [label="To-be-\nunversioned"];
+
+			{
+				rank=same;
+				Conflicted;
+				CopiedC [label="Copied,\nchanged"];
+			}
+
+
+			// --------------- Commands
+			edge [color=brown];
+
+			New -> Added [label="add", URL="\ref add" ];
+			Ignored -> Added [label="add", URL="\ref add"];
+
+			Committed -> Unversioned [label="unversion", URL="\ref unversion"];
+
+			{
+				edge [ label="update", URL="\ref update"];
+				Committed -> Committed;
+				Changed -> Conflicted;
+			}
+
+			Conflicted -> Changed [label="resolve", URL="\ref resolve"];
+
+			{
+				edge [ color=green, URL="\ref commit",
+				  tooltip="commit"];
+				Added -> Committed;
+				New -> Committed;
+				CopiedU -> Committed;
+				Changed -> Committed;
+				CopiedC -> Committed;
+
+				Unversioned -> New [
+					label="commit;\nremoved from\nrepository;\nlocally kept,\nbut forgotten."];
+				Deleted:w -> Not_existing [
+					label="commit;\nremoved from\nrepository\nand local data."];
+			}
+
+
+			New -> CopiedU [label="copy", URL="\ref cp"];
+
+			{
+				edge [ color=blue, URL="\ref revert",
+				  tooltip="revert"];
+				CopiedU -> New;
+				CopiedC -> CopiedU;
+				Changed -> Committed;
+				Deleted -> Committed;
+				Added -> New;
+				Unversioned -> Committed;
+				Conflicted -> Committed;
+			}
+
+
+			// Configuration
+			edge [color=black];
+			New -> Ignored [label="ignore\npattern\nmatches", 
+			  URL="\ref ignore"];
+
+
+			// External
+			edge [color=orange, style=dashed];
+
+			CopiedU -> CopiedC [label="edit"];
+			Committed -> Changed [label="edit"];
+			Committed -> Deleted [label="rm"];
+
+			Not_existing -> New [ label="Create"];
+
+		}
+
+
+		subgraph cluster_1 {
+
+			margin=0;
+			nodesep=0.2;
+			ranksep=0.2;
+			color=white;
+
+			node [shape=plaintext, width=0, height=0, label=""];
+
+
+			{
+				rank=same;
+				revert1 -> revert2 [color=blue, label="revert", 
+				  URL="\ref revert"];
+			}
+
+			{
+				rank=same;
+				commit1 -> commit2 [label="commit", color=green,
+				  URL="\ref commit"];
+			}
+
+
+			{
+				rank=same;
+				other1 -> other2 [color=brown, label="other\ncommands"];
+			}
+			{
+				rank=same;
+				extern1 -> extern2 [color=orange, label="external\nchanges", style=dashed];
+			}
+
+			edge [ style=invis ];
+			revert1 -> commit1 -> other1 -> extern1;
+		}
+
+	}
+	\enddot
+
+*/
+// vi: filetype=doxygen spell spelllang=en_gb
+

@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2007 Philipp Marek.
+ * Copyright (C) 2006-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -44,8 +44,8 @@
  * fsvs urls http://svn/repos/installation/machine-1/trunk
  * \endcode
  *
- * For a format definition of the URLs please see the 
- * chapter \ref url_format .
+ * For a format definition of the URLs please see the chapter \ref 
+ * url_format.
  *
  * \note
  * If there are already URLs defined, and use that command later again,
@@ -74,12 +74,12 @@
  * 
  * \subsection urls_dump Dumping the defined URLs
  *
- * To see which URLs are in use for the current WC, you can use \c dump .
+ * To see which URLs are in use for the current WC, you can use \c dump.
  *
  * As an optional parameter you can give a format statement; \c %p , \c %n 
  * , \c %r, \c %t and \c %u are substituted by the priority, name, current 
  * revision, target revision and URL.
- * Note: That's not a real \c printf()-format; only these and a few \\ 
+ * Note: That's not a real \c printf()-format; only these and a few \c \\ 
  * sequences are recognized.
  *
  * Example:
@@ -89,11 +89,12 @@
  *   http://svn/repos/installation/common/trunk common:50
  * \endcode 
  *
- * The default format is \c "N:%n,P:%p,D:%t,%u\\n" .
+ * The default format is \c "N:%n,P:%p,D:%t,%u\\n"; for a more readable 
+ * version you can use \ref glob_opt_verb "-v".
  * */
 
 /** \defgroup url_format Format of URLs
- * \ingroup compat
+ * \ingroup userdoc
  *
  * FSVS can now use more than 1 URL for update. The given URLs are 
  * "overlayed" according to their priority, and they get a name (to
@@ -101,7 +102,7 @@
  *
  * Such an <i>extended URL</i> has the form
  * \code
- *   ["name:"{name},]["target:"{t-rev},]["prio:"{prio},]["target:"{rev},]URL
+ *   ["name:"{name},]["target:"{t-rev},]["prio:"{prio},]URL
  * \endcode
  * where URL is a standard URL known by subversion -- 
  * something like <tt>http://....</tt>, <tt>svn://...</tt> or
@@ -145,6 +146,10 @@
  * After all, this URL should already be known, as there's a list of URLs to 
  * update from.
  *
+ * You should only use alphanumeric characters and the underscore here; or, 
+ * in other words, \c \\w or \c [a-zA-Z0-9_]. (Whitespace, comma and 
+ * semicolon get used as separators.)
+ *
  *
  * \section url_target What can I do with the target revision?
  *
@@ -154,7 +159,7 @@
  * Please note that the given revision number overrides the \c -r parameter 
  * - which sets the destination for all URLs.
  *
- * The default target is HEAD.
+ * The default target is \c HEAD.
  *
  * \note In subversion you can enter \c URL\@revision - this syntax may be 
  * implemented in fsvs too. (But it has the problem, that as soon as you 
@@ -189,6 +194,16 @@
  * */
 
 
+/** -.
+ *
+ * Does get \c free()d by url__close_sessions().
+ *
+ * See \ref glob_opt_urls "-u" for the specification. */
+char **url__parm_list=NULL;
+int url__parm_list_len=0,
+		url__parm_list_used;
+
+
 
 /** -.
  *
@@ -207,8 +222,9 @@ int url__find_by_name(const char *name, struct url_t **storage)
 	status=EADDRNOTAVAIL;
 	for(i=0; i<urllist_count; i++)
 	{
-		/* Using "!(->name | name)" might be faster, but this is clearer ... */
-		if ( (!urllist[i]->name && !name) ||
+		/* Check for NULL name, and allow NULL === "", too. */
+		if (!urllist[i]->name ?
+				(!name || !*name) :
 				(strcmp(urllist[i]->name, name) == 0) )
 		{
 			if (storage) *storage=urllist[i];
@@ -387,7 +403,7 @@ int url__parse(char *input, struct url_t *storage, int *def_parms)
 				strncmp("P:", cur, nlen) == 0)
 		{
 			STOPIF_CODE_ERR( have_seen & HAVE_PRIO, EINVAL, 
-					"F!ound two priorities in URL '%s'; only one allowed.",
+					"!Found two priorities in URL '%s'; only one allowed.",
 					input);
 			eurl.priority=strtol(value, &cp, 0);
 			STOPIF_CODE_ERR( cp == value || *cp != ',', EINVAL,
@@ -683,7 +699,7 @@ int url__load_list(char *dir, int reserve_space)
 
 	/* ENOENT must be possible without an error message. 
 	 * The space must always be allocated. */
-	status=waa__open_byext(dir, WAA__URLLIST_EXT, 0, &fh);
+	status=waa__open_byext(dir, WAA__URLLIST_EXT, WAA__READ, &fh);
 	if (status==ENOENT)
 	{
 		STOPIF( url__allocate(reserve_space), NULL);
@@ -798,8 +814,7 @@ int url__output_list(void)
 	STOPIF( url___set_internal_nums(), 
 			"Setting the internal numbers failed.");
 
-	/* Open for writing. */
-	STOPIF( waa__open_byext(NULL, WAA__URLLIST_EXT, 1, &fh), NULL);
+	STOPIF( waa__open_byext(NULL, WAA__URLLIST_EXT, WAA__WRITE, &fh), NULL);
 	for(i=0; i<urllist_count; i++)
 	{
 		url=urllist[i];
@@ -883,6 +898,10 @@ int url__close_sessions(void)
 	struct url_t *cur;
 
 	status=0;
+
+	IF_FREE(url__parm_list);
+	url__parm_list_len=url__parm_list_used=0;
+
 	for(i=0; i<urllist_count; i++)
 	{
 		cur=urllist[i];
@@ -922,7 +941,10 @@ int url___dump(char *format)
 	struct url_t *url;
 
 
-	if (!format) format="N:%n,P:%p,%u\\n";
+	if (!format) 
+		format= opt_verbose>0 ? 
+			"%u\\n\tname: \"%n\"; priority: %p; current revision: %r; target: %t;\\n":
+			"N:%n,P:%p,%u\\n";
 
 	status=0;
 	for(i=0; i < urllist_count; i++)
@@ -1029,7 +1051,7 @@ ex:
 
 /** -.
  * The space for the output is allocated, and must not be freed. */
-int urls__full_url(struct estat *sts, char *path, char **url)
+int url__full_url(struct estat *sts, char *path, char **url)
 {	
 	static const char none[]="(none)";
 	static struct cache_t *cache=NULL;
@@ -1071,9 +1093,31 @@ ex:
 }
 
 
+/** -. */
+int url__find(char *url, struct url_t **output)
+{
+	int i;
+	struct url_t *cur;
+
+	/* The URLs are in sorted order (by priority!), so just do a linear 
+	 * search.  */
+	for(i=0; i<urllist_count; i++)
+	{
+		cur=urllist[i];
+		if (strncmp(cur->url, url, cur->urllen) == 0)
+		{
+			*output = cur;
+			return 0;
+		}
+	}
+
+	return ENOENT;
+}
+
+
 /** -.
  * Writes the given URLs into the WAA. */
-int urls__work(struct estat *root UNUSED, int argc, char *argv[])
+int url__work(struct estat *root UNUSED, int argc, char *argv[])
 {
 	int status, fh, l, i, had_it;
 	char *dir;
@@ -1164,3 +1208,79 @@ ex:
 }
 
 
+/** -.
+ * This function takes a list of URL names (and optionally target 
+ * revisions), and marks the URLs by setting url_t::to_be_handled.
+ *
+ * \ref url__parm_list gets destroyed. */
+int url__mark_todo(void)
+{
+	int status;
+	char *parm, *url_string, *rev_str, **list;
+	static const char delim[]=",; \t\r\n\f";
+	struct url_t *url;
+
+
+	status=0;
+	if (!url__parm_list_used) goto ex;
+
+	/* Terminate the list */
+	url__parm_list[url__parm_list_used] = NULL;
+	list=url__parm_list;
+	while (*list)
+	{
+		parm=*(list++);
+
+		url_string=strtok(parm, delim);
+		while (url_string && *url_string)
+		{
+			DEBUGP("marking URL %s", url_string);
+
+			rev_str=strchr(url_string, '@');
+			if (rev_str) *(rev_str++)=0;
+
+			STOPIF( url__find_by_name(url_string, &url), 
+					"!No URL with name \"%s\" found", url_string);
+
+			if (url->to_be_handled)
+				DEBUGP("URL %s mentioned multiple times", url->url);
+			url->to_be_handled=1;
+
+			/* TODO: That should be better; -r should override given URLs without 
+			 * explicit revision. */
+			if (rev_str) 
+				STOPIF( hlp__parse_rev(rev_str, NULL, & url->target_rev), NULL);
+
+			url_string=strtok(NULL, delim);
+		}	
+	}
+
+ex:
+	return status;
+}
+
+
+/** -.
+ *
+ * We may have to reallocate. We don't want to allocate a pointer 
+ * for each argument - we might be run with something like "find / 
+ * -type f | xargs fsvs update". */
+int url__store_url_name(char *parm)
+{
+	int status;
+
+	status=0;
+	/* The terminating NULL must be applied later, too. */
+	if (url__parm_list_used+2 >= url__parm_list_len)
+	{
+		url__parm_list_len= url__parm_list_len ? url__parm_list_len*2 : 8;
+		url__parm_list=realloc(url__parm_list, 
+				url__parm_list_len*sizeof(*url__parm_list));
+		STOPIF_ENOMEM(!url__parm_list);
+	}
+
+	url__parm_list[url__parm_list_used++] = parm;
+
+ex:
+	return status;
+}

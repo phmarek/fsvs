@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2006-2007 Philipp Marek.
+ * Copyright (C) 2006-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <time.h>
+#include <fcntl.h>
 
 
 #include "global.h"
@@ -21,6 +22,7 @@
 #include "ignore.h"
 #include "waa.h"
 #include "racallback.h"
+#include "cp_mv.h"
 #include "warnings.h"
 
 
@@ -62,7 +64,10 @@
  * output the changes in all files <b>in the current directory</b>.
  *
  * The output for non-files is not defined.
- * 
+ *
+ * For entries marked as copy the diff against the (clean) source entry is 
+ * printed.
+ *
  * Please see also \ref o_diff and \ref o_colordiff. */
 
 
@@ -150,13 +155,16 @@ int df__do_diff(struct estat *sts,
 	static char *last_tmp_file=NULL;
 	static char *last_tmp_file2=NULL;
 	pid_t tmp_pid;
-	char *path, *disp_path;
-	int len;
+	char *path, *disp_dest, *disp_source;
+	int len_d, len_s;
 	char *b1, *b2;
 	struct sstat_t new_stat;
 	svn_revnum_t from, to;
 	char short_desc[10];
 	char *new_mtime_string, *other_mtime_string;
+	char *url_to_fetch;
+	int is_copy;
+	int fdflags;
 
 
 	status=0;
@@ -210,7 +218,21 @@ int df__do_diff(struct estat *sts,
 	if (!sts) goto ex;
 
 
+	url_to_fetch=NULL;
+	/* If this entry is freshly copied, get it's source URL. */
+	is_copy=sts->flags & RF___IS_COPY;
+	if (is_copy)
+	{
+		/* Should we warn if any revisions are given? Can we allow one? */
+		STOPIF( cm__get_source(sts, NULL, &url_to_fetch, &rev1, 0), NULL);
+		/* \TODO: That doesn't work for unknown URLs - but that's needed as 
+		 * soon as we allow "fsvs cp URL path".  */
+		STOPIF( url__find(url_to_fetch, &sts->url), NULL);
+	}
+
 	current_url = sts->url;
+
+
 	/* We have to fetch a file and do the diff, so open a session. */
 	STOPIF( url__open_session(NULL), NULL);
 
@@ -222,7 +244,7 @@ int df__do_diff(struct estat *sts,
 	 * \e To is the newer version - 2nd revision, or local file. */
 	if (rev2 != 0)
 	{
-		STOPIF( rev__get_file(sts, rev2, 
+		STOPIF( rev__get_file(sts, rev2, NULL,
 					&to, &last_tmp_file2,
 					global_pool),
 				NULL);
@@ -230,7 +252,7 @@ int df__do_diff(struct estat *sts,
 	new_stat=sts->st;
 
 	/* Now fetch the \e old version. */
-	STOPIF( rev__get_file(sts, rev1, 
+	STOPIF( rev__get_file(sts, rev1, url_to_fetch,
 				&from, &last_tmp_file,
 				global_pool),
 			NULL);
@@ -243,20 +265,34 @@ int df__do_diff(struct estat *sts,
 	if (!last_child)
 	{
 		STOPIF( ops__build_path( &path, sts), NULL);
-		STOPIF( hlp__format_path(sts, path, &disp_path), NULL);
-		len=strlen(disp_path);
+		STOPIF( hlp__format_path(sts, path, &disp_dest), NULL);
+
+		disp_source= is_copy ? url_to_fetch : disp_dest;
+
+		len_d=strlen(disp_dest);
+		len_s=strlen(disp_source);
+
 
 		if (cdiff_pipe != STDOUT_FILENO)
+		{
 			STOPIF_CODE_ERR( dup2(cdiff_pipe, STDOUT_FILENO) == -1, errno,
 					"Redirect output");
+
+			/* Problem with svn+ssh - see comment below. */
+			fdflags=fcntl(STDOUT_FILENO, F_GETFD);
+			fdflags &= ~FD_CLOEXEC;
+			/* Does this return errors? */
+			fcntl(STDOUT_FILENO, F_SETFD, fdflags);
+		}
+
 
 		/* Checking \b which return value we get is unnecessary ... 
 		 * On \b every error we get \c -1 .*/
 		/* We need not be nice with memory usage - we'll be replaced soon. */
 
 		/* 30 chars should be enough for everyone */
-		b1=malloc(len + 60 + 30);
-		b2=malloc(len + 60 + 30);
+		b1=malloc(len_s + 60 + 30);
+		b2=malloc(len_d + 60 + 30);
 
 		new_mtime_string=strdup(ctime(&new_stat.mtim.tv_sec ));
 		STOPIF_ENOMEM(!new_mtime_string);
@@ -264,26 +300,26 @@ int df__do_diff(struct estat *sts,
 		STOPIF_ENOMEM(!other_mtime_string);
 
 		sprintf(b1, "%s  \tRev. %llu  \t(%-24.24s)", 
-				disp_path, (t_ull) from, other_mtime_string);
+				disp_source, (t_ull) from, other_mtime_string);
 
 		if (rev2 == 0)
 		{
 			sprintf(b2, "%s  \tLocal version  \t(%-24.24s)", 
-					disp_path, new_mtime_string);
+					disp_dest, new_mtime_string);
 			strcpy(short_desc, "local");
 		}
 		else
 		{
 			sprintf(b2, "%s  \tRev. %llu  \t(%-24.24s)", 
-					disp_path, (t_ull) to, new_mtime_string);
+					disp_dest, (t_ull) to, new_mtime_string);
 			sprintf(short_desc, "r%llu", (t_ull) to);
 		}
 
 
 		/* Print header line, just like a recursive diff does. */
 		STOPIF_CODE_ERR( printf("diff -u %s.r%llu %s.%s\n", 
-					disp_path, (t_ull)from, 
-					disp_path, short_desc) < 0, errno,
+					disp_source, (t_ull)from, 
+					disp_dest, short_desc) < 0, errno,
 				"Diff header");
 
 
@@ -322,7 +358,8 @@ int df__do_diff(struct estat *sts,
 					"--label", b2,
 					opt__get_string(OPT__DIFF_EXTRA),
 					NULL) == -1, errno,
-				"Starting the diff program failed");
+				"Starting the diff program \"%s\" failed",
+				opt__get_string(OPT__DIFF_PRG));
 	}
 
 ex:
@@ -362,6 +399,7 @@ ex:
 }
 
 
+/// FSVS GCOV MARK: df___signal should not be executed
 /** Signal handler function.
  * If the user wants us to quit, we remove the temporary files, and exit.  
  *
@@ -419,9 +457,16 @@ int df__action(struct estat *sts, char *fn)
 
 		if ( (sts->entry_status & FS_NEW) || !sts->url)
 		{
-			if (opt_verbose>0)
-				printf("Only in local filesystem: %s\n", fn);
-			goto ex;
+			if (sts->flags & RF___IS_COPY)
+			{
+				/* File was copied, we have a source */
+			}
+			else
+			{
+				if (opt_verbose>0)
+					printf("Only in local filesystem: %s\n", fn);
+				goto ex;
+			}
 		}
 
 		/* Local files must have changed; for repos-only diffs do always. */
@@ -457,11 +502,11 @@ ex:
  * */
 int df___colordiff(int *handle, pid_t *cd_pid)
 {
-	const char program[]="colordiff";
+	static const char program[]="colordiff";
 	int status;
 	char *tmp;
 	const int tmp_size=16384;
-	int pipes[2];
+	int pipes[2], fdflags;
 
 
 	status=0;
@@ -497,6 +542,18 @@ int df___colordiff(int *handle, pid_t *cd_pid)
 	}
 
 	close(pipes[0]);
+
+
+	/* For svn+ssh connections a ssh process is spawned off.
+	 * If we don't set the CLOEXEC flag, it inherits the handle, and so the 
+	 * colordiff child will never terminate - it might get data from ssh, after 
+	 * all. */
+	fdflags=fcntl(pipes[1], F_GETFD);
+	fdflags |= FD_CLOEXEC;
+	/* Does this return errors? */
+	fcntl(pipes[1], F_SETFD, fdflags);
+
+
 	*handle=pipes[1];
 	DEBUGP("colordiff is %d", *cd_pid);
 
@@ -543,10 +600,9 @@ int df__work(struct estat *root, int argc, char *argv[])
 
 	status=waa__read_or_build_tree(root, argc, normalized, argv, NULL, 1);
 	if (status == ENOENT)
-	{
 		STOPIF( status, 
-				"No WAA information found; you probably didn't commit.");
-	}
+				"!No WAA information found; you probably didn't commit.");
+	STOPIF( status, "No working copy base found?");
 
 	STOPIF( df___cleanup(), NULL);
 

@@ -15,7 +15,6 @@ file_i=$DIR/${IGN}_file
 logfile=$LOGDIR/016.logfile
 
 mkdir $DIR
-sleep 1
 
 for a in  $file1 $file_i $file2
 do
@@ -52,7 +51,8 @@ $BINq add $file1
 # The added file is un-added by this operation, so add it again.
 mv "$p.bak" "$p"
 # We cannot do a commit, because that would make the added file permanent.
-$BINq add $file2 $file1
+$BINq add $file1
+( cd $DIR && $BINq add $WC/$file2 )
 
 
 # The directory is marked as added, too.
@@ -96,6 +96,18 @@ then
 else
 	$ERROR "not marked for unversioning?"
 fi
+
+# undo unversion
+$BINq add $file2 > $logfile
+if [[ `$BINdflt st | wc -l` -eq 0 ]]
+then
+	$SUCCESS "add reverts unversioned"
+else
+	$ERROR "Adding an unversioned doesn't work"
+fi
+
+# redo unversion
+$BINq unversion $file2 > $logfile
 
 if [[ `$BINdflt ci -m "unversion" | tee $logfile | egrep "^d\.\.\." | wc -l` -eq 1 ]]
 then

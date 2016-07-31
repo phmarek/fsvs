@@ -27,6 +27,7 @@
 #include "checksum.h"
 #include "helper.h"
 #include "global.h"
+#include "status.h"
 #include "est_ops.h"
 #include "ignore.h"
 #include "actions.h"
@@ -230,14 +231,17 @@ ex:
  * This is more or less a portable reimplementation of GNU \c 
  * getcwd(NULL,0) ... self-allocating the needed buffer.
  *
- * \a where gets the cwd; the optional \a len and \a buffer_size can be set 
- * to the actual length of the cwd, and the number of bytes allocated (if 
- * something should be appended).
+ * \a where gets the cwd, and \b must be free()d; the optional \a ret_len 
+ * can be set to the actual length of the cwd.
+ *
+ * If the caller wants to append some path to the end, and knows how many 
+ * bytes are needed, the \a additional bytes can be requested.
  * 
  * If the cwd has been removed, we get \c ENOENT. But returning that would 
  * not necessarily signal a fatal error to all callers, so we return \c 
  * ENOTDIR in that case. */ 
-int waa__save_cwd(char **where, int *ret_len, int *buffer_size)
+int waa__save_cwd(char **where, int *ret_len, 
+		int additional)
 {
 	int status;
 	/* We remember how many bytes we used last time, hoping that we need no 
@@ -250,8 +254,11 @@ int waa__save_cwd(char **where, int *ret_len, int *buffer_size)
 	status=0;
 	while (1)
 	{
-		path=realloc(path, len);
+		path=realloc(path, len + additional + 4);
 		STOPIF_ENOMEM(!path);
+
+		/* We allocate the needed amount, but lie to getcwd() about the available 
+		 * space - so the caller surely has space left. */
 		if (getcwd(path, len-1)) break;
 
 		STOPIF_CODE_ERR(errno != ERANGE, errno == ENOENT ? ENOTDIR : errno,
@@ -263,59 +270,56 @@ int waa__save_cwd(char **where, int *ret_len, int *buffer_size)
 				len);
 	}
 
-	*where=path;
 	if (ret_len) *ret_len=strlen(path);
-	if (buffer_size) *buffer_size=len;
+	*where=path;
 
 ex:
 	return status;
 }
 
 
-/** Creates a directory \a dir.
+/** -.
  * If it already exists, no error is returned.
  *
  * If needed, the structure is generated recursively.
+ * With \a including_last being \c 0 you can give a filename, and make sure 
+ * that the directories up to there are created.
+ * 
  *
  * \note The mask used is \c 0777 - so mind your umask! */
-int waa__mkdir(char *dir)
+int waa__mkdir(char *dir, int including_last)
 {
 	int status;
 	char *last_ps;
+	struct stat buf;
 
 
-	/* just trying is faster than checking ? 
-	 * EEXIST does not differentiate type of existing node -
-	 * so it may be a file. */
-	if (mkdir(dir, 0777) == -1)
-	{
-		status=errno;
-		switch(status)
-		{
-			case EEXIST:
-				/* Is ok ... */
-				status=0;
-				break;
-			case ENOENT:
-				/* Some intermediate levels are still missing; try again 
-				 * recursively. */
-				last_ps=strrchr(dir, PATH_SEPARATOR);
-				BUG_ON(!last_ps);
-
-				/* Strip last directory, and *always* undo the change. */
-				*last_ps=0;
-				status=waa__mkdir(dir);
-				*last_ps=PATH_SEPARATOR;
-				STOPIF( status, NULL);
-
-				/* Now the parent was done ... so we should not get ENOENT again. */
-				STOPIF( waa__mkdir(dir), NULL);
-				break;
-			default:
-				STOPIF(status, "cannot mkdir(%s)", dir);
-		}
-	}
 	status=0;
+	/* Does something exist here? */
+	if (lstat(dir, &buf) == -1)
+	{
+		if (errno == ENOENT)
+		{
+			/* Some intermediate levels are still missing; try again 
+			 * recursively. */
+			last_ps=strrchr(dir, PATH_SEPARATOR);
+			BUG_ON(!last_ps);
+
+			/* Strip last directory, and *always* undo the change. */
+			*last_ps=0;
+			status=waa__mkdir(dir, 1);
+			*last_ps=PATH_SEPARATOR;
+			STOPIF( status, NULL);
+
+			DEBUGP("%s: last is %d", dir, including_last);
+			/* Now the parent was done ... so we should not get ENOENT again. */
+			if (including_last)
+				STOPIF_CODE_ERR( mkdir(dir, 0777) == -1, errno, 
+						"cannot mkdir(%s)", dir);
+		}
+		else
+			STOPIF(status, "cannot lstat(%s)", dir);
+	}
 
 ex:
 	return status;
@@ -343,7 +347,7 @@ int waa__get_waa_directory(char *path,
 	int status, len, plen, wdlen;
 	char *cp;
 	unsigned char digest[APR_MD5_DIGESTSIZE], *p2dig;
-	const char root[]= { PATH_SEPARATOR, 0};
+	static const char root[]= { PATH_SEPARATOR, 0};
 
 	status=0;
 	cp=NULL;
@@ -357,15 +361,7 @@ int waa__get_waa_directory(char *path,
 		/* This may be suboptimal for performance, but the only usage
 		 * currently is for MD5 of large files - and there it doesn't
 		 * matter, because shortly afterwards we'll be reading many KB. */
-		STOPIF( waa__save_cwd(&cp, &wdlen, &len), NULL);
-
-		/* Check whether we have enough space. */
-		plen=wdlen + 1 + plen + 1 + 3;
-		if (len < plen)
-		{
-			cp=realloc(cp, plen);
-			STOPIF_ENOMEM(!cp);
-		}
+		STOPIF( waa__save_cwd(&cp, &wdlen, 1 + plen + 1 + 3), NULL);
 
 		path= hlp__pathcopy(cp, NULL, cp, "/", path, NULL);
 		/* hlp__pathcopy() can return shorter strings, eg. by removing ./././// 
@@ -433,7 +429,7 @@ int waa__get_waa_directory(char *path,
 
 	Mbin2hex(p2dig, cp, len);
 	if (flags & GWD_MKDIR)
-		STOPIF( waa__mkdir(*erg), NULL);
+		STOPIF( waa__mkdir(*erg, 1), NULL);
 
 	*(cp++) = PATH_SEPARATOR;
 	*cp = '\0';
@@ -456,8 +452,12 @@ ex:
  * the file is opened as a temporary file and \b must be closed with 
  * waa__close(); depending on the success value given there it is renamed
  * to the destination name or deleted. 
+ *
  * This temporary path is stored in a per-filehandle array, so there's no
  * limit here on the number of written-to files. 
+ *
+ * If the flags include \c O_APPEND, no temporary file is used, and no 
+ * filehandle is stored - do simply a \c close().
  *
  * For read-only files simply do a \c close() on their filehandles.
  *
@@ -474,13 +474,19 @@ int waa__open(char *path,
 {
 	char *cp, *orig, *eos, *dest, *start_spec;
 	int fh, status;
-	int to_be_written_to;
+	int use_temp_file;
 
 
 	fh=-1;
 	orig=NULL;
 
-	to_be_written_to=flags & (O_WRONLY | O_RDWR | O_CREAT);
+	/* O_APPEND means that we have to append to the *existing* file, so we 
+	 * may not use the temporaray name.
+	 * But using O_APPEND normally means using O_CREAT, too - so we have to 
+	 * do the specifically. */
+	use_temp_file=(flags & O_APPEND) ? 0 : 
+		(flags & (O_WRONLY | O_RDWR | O_CREAT));
+
 	STOPIF( waa__get_waa_directory(path, &dest, &eos, &start_spec,
 				waa__get_gwd_flag(extension) ), NULL);
 
@@ -493,7 +499,7 @@ int waa__open(char *path,
 	}
 
 	strcpy(eos, extension);
-	if (to_be_written_to)
+	if (use_temp_file)
 	{
 		orig=strdup(dest);
 		STOPIF_ENOMEM(!orig);
@@ -526,6 +532,10 @@ int waa__open(char *path,
 		DEBUGP("reading target %s", dest);
 
 
+	if (flags & O_APPEND)
+		STOPIF( waa__mkdir(dest, 0), NULL);
+
+
 	/* in case there's a O_CREAT */
 	fh=open(dest, flags, 0777);
 	if (fh<0) 
@@ -538,10 +548,10 @@ int waa__open(char *path,
 
 	DEBUGP("got fh %d", fh);
 
-	/* For files written to remember the original filename, indexed by the 
-	 * filehandle. That must be done *after* the open - we don't know the 
-	 * filehandle in advance! */
-	if (to_be_written_to)
+	/* For files that are written to, remember the original filename, indexed 
+	 * by the filehandle. That must be done *after* the open - we don't know 
+	 * the filehandle in advance! */
+	if (use_temp_file)
 	{
 		if (fh >= target_name_array_len) 
 		{
@@ -580,47 +590,44 @@ ex:
  * failed somewhere; so the temporary file is not renamed to the 
  * destination name, just removed.
  *
- * This may be called only for *writeable* files of waa__open and similar;
- * readonly files should just be close()d. */
+ * This may be called only for \b writeable files of waa__open() and 
+ * similar; readonly files should just be \c close()d. */
 int waa__close(int filehandle, int has_failed)
 {
 	int status, do_unlink;
 	struct waa___temp_names_t *target;
-	char *cp;
 
 
 	/* Assume we have to remove the file; only if the rename
 	 * is successful, this ain't true. */
 	do_unlink=1;
 	status=0;
-	BUG_ON(!target_name_array);
-	target=target_name_array+filehandle;
-	BUG_ON(!target);
 
-	DEBUGP("filehandle %d should be %s", filehandle, target->dest_name);
+	target= target_name_array ? target_name_array+filehandle : NULL;
+
+	if (target)
+		DEBUGP("filehandle %d should be %s", filehandle, target->dest_name);
+	else
+		DEBUGP("filehandle %d wasn't opened via waa__open()!", filehandle);
 
 	status=close(filehandle);
 	if (!has_failed) 
 	{
 		STOPIF_CODE_ERR(status == -1, errno, "closing tmp file");
 
-		/* Now that we know we'd like to keep that file, make the directories 
-		 * as needed.
-		 * Sadly we have to duplicate some logic from waa__mkdir().
-		 * Maybe that could be refactored a bit - with a function like 
-		 * waa__make_parent_dirs()? */
-		cp=strrchr(target->dest_name, PATH_SEPARATOR);
-		BUG_ON(!cp);
+		if (target)
+		{
+			/* Now that we know we'd like to keep that file, make the directories 
+			 * as needed. */
+			STOPIF( waa__mkdir(target->dest_name, 0), NULL);
 
-		*cp=0;
-		STOPIF( waa__mkdir(target->dest_name), NULL);
-		*cp=PATH_SEPARATOR;
+			/* And give it the correct name. */
+			STOPIF_CODE_ERR( 
+					rename(target->temp_name, target->dest_name) == -1, 
+					errno, "renaming tmp file from %s to %s",
+					target->temp_name, target->dest_name);
+		}
 
-		/* And give it the correct name. */
-		STOPIF_CODE_ERR( 
-				rename(target->temp_name, target->dest_name) == -1, 
-				errno, "renaming tmp file from %s to %s",
-				target->temp_name, target->dest_name);
 		do_unlink=0;
 	}
 
@@ -629,15 +636,18 @@ int waa__close(int filehandle, int has_failed)
 ex:
 	/* If there's an error while closing the file (or already given 
 	 * due to has_failed), unlink the file. */
-	if (do_unlink)
+	if (do_unlink && target)
 	{
 		do_unlink=0;
 		STOPIF_CODE_ERR( unlink(target->temp_name) == -1, errno,
 				"Cannot remove temporary file %s", target->temp_name);
 	}
 
-	IF_FREE(target->temp_name);
-	IF_FREE(target->dest_name);
+	if (target)
+	{
+		IF_FREE(target->temp_name);
+		IF_FREE(target->dest_name);
+	}
 
 	return status;
 }
@@ -672,28 +682,25 @@ ex:
 
 /** -.
  *
- * This function takes the parameter \a directory, and returns a 
- * freshly allocated bit of memory with the given value or - if \c NULL -
+ * This function takes the parameter \a name, and returns a freshly 
+ * allocated bit of memory with the given value or - if \c NULL -
  * the current working directory.
  *
  * That the string is always freshly allocated on the heap makes
  * sense in that callers can \b always just free it. */
-int waa__given_or_current_wd(char *directory, char **erg)
+int waa__given_or_current_wd(char *name, char **erg)
 {
 	int status;
 
 
 	status=0;
-	if (directory)
+	if (name)
 	{
-		*erg=strdup(directory);
+		*erg=strdup(name);
 		STOPIF_ENOMEM(!*erg);
 	}
 	else
-	{
-		STOPIF( waa__save_cwd( erg, NULL, NULL), NULL);
-
-	}
+		STOPIF( waa__save_cwd( erg, NULL, 0), NULL);
 
 ex:
 	return status;
@@ -755,43 +762,42 @@ ex:
 
 /** -.
  *
- * The \a directory may be \c NULL; then the current working directory
+ * The \a entry_name may be \c NULL; then the current working directory
  * is taken.
- * \a write is just a flag; if set, <tt>O_CREAT | O_WRONLY | O_TRUNC</tt>
- * is given to \c waa__open().
+ * \a write is open mode, like used for \c open(2) (<tt>O_CREAT | O_WRONLY 
+ * | O_TRUNC</tt>) and is given to \c waa__open().
  * 
  * \c ENOENT is returned without giving an error message. */
-int waa__open_byext(char *directory,
+int waa__open_byext(char *entry_name,
 		char *extension,
-		int write,
+		int mode,
 		int *fh)
 {
 	int status;
-	char *dir;
+	char *entry;
 
 
 	status=0;
-	STOPIF( waa__given_or_current_wd(directory, &dir), NULL );
+	entry=NULL;
+	STOPIF( waa__given_or_current_wd(entry_name, &entry), NULL );
 
-	status=waa__open(dir, extension, 
-			write ? (O_CREAT | O_WRONLY | O_TRUNC) : O_RDONLY,
-			fh);
+	status=waa__open(entry, extension, mode, fh);
 	if (status == ENOENT) goto ex;
 	STOPIF(status, NULL);
 
 ex:
-	if (dir) IF_FREE(dir);
+	IF_FREE(entry);
 	return status;
 }
 
 
 /** -.
  * */
-int waa__open_dir(char *directory,
+int waa__open_dir(char *wc_base,
 		int write,
 		int *fh)
 {
-	return waa__open_byext(directory, WAA__DIR_EXT, write, fh);
+	return waa__open_byext(wc_base, WAA__DIR_EXT, write, fh);
 }
 
 
@@ -853,12 +859,12 @@ int waa__build_tree(struct estat *root)
 			sts->entry_type=ops___filetype(&(sts->st));
 		}
 
-		STOPIF( ac__dispatch(sts, NULL), NULL);
+		STOPIF( ac__dispatch(sts), NULL);
 	}
 
 	if (have_ignored)
 		/* Delete per index faster */
-		STOPIF( ops__free_marked(root), NULL);
+		STOPIF( ops__free_marked(root, 0), NULL);
 
 	if (have_found)
 		root->entry_status |= FS_CHANGED | FS_CHILD_CHANGED;
@@ -881,11 +887,16 @@ int waa___find_position(struct estat **new,
 	if (count == 0) 
 		return 0;
 
-	/* A special case. As the directories are normally laid out
-	 * sequentially on a hard disk, the inode number are often
-	 * grouped in their directories.
+	/* A special case. As the directories are normally laid out sequentially 
+	 * on a hard disk, the inodes are often grouped in their directories.
 	 * In a test case (my /etc) this shortcut was taken 1294 times, and
 	 * didn't catch 1257 times (with up to 80 entries in the array). */
+	/* Recent gcov tests are still better:
+	 * - of ~24000 calls of this function
+	 * - 118 times the above shortcut for only a single directory was taken,
+	 * - ~23730 times this single comparision was enough,
+	 * - and the binary search loop below was called only 16 times.
+	 * Hooray! */
 	if (dir___f_sort_by_inode(new, array[0]) < 0)
 	{
 		DEBUGP("short path taken for 0<1");
@@ -935,8 +946,11 @@ int waa___find_position(struct estat **new,
 		else if (status	< 0)
 			bigger_eq=middle;
 		else 
-			/* status == 0 means identical inodes => hardlinks. */
 		{
+			/* status==0 means identical inodes => hardlinks.
+			 * Now these are directories ... but we see hardlinks eg. for binding 
+			 * mounts, so we cannot just abort. */
+			DEBUGP("Jackpot, hardlink!");
 			bigger_eq=middle;
 			break;
 		}
@@ -1079,7 +1093,7 @@ int waa__output_tree(struct estat *root)
 
 
 	directory=NULL;
-	STOPIF( waa__open_dir(NULL, 1, &waa_info_hdl), NULL);
+	STOPIF( waa__open_dir(NULL, WAA__WRITE, &waa_info_hdl), NULL);
 
 	/* allocate space for later use - entry count and similar. */
 	status=strlen(header);
@@ -1099,6 +1113,10 @@ int waa__output_tree(struct estat *root)
 	/* The root entry is visible above all URLs. */
 	root->url=NULL;
 
+	/* That must be done before saving the root entry - the entry_count can get 
+	 * changed! */
+	STOPIF( ops__free_marked(root, 1), NULL);
+
 	STOPIF( ops__save_1entry(root, 0, waa_info_hdl), NULL);
 	root->file_index=complete_count=1;
 
@@ -1111,9 +1129,6 @@ int waa__output_tree(struct estat *root)
 	 * be wasted :-) ! */
 	if (!root->entry_count) goto save_header;
 
-	directory[0]=root->by_inode;
-	max_dir=1;
-
 	/* This check is duplicated in the loop.
 	 * We could do that in ops__save_1entry(), but it doesn't belong here. */
 	if (root->to_be_sorted)
@@ -1122,6 +1137,10 @@ int waa__output_tree(struct estat *root)
 		STOPIF( dir__sortbyinode(root), NULL);
 	}
 
+	/* by_inode might be reallocated by dir__sortbyinode(); so it has be used 
+	 * after that. */
+	directory[0]=root->by_inode;
+	max_dir=1;
 
 	/* as long as there are directories to do... */
 	while (max_dir)
@@ -1167,7 +1186,13 @@ int waa__output_tree(struct estat *root)
 		}
 
 
-		if (sts->entry_type == FT_IGNORE) continue;
+		/* It would be so easy to *not* write ignored entries ...
+		 * but the entry_count in the parent is wrong.
+		 * So we have to remove such entries before putting the entry in the 
+		 * file. */
+		if (S_ISDIR(sts->st.mode))
+			STOPIF( ops__free_marked(sts, 1), NULL);
+
 
 		// do current entry
 		STOPIF( ops__save_1entry(sts, sts->parent->file_index, waa_info_hdl), 
@@ -1281,11 +1306,12 @@ ex:
  * The estat::do_this_entry and estat::do_tree flags are set, and depending 
  * on them (and opt_recursive) estat::entry_status is set.
  * */
-int waa__update_dir(struct estat *old, char *path)
+int waa__update_dir(struct estat *old)
 {
 	int dir_hdl, status;
 	struct estat current;
 	int nr_new, i;
+	char *path;
 
 
 	status=nr_new=0;
@@ -1295,8 +1321,7 @@ int waa__update_dir(struct estat *old, char *path)
 	current.by_inode=current.by_name=NULL;
 	current.entry_count=0;
 
-	if (!path)
-		STOPIF( ops__build_path(&path, old), NULL);
+	STOPIF( ops__build_path(&path, old), NULL);
 
 	/* To avoid storing arbitrarily long pathnames, we just open this
 	 * directory and do a fchdir() later. */
@@ -1356,7 +1381,7 @@ int waa__update_dir(struct estat *old, char *path)
 
 			DEBUGP("found a new one!");
 			sts->entry_status=FS_NEW;
-			STOPIF( ac__dispatch(sts, NULL), NULL);
+			STOPIF( ac__dispatch(sts), NULL);
 			approx_entry_count++;
 
 			STOPIF( ops__set_to_handle_bits(sts), NULL);
@@ -1487,7 +1512,7 @@ int waa__input_tree(struct estat *root,
 
 	length=0;
 	dir_mmap=NULL;
-	status=waa__open_dir(NULL, 0, &waa_info_hdl);
+	status=waa__open_dir(NULL, WAA__READ, &waa_info_hdl);
 	if (status == ENOENT) 
 	{
 		status=-ENOENT;
@@ -1650,7 +1675,7 @@ int waa__input_tree(struct estat *root,
 		}
 
 		if (callback)
-			STOPIF( callback(sts, NULL), NULL);
+			STOPIF( callback(sts), NULL);
 	} /* while (count)  read entries */
 
 
@@ -1681,7 +1706,7 @@ ex:
  *   - it was freshly added.
  *
  * */
-inline int waa___check_dir_for_update(struct estat *sts, char *fullpath)
+inline int waa___check_dir_for_update(struct estat *sts)
 {
 	int status;
 
@@ -1708,23 +1733,28 @@ inline int waa___check_dir_for_update(struct estat *sts, char *fullpath)
 		else
 		{
 			DEBUGP("dir_to_print | CHECK for %s", sts->name);
-			STOPIF( waa__update_dir(sts, fullpath), NULL);
-			/* After that update_dir fullpath may not be valid anymore! */
-			fullpath=NULL;
+			STOPIF( waa__update_dir(sts), NULL);
 		}
 	}
 
+ex:
 	/* Whether to do something with this directory or not shall not be 
 	 * decided here. Just pass it on. */
 	/* The path may not be valid here anymore. */
-	STOPIF( ac__dispatch(sts, NULL), NULL);
+	STOPIF( ac__dispatch(sts), NULL);
 
-ex:
 	return status;
 }
 
 
 /** -.
+ *
+ * On input we expect a tree of nodes starting with \a root; the entries 
+ * that need updating have estat::do_tree set, and their children get set 
+ * via ops__set_to_handle_bits().
+ *
+ * On output we have estat::entry_status set; and the current \ref 
+ * action->local_callback gets called.
  *
  * It's not as trivial to scan the inodes in ascending order as it was when 
  * this part of code was included in 
@@ -1786,7 +1816,7 @@ int waa__update_tree(struct estat *root,
 			if (sts->parent->entry_status & FS_REMOVED)
 			{
 				sts->entry_status=FS_REMOVED;
-				goto next_noparent;
+				goto next;
 			}
 		}
 
@@ -1838,13 +1868,24 @@ int waa__update_tree(struct estat *root,
 			DEBUGP("doing empty directory %s", sts->name);
 			/* Check this entry for added entries. There cannot be deleted 
 			 * entries, as this directory had no entries before. */
-			STOPIF( waa___check_dir_for_update(sts, fullpath), NULL);
+			STOPIF( waa___check_dir_for_update(sts), NULL);
 			/* Mind: \a fullpath may not be valid anymore. */
 		}
 
 
 next:
-		if (sts->parent)
+		/* If this is a normal entry, we print it now.
+		 * Directories are shown after all child nodes have been checked. */
+		if (sts->do_this_entry && 
+				( !S_ISDIR(sts->st.mode) || 
+					(sts->entry_status & FS_REMOVED)) )
+			STOPIF( ac__dispatch(sts), NULL);
+
+
+		/* The parent must be done *after* the last child node ... at least that's  
+		 * what's documented above :-) */
+		if (sts->parent && 
+				!(sts->parent->entry_status & FS_REMOVED) )
 		{
 			sts->parent->child_index++;
 
@@ -1856,20 +1897,15 @@ next:
 				/* Check the parent for added entries. 
 				 * Deleted entries have already been found missing while 
 				 * running through the list. */
-				STOPIF( waa___check_dir_for_update(sts->parent, NULL), NULL);
+				STOPIF( waa___check_dir_for_update(sts->parent), NULL);
 			}
 			else
 				DEBUGP("deferring parent %s/%s", sts->parent->name, sts->name);
 		}
 
-next_noparent:
-		/* If this is a normal entry, we print it now.
-		 * Directories are shown after all child nodes have been checked. */
-		if ((sts->entry_status & FS_REMOVED) || 
-				(sts->do_this_entry && !S_ISDIR(sts->st.mode)))
-			STOPIF( ac__dispatch(sts, NULL), NULL);
 
-		/* How is a "continue" block from perl named in C??  TODO */
+		/* Sadly there's no continue block, like in perl.
+		 * Advance the pointers. */
 		cur_block->first++;
 		cur_block->count--;
 		if (cur_block->count <= 0)
@@ -2229,6 +2265,24 @@ int waa__find_common_base(int argc, char *args[], char **normalized[])
 	STOPIF( opt__load_settings(confname, "config", PRIO_ETC_WC ), NULL);
 
 
+	/* If this command is not filtered, or an invalid filter is defined, 
+	 * change filter to output all entries.
+	 *
+	 * The config file can be parsed only after we know what our base 
+	 * directory is ... so this can't be done directly after command line 
+	 * parsing.
+	 * waa__get_waa_directory() woudn't be enough - some commands, like 
+	 * export, don't use it - but only 2 actions currently allow filtering: 
+	 * status, and commit. And both get here. */
+	if (!action->only_opt_filter ||
+			opt__get_int(OPT__FILTER) == 0) 
+		opt__set_int(OPT__FILTER, PRIO_MUSTHAVE, FILTER__ALL);
+
+	DEBUGP("filter has mask 0x%X (%s)", 
+			opt__get_int(OPT__FILTER),
+			st__status_string_fromint(opt__get_int(OPT__FILTER)));
+
+
 ex:
 	if (status && status!=ENOENT)
 	{
@@ -2247,6 +2301,10 @@ ex:
 
 
 /** -.
+ *
+ * We get a tree starting with \a root, and all entries from \a normalized 
+ * get estat::do_tree and estat::do_this_entry set. These flag gets used by 
+ * waa__update_tree().
  * */
 int waa__partial_update(struct estat *root, 
 		int argc, char *normalized[], char *orig[],
@@ -2397,7 +2455,7 @@ int waa__do_sorted_tree(struct estat *root, action_t handler)
 	struct estat **list, *sts;
 
 
-  status=0;
+	status=0;
 
 	if ( !root->by_name)
 		STOPIF( dir__sortbyname(root), NULL);
@@ -2409,7 +2467,7 @@ int waa__do_sorted_tree(struct estat *root, action_t handler)
 	while ( (sts=*list) )
 	{
 		if (sts->do_this_entry)
-			STOPIF( handler(sts, NULL), NULL);
+			STOPIF( handler(sts), NULL);
 
 		if (sts->do_tree && sts->entry_type==FT_DIR)
 			STOPIF( waa__do_sorted_tree(sts, handler), NULL);
@@ -2476,11 +2534,9 @@ int waa__copy_entries(struct estat *src, struct estat *dest)
 	to_append=NULL;
 	status=0;
 
+	ops__copy_single_entry(src, dest);
 	if (!S_ISDIR(src->st.mode))
-	{
-		ops__copy_single_entry(src, dest);
 		goto ex;
-	}
 
 
 	append_count=0;
@@ -2518,6 +2574,7 @@ int waa__copy_entries(struct estat *src, struct estat *dest)
 		newdata->name=(*tmp)->name;
 		/* Copy old data, and change what's needed. */
 		STOPIF( waa__copy_entries(*tmp, newdata), NULL);
+		/* If URL is different from parent URL, it's a new base. */
 
 		/* Remember new address. */
 		(*tmp) = newdata;

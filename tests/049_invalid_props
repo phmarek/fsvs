@@ -1,0 +1,77 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN WC_COUNT=3 > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+filename=asd
+logfile=$LOGDIR/049.iprop
+
+svndir=$WC2/f
+
+
+svn co $REPURL $svndir
+svnfile=$svndir/$filename
+
+function SetProp
+{
+  test -f $svnfile && rm $svnfile
+	svn ci -m2 $svndir
+
+	echo $RANDOM > $svnfile
+	svn add $svnfile
+	test -n "$1" && svn ps fsvs:owner "$1" $svnfile
+	test -n "$2" && svn ps fsvs:group "$2" $svnfile
+	test -n "$3" && svn ps fsvs:text-time "$3" $svnfile
+	test -n "$4" && svn ps fsvs:unix-mode "$4" $svnfile
+	svn ci -m2 $svndir
+}
+
+SetProp
+$BINdflt up
+# Currently *no* fsvs-properties are set ... so defaults should apply.
+ls -la $filename > $logfile
+if grep -- '-rw-------' < $logfile
+then
+  $SUCCESS "Unset mode gives 0600."
+else
+	cat $logfile
+  $ERROR "Mode should default to 0600"
+fi
+
+# We allow a few seconds off, in case the system is very busy.
+if perl -e 'exit 1 if -M shift() > (3/86400.0)' $filename
+then
+  $SUCCESS "Timestamp is current"
+else
+  $ERROR "Timestamp is wrong"
+fi
+
+
+SetProp "x" "x" "x" "x"
+$BINdflt up
+
+if perl -e 'exit 1 if -M shift() > (3/86400.0)' $filename
+then
+  $SUCCESS "Invalid timestamps are current"
+else
+  $ERROR "Invalid timestamps are wrong"
+fi
+
+if [[ $UID -eq 0 ]]
+then
+	SetProp "x" "x" "" ""
+	$BINdflt up
+#	ls -la $filename
+
+	SetProp "999 a" "999 a" "" ""
+	$BINdflt up
+#	ls -la $filename
+
+  $SUCCESS "arbitrary owner/group ok."
+else
+  $WARN "UID 0 needed to get arbitrary owner/group."
+fi
+

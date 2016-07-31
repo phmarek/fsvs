@@ -6,13 +6,13 @@ $INCLUDE_FUNCS
 cd $WC
 
 file=diff-file
+copy=copy-file
 log=$LOGDIR/026.diff-log
 
 echo "line" > $file
-$BINq ci -m "repos-vers"
+$BINq ci -m "repos-vers" -o delay=yes
 
 echo "something else" > $file
-sleep 1
 
 if [[ `$BINdflt diff $file | wc -l` -eq 6 ]]
 then
@@ -48,5 +48,59 @@ then
 else
 	$ERROR "Too much output for unchanged files!"
 fi
+
+# Tests for diff of copied entries.
+
+cp -a $file $copy
+$BINq cp $file $copy
+# We don't use -a; because of the sleep above we get a different timestamp, 
+# and so the header is printed.
+if [[ `$BINdflt diff $copy | wc -l` -le 1 ]]
+then
+	$SUCCESS "Diff for unchanged, copied, mtime entry"
+else
+	$ERROR "Diff for unchanged, copied, mtime wrong"
+fi
+
+cp -a $file $copy
+# Now they should have the same timestamp, so no change.
+if [[ `$BINdflt diff $copy | wc -l` -le 1 ]]
+then
+	$SUCCESS "Diff for unchanged, copied entry"
+else
+	$BINdflt diff $copy
+	$ERROR "Diff for unchanged, copied unexpected"
+fi
+
+
+echo X > $copy
+if [[ `$BINdflt diff -r HEAD $copy | wc -l` -eq 6 ]]
+then
+	$SUCCESS "Diff for copied"
+else
+	$ERROR "Diff for copied wrong"
+fi
+
+
+chmod 700 $copy
+$BINq ps a b $copy
+$BINq ci -m 1 -o delay=yes
+
+echo Y > $copy
+chmod 550 $copy
+$BINq ps a c $copy
+
+# TODO: user-defined property diff
+if [[ `$BINdflt diff -v $copy | wc -l` -eq 12 ]]
+then
+	$SUCCESS "Diff for changed copy"
+else
+	$BINdflt diff -v $copy
+	$ERROR "Diff for changed copy"
+fi
+
+
+# Try colordiff auto mode
+$BINdflt diff -v $copy -o colordiff=auto > /dev/null
 
 

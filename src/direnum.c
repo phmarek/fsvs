@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -227,8 +227,12 @@ ex:
 
 
 /** Compares two struct estat pointers by device/inode.
- * \return +2, +1, 0, -1, -2, suitable for \a qsort(). */
-int dir___f_sort_by_inodePP(struct estat *a, struct estat *b)
+ * \return +2, +1, 0, -1, -2, suitable for \a qsort().
+ *
+ * That is now an inline function; but without force gcc doesn't inline it 
+ * on 32bit, because of the size (64bit compares, 0x6b bytes).
+ * [ \c __attribute__((always_inline)) in declaration]. */
+int dir___f_sort_by_inodePP(struct estat *a, struct estat *b) 
 {
 	register const struct sstat_t* __a=&(a->st);
 	register const struct sstat_t* __b=&(b->st);

@@ -16,8 +16,7 @@ do
 	echo $a > $p/other-$a
 done
 
-$BINq ci -m 1
-sleep 1
+$BINq ci -m 1 -o delay=yes
 
 mkdir dir2
 echo $WC2 > dir2/wcpath

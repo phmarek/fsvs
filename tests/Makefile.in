@@ -1,4 +1,4 @@
-###
+###   MUST BE EDITED AS UTF-8!   ####
 #
 # BINARY needs to be set to the program to test.
 #
@@ -16,18 +16,22 @@ TEST_PROG_DIR	:= $(shell pwd)
 
 
 VALGRIND	:= valgrind --trace-children=no -v --error-exitcode=1 --log-file=/tmp/valgrind.out --suppressions=$(TEST_PROG_DIR)/valgrind-suppressions.supp
-CALLGRIND	:= valgrind -q --tool=callgrind --collect-systime=yes --collect-jumps=yes --dump-instr=yes
+CALLGRIND	:= valgrind -q --tool=callgrind --collect-systime=yes --collect-jumps=yes --dump-instr=yes --callgrind-out-file=/tmp/valgrind.%p.out 
 MEMCHECK	:= valgrind --leak-check=full --show-reachable=yes --num-callers=15 --log-file=/tmp/valgrind-%p.out --time-stamp=yes 
+MEMCHECK_G:= valgrind --trace-children=no -v --error-exitcode=1 --log-file=/tmp/valgrind.%p.out --suppressions=$(TEST_PROG_DIR)/valgrind-suppressions.supp --gen-suppressions=all
 
-export VALGRIND CALLGRIND
+export VALGRIND CALLGRIND MEMCHECK
 ifeq ($(CHECKER),valgrind)
 override CHECKER	:= $(VALGRIND)
 endif
 ifeq ($(CHECKER),callgrind)
 override CHECKER	:= $(CALLGRIND)
 endif
-ifeq ($(CHECKER),callgrind)
+ifeq ($(CHECKER),memcheck)
 override CHECKER	:= $(MEMCHECK)
+endif
+ifeq ($(CHECKER),memcheck_g)
+override CHECKER	:= $(MEMCHECK_G)
 endif
 
 
@@ -75,6 +79,14 @@ ifeq ($(RANDOM_ORDER), 1)
 TEST_LIST	:= $(shell perl -e 'srand();  while (@ARGV) { print splice(@ARGV, rand(@ARGV), 1),"\n"; } ' $(TEST_LIST))
 endif
 
+# For use by the locale-dependent tests.
+STG_UTF8:=xxç划xWörstCäseTäßt
+# This gives eg. for de_AT "Jän", but in the locale encoding (eg. 8859-1)
+STG_LOC:=$(shell date +%b -d2001-01-27)
+# We don't use the 1st - depending on the timezone settings this might give  
+# us December.
+export STG_UTF8 STG_LOC
+
 
 UID	:= $(shell id -u)
 TESTBASEx ?= /tmp
@@ -98,7 +110,7 @@ WC1	:= $(WC)
 DFLT_REPO	:= $(TESTBASE)/default-repos.dump
 
 export REP REPURL REPSUBDIR REPURLBASE WC WC2 DFLT_REPO WC_COUNT WCBASE
-export BIN BINdflt BINq TEST_PROG_DIR LOGDIR
+export BIN BINdflt BINq TEST_PROG_DIR LOGDIR BIN_FULLPATH
 
 PREPARE_REPOS	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_repos 
 PREPARE_WC1	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_wc1 

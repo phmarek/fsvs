@@ -5,6 +5,8 @@ $PREPARE_CLEAN > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
+logfile=$LOGDIR/003.change_types
+
 if [[ $UID -eq 0 ]]
 then
 	ONLY_ROOT=
@@ -33,17 +35,14 @@ mkdir typechange
 popd > /dev/null
 
 
-echo "     ci"
-$BIN ci -m "inserted types"
-sleep 1
+$BINq ci -m "inserted types" -o delay=yes > $logfile
+rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
 
 # now goto other wc and update
 pushd $WC2 > /dev/null
-echo "     up"
-$BIN up
+$BINq up
 
-echo "     st"
-$BIN st
+$BINq st
 
 $COMPARE_1_2
 popd > /dev/null
@@ -63,10 +62,15 @@ pushd typechange > /dev/null
  done
 popd > /dev/null
 
-echo "     ci"
-$BIN ci -m "changed types"
-sleep 1
-
+$BINq ci -m "changed types" -o delay=yes > $logfile
 
 $WC2_UP_ST_COMPARE
+$SUCCESS "all types changed to other types."
+exit
 
+# Now we change WC1 back via update, and revert everything in WC2.
+$BINq up -r$rev $WC2
+$BINq revert -r$rev -R -R .
+
+$COMPARE_1_2
+$SUCCESS "Revert works across type-changes too."

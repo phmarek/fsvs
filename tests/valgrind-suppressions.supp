@@ -1,127 +1,8 @@
 # :-) vim (-:
 # :4,$g/</exec "normal C   X" line(".") ""
 # :g/^[-=]/normal dd
-
 {
-   X 2 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-}
-{
-   X 11 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-}
-{
-   X 20 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-}
-{
-   X 29 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-}
-{
-   X 38 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-}
-{
-   X 47 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-}
-{
-   X 56 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/libc-2.7.so
-   obj:/lib/ld-2.7.so
-   fun:__libc_dlopen_mode
-   fun:__nss_lookup_function
-   obj:/lib/libc-2.7.so
-   fun:__nss_passwd_lookup
-   fun:getpwuid_r
-   fun:apr_uid_name_get
-}
-{
-   X 72 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/libc-2.7.so
-   obj:/lib/ld-2.7.so
-   fun:__libc_dlopen_mode
-   fun:__nss_lookup_function
-   obj:/lib/libc-2.7.so
-   fun:__nss_passwd_lookup
-   fun:getpwuid_r
-   fun:apr_uid_name_get
-}
-{
-   X 88 
-   Memcheck:Addr4
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/libc-2.7.so
-   obj:/lib/ld-2.7.so
-   fun:__libc_dlopen_mode
-   fun:__nss_lookup_function
-   obj:/lib/libnss_compat-2.7.so
-   fun:_nss_compat_getpwuid_r
-}
-{
-   X 104 
-   Memcheck:Addr4
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/libc-2.7.so
-   obj:/lib/ld-2.7.so
-   fun:__libc_dlopen_mode
-}
-{
-   X 120 
+   X 5 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -137,7 +18,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 136 
+   X 21 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -153,7 +34,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 152 
+   X 37 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -169,7 +50,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 168 
+   X 53 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -185,7 +66,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 184 
+   X 69 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -201,7 +82,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 200 
+   X 85 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -217,7 +98,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 216 
+   X 101 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -233,7 +114,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 232 
+   X 117 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -249,7 +130,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 248 
+   X 133 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -265,7 +146,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 264 
+   X 149 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -281,7 +162,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 280 
+   X 165 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -297,7 +178,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 296 
+   X 181 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -313,7 +194,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 312 
+   X 197 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -329,7 +210,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 328 
+   X 213 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -345,7 +226,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 344 
+   X 229 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -361,7 +242,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 360 
+   X 245 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    obj:/usr/lib/libz.so.1.2.3.3
@@ -377,7 +258,7 @@
    obj:/usr/lib/libsvn_fs_fs-1.so.1.0.0
 }
 {
-   X 376 
+   X 261 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -393,10 +274,10 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 392 
+   X 277 
    Memcheck:Param
    write(buf)
-   fun:write
+   obj:/lib/ld-2.7.so
    fun:apr_file_write
    fun:apr_file_write_full
    fun:svn_io_file_write_full
@@ -410,7 +291,7 @@
    obj:/usr/lib/libsvn_fs_fs-1.so.1.0.0
 }
 {
-   X 409 
+   X 294 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -426,7 +307,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 425 
+   X 310 
    Memcheck:Cond
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -442,7 +323,7 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 441 
+   X 326 
    Memcheck:Value4
    obj:/usr/lib/libz.so.1.2.3.3
    fun:deflate
@@ -458,11 +339,11 @@
    fun:svn_txdelta_send_stream
 }
 {
-   X 457 
+   X 342 
    Memcheck:Param
    write(buf)
-   fun:write
-   obj:/usr/lib/libapr-1.so.0.2.11
+   obj:/lib/ld-2.7.so
+   fun:setptr
    fun:apr_file_seek
    fun:svn_io_file_seek
    obj:/usr/lib/libsvn_fs_fs-1.so.1.0.0
@@ -475,39 +356,7 @@
    fun:ci__directory
 }
 {
-   X 478 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/libc-2.7.so
-   obj:/lib/ld-2.7.so
-   fun:__libc_dlopen_mode
-   fun:__nss_lookup_function
-   obj:/lib/libc-2.7.so
-   fun:__nss_passwd_lookup
-   fun:getpwnam_r
-   obj:/usr/lib/libapr-1.so.0.2.11
-}
-{
-   X 494 
-   Memcheck:Cond
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/ld-2.7.so
-   obj:/lib/libc-2.7.so
-   obj:/lib/ld-2.7.so
-   fun:__libc_dlopen_mode
-   fun:__nss_lookup_function
-   obj:/lib/libc-2.7.so
-   fun:__nss_passwd_lookup
-   fun:getpwnam_r
-   obj:/usr/lib/libapr-1.so.0.2.11
-}
-{
-   X 510 
+   X 359 
    Memcheck:Addr4
    obj:/lib/ld-2.7.so
    obj:/lib/ld-2.7.so
@@ -515,11 +364,767 @@
    obj:/lib/ld-2.7.so
    obj:/lib/ld-2.7.so
    obj:/lib/ld-2.7.so
-   obj:/lib/libc-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
    obj:/lib/ld-2.7.so
    fun:__libc_dlopen_mode
    fun:__nss_lookup_function
-   obj:/lib/libnss_compat-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
+   fun:__nss_passwd_lookup
+}
+{
+   X 375 
+   Memcheck:Addr4
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+}
+{
+   X 391 
+   Memcheck:Addr4
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+   fun:__nss_lookup_function
+   obj:/lib/i686/cmov/libnss_compat-2.7.so
+   fun:_nss_compat_getpwuid_r
+}
+{
+   X 407 
+   Memcheck:Addr4
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+}
+{
+   X 423 
+   Memcheck:Addr4
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+   fun:__nss_lookup_function
+   obj:/lib/i686/cmov/libnss_compat-2.7.so
    fun:_nss_compat_getpwnam_r
 }
-
+{
+   X 439
+   Memcheck:Value4
+   obj:/usr/lib/libz.so.1.2.3.3
+   obj:/usr/lib/libz.so.1.2.3.3
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_stream_close
+   obj:/usr/lib/libsvn_fs_fs-1.so.1.0.0
+   fun:svn_stream_close
+   obj:/usr/lib/libsvn_fs_fs-1.so.1.0.0
+}
+{
+   X 455 
+   Memcheck:Addr4
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+   fun:__nss_lookup_function
+   obj:/lib/i686/cmov/libc-2.7.so
+   fun:__nss_group_lookup
+}
+{
+   X 471 
+   Memcheck:Addr4
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/ld-2.7.so
+   obj:/lib/i686/cmov/libc-2.7.so
+   obj:/lib/ld-2.7.so
+   fun:__libc_dlopen_mode
+   fun:__nss_lookup_function
+   obj:/lib/i686/cmov/libnss_compat-2.7.so
+   fun:_nss_compat_getgrgid_r
+}
+{
+   X 487 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 502 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 517 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 532 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 547 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 562 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 577 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 592 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 607 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 622 
+   Memcheck:Value8
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 637 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 652 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 667 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 682 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 697 
+   Memcheck:Value8
+   obj:/usr/lib/libz.so.1.2.3.3
+   obj:/usr/lib/libz.so.1.2.3.3
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+}
+{
+   X 713 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 728 
+   Memcheck:Param
+   write(buf)
+   fun:__write_nocancel
+   fun:apr_file_write
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   fun:svn_ra_svn_write_string
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   fun:svn_ra_svn_write_cmd
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+}
+{
+   X 745 
+   Memcheck:Value8
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 760 
+   Memcheck:Value8
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 775 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 790 
+   Memcheck:Addr8
+   fun:_wordcopy_fwd_dest_aligned
+   fun:bcopy
+   fun:gdbm_fetch
+   fun:hsh__fetch
+   fun:ci___send_user_props
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 803 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 819 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 835 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 851 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 867 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 883 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 899 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 915 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 931 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 947 
+   Memcheck:Value8
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 963 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 979 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 995 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 1011 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 1027 
+   Memcheck:Value8
+   obj:/usr/lib/libz.so.1.2.3.3
+   obj:/usr/lib/libz.so.1.2.3.3
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+}
+{
+   X 1043 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 1059 
+   Memcheck:Cond
+   obj:/usr/lib/libz.so.1.2.3.3
+   fun:deflate
+   fun:compress2
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   obj:/usr/lib/libsvn_delta-1.so.1.0.0
+   fun:svn_txdelta_send_txstream
+   fun:svn_txdelta_send_stream
+   fun:ci__nondir
+   fun:ci__directory
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 1075 
+   Memcheck:Param
+   write(buf)
+   fun:__write_nocancel
+   fun:apr_file_write
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   fun:svn_ra_svn_read_item
+   fun:svn_ra_svn_read_tuple
+   fun:svn_ra_svn_read_cmd_response
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   fun:ci__work
+   fun:main
+}
+{
+   X 1092
+   Memcheck:Addr8
+   fun:_wordcopy_fwd_dest_aligned
+   fun:bcopy
+   fun:gdbm_fetch
+   fun:hsh__fetch
+   fun:cm___get_base_source
+   fun:cm__get_source
+   fun:ci__directory
+   fun:ci__work
+   fun:main
+}
+{
+   X 1105
+   Memcheck:Addr8
+   fun:_wordcopy_fwd_dest_aligned
+   fun:bcopy
+   fun:gdbm_fetch
+   fun:hsh__fetch
+   fun:prp__fetch
+   fun:prp__s_work
+   fun:main
+}
+{
+   X 1116 
+   Memcheck:Addr8
+   fun:_wordcopy_fwd_dest_aligned
+   fun:bcopy
+   fun:gdbm_fetch
+   fun:hsh__fetch
+   fun:prp__fetch
+   fun:up__fetch_decoder
+   fun:cb___open_file
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   fun:svn_ra_svn__drive_editorp
+   fun:svn_ra_svn_drive_editor2
+   obj:/usr/lib/libsvn_ra_svn-1.so.1.0.0
+   fun:cb__record_changes
+}

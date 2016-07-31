@@ -5,46 +5,38 @@ $PREPARE_CLEAN > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
-######################################################################
-#
-# Preferable we should not only do such a mini-test for locales,
-# but do the whole test-suite with both language settings.
-# 
-# - Define an environment variable for the unicode-characters 
-#   (eg FSVSTEST_CH)
-# - Skip this script if FSVSTEST_CH is set
-# - Call the testsuite with FSVSTEST_CH and locale set to UTF8
-# - Call the testsuite with FSVSTEST_CH with local encodings
-# - Change the testsuite to use $FSVSTEST_CH in the filenames
-#   (and commit messages)
-#
-# Contributions?? Thank you!
-#
-######################################################################
+log=$LOGDIR/017.log
 
 
 function testfunc
 {
 	filename=$1
 
-		touch file-$filename
-		ln -s file-$filename link-$filename
-		ln -s bad-$filename badlink-$filename
-		$BIN ci -m "locale ci $filename"
-		$WC2_UP_ST_COMPARE
+	touch file-$filename
+	ln -s file-$filename link-$filename
+	ln -s bad-$filename badlink-$filename
+	$BINdflt ci -m "locale ci $filename"
+	$WC2_UP_ST_COMPARE
 
-    if [[ `svn ls $REPURL/ | grep -F "$filename" | wc -l` -eq 3 ]]
-		then
-			echo "Ok, found all 3 entries."
-		else
-		  $ERROR "En/Decode problem - entries not found."
-		fi
+# "svn ls" gives characters > \x80 as eg. "?\228".
+# With --xml we get the raw string, but *always* in UTF-8 ... so try both ways.
+	svn ls --xml $REPURL/ > $log.1
+	svn ls $REPURL/ > $log.2
+	if [[ `grep -F "$filename" < $log.1 | wc -l` -eq 3 ||
+	      `grep -F "$filename" < $log.2 | wc -l` -eq 3 ]]
+	then
+		echo "Ok, found all 3 entries."
+	else
+		$ERROR_NB "Expected filename:"
+	  echo $filename | od -Ax -tx1 -tc
+		$ERROR "En/Decode problem - entries not found."
+	fi
 
-		# TODO: test whether the entries are correct in the other locale.
+# TODO: test whether the entries are correct in the other locale.
 
-		rm *
-		$BIN ci -m "locale ci $filename cleanup"
-		$WC2_UP_ST_COMPARE
+	rm *
+	$BIN ci -m "locale ci $filename cleanup"
+	$WC2_UP_ST_COMPARE
 }
 
 
@@ -87,6 +79,8 @@ then
 	# The bytes here must be \xc2\xa9; in utf8 that's 3 horizontal lines.
 	# Use a hex editor.
 	testfunc Â©
+	testfunc $STG_UTF8
+	testfunc $STG_LOC
 	$SUCCESS "utf8 locale"
 fi
 
@@ -98,6 +92,8 @@ then
 	# The bytes here must be \xc2\x61, that is an invalid UTF8-sequence.
 	# Use a hex editor.
 	testfunc Âa
+	testfunc $STG_UTF8
+	testfunc $STG_LOC
 	$SUCCESS "non-utf8 locale"
 fi
 

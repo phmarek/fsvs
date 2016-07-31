@@ -17,8 +17,10 @@
 
 /** \name Action callbacks. */
 /** @{ */
-/** One to show progress */
-typedef int (action_t)(struct estat *sts, char *path);
+/** One to show progress.
+ * The full (wc-based) path can be built as required by \ref 
+ * ops__build_path().*/
+typedef int (action_t)(struct estat *sts);
 /** One for working */
 typedef int (work_t)(struct estat *root, int argc, char *argv[]);
 /** One after all progress has been made. */

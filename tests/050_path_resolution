@@ -5,8 +5,6 @@ $PREPARE_DEFAULT > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
-sleep 1
-
 touch -dyesterday empty-file tree/b/2/file-x tree/a/new
 
 

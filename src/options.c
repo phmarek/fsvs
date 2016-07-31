@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007 Philipp Marek.
+ * Copyright (C) 2007-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -65,17 +65,43 @@ const struct opt___val_str_t opt___yes_no_auto[]= {
 /** Filter strings and bits.
  * \ref glob_opt_filter. */
 const struct opt___val_str_t opt___filter_strings[]= {
-	{ .val=FILTER__ALL,				 		.string="any" },
-	{ .val=FS_CHANGED | FS_NEW, 	.string="text" },
-	{ .val=FS_META_CHANGED, 			.string="meta" }, 
-	{ .val=FS_META_MTIME, 				.string="mtime" }, 
-	{ .val=FS_META_OWNER, 				.string="owner" },
-	{ .val=FS_META_GROUP, 				.string="group" },
-	{ .val=FS_NEW, 								.string="new" },
-	{ .val=FS_REMOVED, 						.string="deleted" },
-	{ .val=0, 										.string="none" },
+	{ .val=FILTER__ALL,				 								.string="any" },
+	{ .val=FS_CHANGED | FS_NEW | FS_REMOVED, 	.string="text" },
+	{ .val=FS_META_CHANGED, 									.string="meta" }, 
+	{ .val=FS_META_MTIME, 										.string="mtime" }, 
+	{ .val=FS_META_OWNER, 										.string="owner" },
+	{ .val=FS_META_GROUP, 										.string="group" },
+	{ .val=FS_NEW, 														.string="new" },
+	{ .val=FS_REMOVED, 												.string="deleted" },
+	{ .val=0, 																.string="none" },
 	{ .string=NULL, }
 };
+
+
+/** Delay action names.
+ * See \ref o_delay. */
+const struct opt___val_str_t opt___delay_strings[]= {
+	{ .val=DELAY_COMMIT,				 	.string="commit" },
+	{ .val=DELAY_UPDATE,	 				.string="update" },
+	{ .val=DELAY_REVERT, 					.string="revert" }, 
+	{ .val=DELAY_CHECKOUT, 				.string="checkout" }, 
+	{ .val=-1,										.string="yes" },
+	{ .val=0, 										.string="no" },
+	{ .string=NULL, }
+};
+
+
+/** Conflict resolution options.
+ * See \ref o_conflict. */
+const struct opt___val_str_t opt___conflict_strings[]= {
+	{ .val=CONFLICT_STOP,				 	.string="stop" },
+	{ .val=CONFLICT_LOCAL,				.string="local" },
+	{ .val=CONFLICT_REMOTE,				.string="remote" }, 
+	{ .val=CONFLICT_BOTH,  				.string="both" }, 
+	{ .val=CONFLICT_MERGE, 				.string="merge" }, 
+	{ .string=NULL, }
+};
+
 
 
 /** \name Predeclare some functions.
@@ -101,31 +127,9 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.name="path", .i_val=PATH_PARMRELATIVE, 
 		.parse=opt___string2val, .parm=opt___path_strings, 
 	},
-	[OPT__DIFF_PRG] = {
-		.name="diff_prg", .cp_val="diff", .parse=opt___store_string, 
-	},
-	[OPT__DIFF_OPT] = {
-		.name="diff_opt", .cp_val="-pu", .parse=opt___store_string,
-	},
-	[OPT__DIFF_EXTRA] = {
-		.name="diff_extra", .cp_val=NULL, .parse=opt___store_string,
-	},
-	[OPT__DEBUG_OUTPUT] = {
-		.name="debug_output", .cp_val=NULL, .parse=opt___store_string, 
-	},
 	[OPT__LOG_OUTPUT] = {
 		.name="log_output", .i_val=LOG__OPT_DEFAULT,
 		.parse=opt___strings2empty_bm, .parm=opt___log_output_strings,
-	},
-	[OPT__FILTER] = {
-		.name="filter", .i_val=0, 
-		.parse=opt___strings2bitmap, .parm=opt___filter_strings,
-	},
-	[OPT__WARNINGS] = {
-		.name="warning", .parse=opt___parse_warnings,
-	},
-	[OPT__SOFTROOT] = {
-		.name="softroot", .cp_val=NULL, .parse=opt___normalized_path,
 	},
 	[OPT__COLORDIFF] = {
 		.name="colordiff", .i_val=OPT__AUTO, 
@@ -135,11 +139,60 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.name="dir_sort", .i_val=OPT__NO, 
 		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
 	},
+	[OPT__STATUS_COLOR] = {
+		.name="stat_color", .i_val=OPT__NO, 
+		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+	},
+	[OPT__FILTER] = {
+		.name="filter", .i_val=0, 
+		.parse=opt___strings2bitmap, .parm=opt___filter_strings,
+	},
+
+	[OPT__DEBUG_OUTPUT] = {
+		.name="debug_output", .cp_val=NULL, .parse=opt___store_string, 
+	},
+
+	[OPT__CONFLICT] = {
+		.name="conflict", .i_val=CONFLICT_STOP,
+		.parse=opt___string2val, .parm=opt___conflict_strings,
+	},
+	[OPT__MERGE_PRG] = {
+		.name="merge_prg", .cp_val="merge", .parse=opt___store_string, 
+	},
+	[OPT__MERGE_OPT] = {
+		.name="merge_opt", .cp_val="-A", .parse=opt___store_string,
+	},
+	[OPT__DIFF_PRG] = {
+		.name="diff_prg", .cp_val="diff", .parse=opt___store_string, 
+	},
+	[OPT__DIFF_OPT] = {
+		.name="diff_opt", .cp_val="-pu", .parse=opt___store_string,
+	},
+	[OPT__DIFF_EXTRA] = {
+		.name="diff_extra", .cp_val=NULL, .parse=opt___store_string,
+	},
+
+	[OPT__WARNINGS] = {
+		.name="warning", .parse=opt___parse_warnings,
+	},
+	[OPT__SOFTROOT] = {
+		.name="softroot", .cp_val=NULL, .parse=opt___normalized_path,
+	},
+
 	[OPT__COMMIT_TO] = {
 		.name="commit_to", .cp_val=NULL, .parse=opt___store_string,
 	},
-	[OPT__STATUS_COLOR] = {
-		.name="stat_color", .i_val=OPT__NO, 
+
+	[OPT__EMPTY_COMMIT] = {
+		.name="empty_commit", .i_val=OPT__YES, 
+		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+	},
+	[OPT__DELAY] = {
+		.name="delay", .i_val=OPT__NO,
+		.parse=opt___strings2empty_bm, .parm=opt___delay_strings,
+	},
+	[OPT__COPYFROM_EXP] = {
+		.name="copyfrom_exp", .i_val=OPT__YES,
 		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
 	},
 };
@@ -197,7 +250,7 @@ ex:
 int opt___strings2bitmap(struct opt__list_t *ent, char *string, 
 		enum opt__prio_e prio UNUSED)
 {
-	const char delim[]=";,:/";
+	static const char delim[]=";,:/";
 	int status;
 	int val, i;
 	char buffer[strlen(string)+1];
@@ -212,6 +265,7 @@ int opt___strings2bitmap(struct opt__list_t *ent, char *string,
 
 	while ( (cp=strsep(&string, delim)) )
 	{
+	/* Return errors quietly. */
 		STOPIF( opt___find_string(ent->parm, cp, &i), NULL);
 		if (i == 0) val=0;
 		else val |= i;
@@ -257,7 +311,11 @@ int opt___store_string(struct opt__list_t *ent, char *string,
 int opt___parse_warnings(struct opt__list_t *ent, char *string, 
 		enum opt__prio_e prio)
 {
-	return wa__set_warn_option(string, prio);
+	int status;
+
+	STOPIF( wa__split_process(string, prio), NULL);
+ex:
+	return status;
 }
 
 
@@ -277,7 +335,7 @@ int opt__parse_option(enum opt__settings_e which, enum opt__prio_e prio,
 	if (ent->prio <= prio) 
 	{
 		STOPIF( ent->parse(ent, string, prio), 
-				"!Parsing value '%s' for option '%s' failed", 
+				"!Parsing value '%s' for option '%s' failed.", 
 				string, ent->name);
 		ent->prio=prio;
 	}
@@ -291,7 +349,8 @@ ex:
  * If the \a value is \c NULL, try to split the \a key on a \c =.
  * Then find the matching option, and set its value (depending on the given 
  * priority). */
-int opt__parse(char *key, char *value, enum opt__prio_e prio)
+int opt__parse(char *key, char *value, enum opt__prio_e prio,
+		int quiet_errors)
 {
 	int status;
 	int klen;
@@ -308,7 +367,7 @@ int opt__parse(char *key, char *value, enum opt__prio_e prio)
 	{
 		value=strchr(key, '=');
 		STOPIF_CODE_ERR(!value, EINVAL,
-				"!Cannot find value in string '%s'", key);
+				"!Cannot find value in string '%s'.", key);
 		klen=value-key;
 		value++;
 	}
@@ -328,12 +387,14 @@ int opt__parse(char *key, char *value, enum opt__prio_e prio)
 				opt__list[i].name[klen] == 0)
 		{
 			DEBUGP("parsing %s[%i] = %s", opt__list[i].name, i, value);
-			STOPIF(opt__parse_option( i, prio, value), NULL);
+			STOPIF( opt__parse_option( i, prio, value), NULL);
 			goto ex;
 		}
 	}
 
 	status=ENOENT;
+	if (!quiet_errors)
+		STOPIF( status, "!Option name '%s' unknown.", key);
 
 ex:
 	return status;
@@ -399,7 +460,7 @@ int opt__load_settings(char *path, char *name, enum opt__prio_e prio)
 			/* Only non-empty lines. */
 			if (*sol)
 			{
-				STOPIF( opt__parse(sol, NULL, prio),
+				STOPIF( opt__parse(sol, NULL, prio, 0),
 						"In file '%s' on line %d", fn, line);
 			}
 		}
@@ -419,7 +480,7 @@ ex:
  * Invalid names are ignored, invalid values not. */
 int opt__load_env(char **env)
 {
-	const char prefix[]="FSVS_";
+	static const char prefix[]="FSVS_";
 	int status;
 	char *cur;
 	char buffer[32];
@@ -446,7 +507,7 @@ int opt__load_env(char **env)
 				continue;
 			}
 
-			status=opt__parse(buffer, cur+i+1, PRIO_ENV);
+			status=opt__parse(buffer, cur+i+1, PRIO_ENV, 1);
 			if (status == ENOENT)
 			{
 				DEBUGP("key not known.");

@@ -1,5 +1,5 @@
-/************************************************************************
- * Copyright (C) 2005-2007 Philipp Marek.
+/***********************************************************************
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -109,10 +109,10 @@
  * 
  * */
 
-/** \defgroup add_unv Semantics for an added/unversioned entry.
- * \ingroup add_unv_ign
+/** \defgroup howto_add_unv Semantics for an added/unversioned entry
+ * \ingroup userdoc
  *
- * \section Overview
+ * Here's a small overview for the \ref add and \ref unversion actions.
  *
  * - Unversion:
  *   The entry to-be-unversioned will be deleted from the repository and the 
@@ -141,7 +141,7 @@
  * */
 
 
-int au__action(struct estat *sts, char *path)
+int au__action(struct estat *sts)
 {
 	int status;
 	int old;
@@ -151,7 +151,8 @@ int au__action(struct estat *sts, char *path)
 	status=0;
 
 	/* This should only be done once ... but as it could be called by others, 
-	 * without having action->i_val the correct value, we check on every call.
+	 * without having action->i_val the correct value, we check on every 
+	 * call.
 	 * After all it's just two compares, and only for debugging ...  */
 	BUG_ON( action->i_val != RF_UNVERSION && action->i_val != RF_ADD );
 
@@ -160,7 +161,7 @@ int au__action(struct estat *sts, char *path)
 	 * afterwards. */
 	sts->flags = (sts->flags & ~mask) | action->i_val;
 	DEBUGP("changing flags: has now %X", sts->flags);
-	STOPIF( st__status(sts, NULL), NULL);
+	STOPIF( st__status(sts), NULL);
 
 	/* If we have an entry which was added *and* unversioned (or vice 
 	 * versa), but
@@ -197,6 +198,8 @@ int au__work(struct estat *root, int argc, char *argv[])
 	/* Would it make sense to do "-=2" instead, so that the user could override 
 	 * that and really add/unversion more than single elements? */
 
+	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
+
 	/** \todo Do we really need to load the URLs here? They're needed for 
 	 * associating the entries - but maybe we should do that two-way:
 	 * - just read \c intnum , and store it again
@@ -205,7 +208,6 @@ int au__work(struct estat *root, int argc, char *argv[])
 	 * Well, reading the URLs doesn't cost that much ... */
 	STOPIF( url__load_list(NULL, 0), NULL);
 
-	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
 	STOPIF( waa__read_or_build_tree(root, argc, normalized, argv, 
 				NULL, 0), NULL);
 

@@ -10,12 +10,6 @@ set -e
 $PREPARE_CLEAN WC_COUNT=$NUM_WC > /dev/null
 $INCLUDE_FUNCS
 
-# We're much too fast
-sleep 1
-
-LOG=
-#LOG=-d
-
 
 #
 # Thread i
@@ -66,14 +60,14 @@ do
 	for i in `seq 1 $NUM_WC`
 	do
 		( cd $WCBASE$i &&
-			echo "=== update $i" && $BINdflt $LOG up &&
-			echo "=== commit $i" && $BINdflt $LOG ci -m "$i-$loop" ) || false
+			echo "=== update $i" && $BINdflt up &&
+			echo "=== commit $i" && $BINdflt ci -m "$i-$loop" ) || false
 	done >&5 2>&5
 
 	for i in `seq 1 $NUM_WC`
 	do
 		( cd $WCBASE$i &&
-			echo "=== update $i" && $BINdflt $LOG up &&
+			echo "=== update $i" && $BINdflt up &&
 			echo "=== status $i" && $BINdflt st -C -C ) || false
 		echo "=== check  $i"
 		if [[ `cd $WCBASE$i && $BINdflt st` != '' ]]
