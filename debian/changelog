@@ -1,4 +1,4 @@
-fsvs (1.2.7-1) UNRELEASED; urgency=medium
+fsvs (1.2.7-1) unstable; urgency=medium
 
   * QA upload.
   * New upstream release.
@@ -12,7 +12,7 @@ fsvs (1.2.7-1) UNRELEASED; urgency=medium
   * Convert copyright to DEP5 format.
   * Add DEP3 patch headers to patches missing it.
 
- -- Reiner Herrmann <reiner@reiner-h.de>  Sun, 31 Jul 2016 16:50:31 +0200
+ -- Reiner Herrmann <reiner@reiner-h.de>  Sun, 31 Jul 2016 17:48:36 +0200
 
 fsvs (1.2.6-3) unstable; urgency=medium
 
