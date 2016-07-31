@@ -1,0 +1,194 @@
+#!/bin/bash
+
+# This test tries to simulate a master/local URL relationship, 
+# ie. that there is a "master" URL (to be updated from) and a "local" URL 
+# which tracks local modifications.
+# 
+# The "master" URL is set with a higher priority, so that it takes 
+# precedence (binaries, and basic system); the local URL is just for 
+# tracking the (machine-specific) local changes.
+# 
+# We use the working copies as follows:
+#  1 for the master data (/trunk in the repository)
+WC_MASTER=${WCBASE}1
+REP_MASTER=$REPURL
+#  2 for the local#1 data (/machineA)
+WC_LOCAL1=${WCBASE}2
+#  3 for the local#2 data (/machineB)
+WC_LOCAL2=${WCBASE}3
+#  4 as working copy for machine1
+WC_MACHINE1=${WCBASE}4
+#  5 as working copy for machine2
+WC_MACHINE2=${WCBASE}5
+#  6 as the base directory for the machine-specific repositories
+REPD_1=${WCBASE}6/m1
+REPD_2=${WCBASE}6/m2
+REP_1=file:///$REPD_1/trunk
+REP_2=file:///$REPD_2/trunk
+# 
+# So we need 5 working copies.
+NUM_WC=6
+#
+# We take care to commit to a directory that doesn't yet exist in the 
+# "local" repository.
+
+# PS: is there an easier way for variable indirection?
+
+set -e
+$PREPARE_CLEAN WC_COUNT=$NUM_WC > /dev/null
+$INCLUDE_FUNCS
+
+file1=conf1
+file2=etc/conf2
+
+####################################################
+##### Prepare Master-data
+####################################################
+cd $WC_MASTER
+mkdir bin
+echo got ya > bin/ls
+echo something > root-file
+$BINq urls $REP_MASTER
+$BINq ci -m "master"
+
+####################################################
+##### Prepare machine-local data.
+####################################################
+function makeLocal
+{
+  which=$1
+	_rep="REP_$which"
+	_rep=${!_rep}
+	_repd="REPD_$which"
+	_repd=${!_repd}
+
+# Create repository for machine
+	svnadmin create $_repd
+	svn mkdir "$_rep" -m "mkdir loc-$which"
+
+# Local data wc
+	_loc="WC_LOCAL$which"
+  cd "${!_loc}"
+# We have to load, as the (wrong) /trunk was already set by prepare
+	echo "$_rep" | $BINq urls load
+	echo "Set URL $_rep for ${!_loc}"
+# Make some empty revisions, so that the revision numbers surely disagree
+  for a in 1 2 3 4 5 6 7 8 9 10 11 12 13
+	do
+	  $BINq ci -m $a > /dev/null
+	done
+
+# Goto machine-WC
+	_mac="WC_MACHINE$which"
+  cd "${!_mac}"
+# Set URLs with priorities
+	echo "N:base,P:10,$REP_MASTER" | $BINq urls load
+	$BINq urls "N:local,P:20,$_rep"
+	echo "set N:base,P:10,$REP_MASTER and N:local,P:20,$_rep for ${!_mac}"
+# Set commit-URL in config
+	conf=`$BINdflt info | grep Conf-Path | cut -f3`
+	if [[ "$conf" == "" ]] 
+	then
+	  $ERROR "Can't get Conf-Path for $which"
+	fi
+
+	echo "Got $conf as config path"
+	echo commit-to=local > $conf/config
+}
+makeLocal 1
+makeLocal 2
+
+####################################################
+##### Set data
+####################################################
+function Set
+{
+	which=$1
+	num=$2
+	where=$3
+  _p=$where$which
+  cd "${!_p}"
+
+# make and commit data.
+  echo $which$num > $file1
+	test -d etc || mkdir etc
+	echo $which$num > $file2
+	$BINq ci -m "change local $which - $num"
+}
+Set 1 a WC_LOCAL
+Set 2 a WC_LOCAL
+sleep 1
+
+####################################################
+##### Verify 1
+####################################################
+function Verify
+{
+	which=$1
+	num=$2
+	where=$3
+  _p=$where$which
+  cd "${!_p}"
+
+# get data
+	$BINq up
+
+# verify
+	if [[ x`cat $file1`x`cat $file2`x == x${which}${num}x${which}${num}x ]]
+	then
+		$SUCCESS "Working copy local-$which correctly updated ($num)"
+	else
+		$ERROR "Wrong data in $which ($num)"
+	fi
+}
+Verify 1 a WC_MACHINE
+Verify 2 a WC_MACHINE
+
+####################################################
+##### Set/verify again
+####################################################
+Set 1 b WC_LOCAL
+Set 2 b WC_LOCAL
+sleep 1
+Verify 1 b WC_MACHINE
+Verify 2 b WC_MACHINE
+
+####################################################
+##### Do changes on the machines
+####################################################
+$INFO "Committing locals from machines"
+Set 1 t WC_MACHINE
+Set 2 t WC_MACHINE
+sleep 1
+
+####################################################
+##### Verify the data in the repository
+####################################################
+Verify 1 t WC_LOCAL
+Verify 2 t WC_LOCAL
+
+# TODO: Get both ways of repository numbers - local higher than base, and 
+# vice-versa.
+
+# TODO: Master overlays one of the config files -> has to get to the 
+# machines (even if changed locally??); if changed doesn't get committed to 
+# master unless specified via commit-to.
+
+# Checking correct creation of new directories.
+cd $WC_MACHINE1
+NEW1=etc/date.txt
+NEW2=bin/date
+date > $NEW1
+date > $NEW2
+$BINq ci -m "both dirs"
+if [[ `svn ls $REP_1/$NEW1 | wc -l` == 1 &&
+	`svn ls $REP_1/$NEW2 | wc -l` == 1 ]]
+then
+	$SUCCESS "New directory successfully created"
+else
+	$ERROR "New dirs not found!"
+fi
+
+
+$SUCCESS "Master/Local-URL usage works."
+

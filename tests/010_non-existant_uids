@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+if [[ $UID -ne 0 ]]
+then
+  echo "Warning: cannot test changing userids as normal user."
+	exit
+fi
+
+filename=uid-gid-test
+
+# Find an unused id
+function unused_id
+{
+  perl -e '$i=shift || 100; $grp=shift; $i++ while ($grp ? getgrgid($i) : getpwuid($i)); print $i' $1 $2
+}
+
+uid=`unused_id 100 0`
+gid=`unused_id 100 1`
+
+echo "Using UID $uid and GID $gid for unknown-user-tests."
+
+if [[ -e $filename ]]
+then
+  rm $filename
+	$BIN ci -m "delete the test-file"
+fi
+
+date > $filename
+chown $uid.$gid $filename
+echo "     ci1"
+$BIN ci -m "uid-gid-test"
+
+echo "Another line" >> $filename
+echo "     ci2"
+$BIN ci -m "uid-gid-expand"
+
+$WC2_UP_ST_COMPARE

@@ -1,0 +1,85 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+filename=file-$RANDOM-$RANDOM
+logfile=$LOGDIR/031.logfile
+
+touch $filename
+chmod 742 $filename
+# Be careful - don't do a CR/LF or something like that.
+printf "TEST 1" > $filename
+touch -t 200602231730.13 $filename
+md5=`md5sum - < $filename`
+
+echo Checkin ...
+$BINq ci -m x
+sleep 1
+
+
+function Check
+{
+  tag=$1
+	data="$2"
+
+	# We need a word boundary; "grep -E" is not POSIX. So use perl.
+	# I tried to use \Q in the patterns (svn+ssh has a + in it!), but that
+	# doesn't work if it gets expanded from a variable into a pattern.
+	# So we have to use the conditional.
+	if perl -e '$tag=shift; $pat=shift; $pat=quotemeta($1) if $pat =~ /^=(.*)/; exit !grep(m#^\t$tag:\s+$pat#, <STDIN>)' "$tag" "$data" < $logfile
+	then
+	  # Used to be $SUCCESS, but that's a lot of green
+#    echo "found $tag: $data"
+		true
+  else
+    echo "$tag wanted as $data, but found:"
+		echo "'"`grep $tag $logfile || true `"'"
+    $ERROR "Wrong data returned!"
+  fi
+}
+
+
+function CheckAttr
+{
+	Check Type file
+	Check Status "$1"
+	Check Flags 0x0
+	Check URL "=$REPURL/$filename"
+	Check Mode 0100742
+	Check UID/GID "$UID .*/.*"
+	Check MTime "Thu Feb 23 17:30:13 2006"
+	Check Revision 4
+	Check Size 6
+	Check Repos-MD5 $md5 # f676245d2b1ee5589cd0f19401fda420
+}
+
+$BINdflt info $filename > $logfile
+CheckAttr "0x0 .unmodified."
+$SUCCESS "info prints the expected data for existing files."
+
+# Check that *really* the stored data is printed,
+# and not just the current values!
+echo "ASDASAAGDGASGa" > $filename
+$BINdflt info $filename > $logfile
+CheckAttr "0x24 .changed, mtime."
+$SUCCESS "info prints the expected data for modified files."
+
+rm $filename
+$BINdflt info $filename > $logfile
+CheckAttr "0x2 .removed."
+$SUCCESS "info prints the expected data for removed files."
+
+
+if $BINdflt info Does-not-exist-in-this-WC > $logfile 2>&1
+then
+	$ERROR "info does not stop for non-existing entries!"
+else
+	$SUCCESS "info stops for non-existing entries!"
+fi
+
+
+# set ts=2 sw=2

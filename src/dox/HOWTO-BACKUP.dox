@@ -1,0 +1,173 @@
+/**
+	\defgroup howto A small collection of HOW-TOs
+
+	Here you see a small collection of HOW-TOs.
+	These aim to give you a small overview about common tasks.
+
+	The paths and examples are based on a current Debian/Testing, but should 
+	be easily transferable to other Linux distributions or other UNIXes.
+
+*/
+ 
+/**
+	\defgroup howto_backup Backup
+	\ingroup howto
+
+	This document is a step-by-step explanation how to do backups using \c fsvs.
+
+	\section howto_backup_prep Preparation
+
+	If you're going to back up your system, you have to decide what you want 
+	to have stored in your backup, and what should be left out.
+
+	Depending on your system usage and environment you first have to decide:
+	- Do you only want to backup your data in \c /home?
+		- Less storage requirements
+		- In case of hardware crash the OS must be set up again
+	- Do you want to keep track of your configuration in \c etc?
+		- Very small storage overhead
+		- Not much use for backup/restore, but shows what has been changed
+	- Or do you want to backup your whole installation, from \c / on?
+		- Whole system versioned, restore is only a few commands
+		- Much more storage space needed - typically you'd need at least a few 
+			GB free space.
+ 
+	The next few moments should be spent thinking about the storage space for 
+	the repository - will it be on the system harddisk, a secondary or an 
+	external harddisk, or even off-site?
+
+	\note If you just created a fresh repository, you probably should create 
+	the "default" directory structure for subversion - \c trunk, \c branches, 
+	\c tags; this layout might be useful for your backups.\n The URL you'd 
+	use in fsvs would go to \c trunk.
+	
+
+	Possibly you'll have to take the available bandwidth into your 
+	considerations; a single home directory may be backed up on a 56k modem, 
+	but a complete system installation would likely need at least some kind 
+	of DSL or LAN.
+
+	\note If this is a production box with sparse, small changes, you could 
+	take the initial backup on a local harddisk, transfer the directory with 
+	some media to the target machine, and switch the URLs.
+
+
+	A fair bit of time should go to a small investigation which file patterns 
+	and paths you \b not want to back-up.
+	- Backup files like \c *.bak, \c *~, \c *.tmp, and similar
+	- History files: <tt>.sh-history</tt> and similar in the home-directories
+	- Cache directories: your favourite browser might store many MB of cached 
+		data in you home-directories
+	- Virtual system directories, like \c /proc and \c /sys, \c /dev/shmfs.
+
+
+
+	\section howto_backup_first_steps Telling FSVS what to do
+
+	Given \c $WC as the <i>working directory</i> - the base of the data you'd  
+	like backup'ed (\c /, \c /home), and \c $URL as a valid subversion URL to 
+	your (already created) repository path.
+
+	Independent of all these details the first steps look like these:
+	\code
+		 cd $WC
+		 fsvs urls $URL
+	\endcode
+	Now you have to say what should be ignored - that'll differ depending on 
+	your needs/wishes.
+	\code
+		 fsvs ignore ./ **~ ./ **.tmp ./ **.bak
+		 fsvs ignore ./proc/ ./sys/ ./tmp/
+		 fsvs ignore ./var/tmp/ ./var/spool/lpd/
+		 fsvs ignore ./var/log/*.gz
+		 fsvs ignore ./etc/*.dpkg-dist
+		 fsvs ignore ./etc/*.dpkg-old
+	\endcode
+
+	Now you may find that you'd like to have some files encrypted in your 
+	backup - like \c /etc/shadow, or your \c .ssh/id_* files. So you tell 
+	fsvs to en/decrypt these files:
+	\code
+		 fsvs propset fsvs:commit-pipe 'gpg -er {your backup key}' /etc/shadow /etc/gshadow
+		 fsvs propset fsvs:update-pipe 'gpg -d' /etc/shadow /etc/gshadow
+	\endcode
+
+	\note This are just examples. You'll probably have to exclude some other 
+	paths and patterns from your backup, and mark some others as 
+	to-be-filtered.
+
+
+	\section howto_backup_first_commit The first backup
+
+	\code
+		fsvs commit -m "First commit!"
+	\endcode
+	That's all there is to it!
+
+
+
+	\section howto_backup_usage Further use and maintenance
+
+	The further usage is more or less the \c commit command from the last 
+	section.
+	When do you have to do some manual work?
+	- When ignore patterns change.
+		- New filesystems that should be ignored, or would be ignored but 
+			shouldn't
+		- You find that your favourite word-processor leaves many *.segv files 
+			behind, and similar things
+	- If you get an error message from fsvs, check the arguments and retry.
+		In desperate cases (or just because it's quicker than debugging 
+		yourself) ask on <tt>dev [at] fsvs.tigris.org</tt>.
+
+
+	\section howto_backup_restore Restoration in a working system
+  
+	Depending on the circumstances you can take different ways to restore 
+	data from your repository.
+	- <tt>fsvs \ref export</tt> allows you to just dump some repository data 
+		into your filesystem - eg. into a temporary directory to sort things 
+		out.
+	- Using <tt>fsvs \ref revert</tt> you can go to older revisions of a 
+		given file inplace. \note Whole directory structures are planned, just 
+		not done yet.
+	- Or you can do a fresh checkout - set an URL in an (empty) directory, 
+		and update to the needed revision.
+	- If everything else fails (no backup media with fsvs on it), you can use 
+		subversion commands (eg. \c export) to restore needed parts, and update 
+		the rest with fsvs.
+
+
+  \section howto_backup_recovery Recovery for a non-booting system
+
+  In case of a real emergency, when your harddisks crashed or your 
+	filesystem was eaten and you have to re-partition or re-format, you 
+	should get your system working again by 
+	- booting from a knoppix or some other Live-CD (with \c fsvs on it),
+	- partition/format as needed,
+	- mount your harddisk partitions below eg. \c /mnt,
+	- and then recovering by
+	\code
+	  $ cd /mnt
+		$ export FSVS_CONF=/etc/fsvs					# if non-standard
+		$ export FSVS_WAA=/var/spool/fsvs			# if non-standard
+		$ fsvs checkout -o softroot=/mnt
+	\endcode
+
+	If somebody asks really nice I'd possible even create a \c recovery 
+	command that deduces the \c softroot parameter from the current working 
+	directory.
+
+	For more information please take a look at \ref o_softroot.
+
+
+	\section howto_backup_feedback Feedback
+
+	If you've got any questions, ideas, wishes or other feedback, please tell 
+	us in the mailing list <tt>users [at] fsvs.tigris.org</tt>. 
+
+	Thank you!
+
+*/
+// vi: filetype=doxygen spell spelllang=en_us
+

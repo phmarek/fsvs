@@ -1,0 +1,100 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+tmp=$LOGDIR/014.fsvs-test.tmp
+
+for filename in new-file1 ' ' new-file2
+do
+	if [[ `$BINdflt st | wc -l` -ne 0 ]]
+	then
+		$ERROR_NB "status gave unexpected lines:"
+		$BINdflt st
+		exit 1
+	fi
+
+	# The sleeps in here should be longer than the filesystem granularity.
+	# Mostly <= 1 second, only on FAT (VFAT) 2 seconds ...
+	# But running the tests on such is not possible (chmod, chown)
+	sleep 1
+	touch "$filename"
+	if [[ `$BINdflt st | wc -l` -ne 2 ]]
+	then
+		$ERROR_NB "status gave unexpected lines; only 2 line expected,"
+		echo ". changed, '$filename' as new"
+		$BINdflt st
+		exit 1
+	fi
+
+	echo "     ci"
+	$BINdflt ci -m "$filename-$RANDOM" > $tmp
+	if [[ `grep -F "N...         0  ./$filename" < $tmp > /dev/null` ]]
+	then
+		$ERROR_NB "expected '$filename' as new"
+		cat $tmp
+		exit 1
+	else
+		$SUCCESS "'$filename' is new"
+	fi
+
+	if [[ `tail -1 $tmp | grep -v 'committed revision'` ]]
+	then
+		$ERROR_NB "expected 'committed revision'"
+		cat $tmp
+		exit 1
+	else
+		$SUCCESS "found revision line"
+	fi
+
+	$WC2_UP_ST_COMPARE
+done
+
+
+sleep 1
+echo "delete a file"
+rm $filename
+if [[ `$BINdflt st $filename | wc -l` -ne 1 ]]
+then
+	$ERROR "$filename should be shown as removed!"
+fi
+
+if [[ `$BINdflt st | wc -l` -ne 2 ]]
+then
+	$ERROR_NB "status gave unexpected lines; only 2 line expected,"
+	echo ". changed, $filename as deleted"
+	$BINdflt st
+	exit 1
+fi
+
+
+if $BINdflt st does-not-exist-$$.$RANDOM.$RANDOM > $tmp 2>&1
+then
+	$ERROR "status doesn't stop on undefined entries"
+fi
+
+
+echo "     ci"
+$BINdflt ci -m delete > $tmp
+if [[ `grep -F "D...         0  ./$filename" < $tmp > /dev/null` ]]
+then
+	$ERROR_NB "expected $filename as deleted"
+	cat $tmp
+	exit 1
+else
+	$SUCCESS "$filename is deleted"
+fi
+
+if [[ `tail -1 $tmp | grep -v 'committed revision'` ]]
+then
+	$ERROR_NB "expected 'committed revision'"
+	cat $tmp
+	exit 1
+else
+	$SUCCESS "found revision line"
+fi
+
+
+$WC2_UP_ST_COMPARE

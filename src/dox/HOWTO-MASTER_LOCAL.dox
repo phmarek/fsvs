@@ -1,0 +1,366 @@
+/**
+\defgroup howto_master_local Master/Local repositories
+\ingroup howto
+
+This HOWTO describes how to use a single working copy with multiple 
+repositories.
+
+Please read the \ref howto_backup first, to know about basic steps using 
+FSVS.
+
+
+\section howto_masloc_ratio Rationale
+
+If you manage a lot of machines with similar or identical software, you 
+might notice that it's a bit of work keeping them all up-to-date. Sure, 
+automating distribution via rsync or similar is easy; but then you get 
+identical machines, or you have to play with lots of exclude patterns to 
+keep the needed differences.
+
+Here another way is presented; and even if you don't want to use FSVS for 
+distributing your files, the ideas presented here might help you keep 
+your machines under control.
+
+
+\section howto_masloc_prep Preparation, repository layout
+
+In this document the basic assumption is that there is a group of (more 
+or less identical) machines, that share most of their filesystems.
+
+Some planning should be done beforehand; while the ideas presented here 
+might suffice for simple versioning, your setup can require a bit of 
+thinking ahead.
+
+This example uses some distinct repositories, to achieve a bit more 
+clarity; of course these can simply be different paths in a single 
+repository (see \ref howto_masloc_single_repos for an example 
+configuration).
+
+Repository in URL \c base:
+\code
+  trunk/
+    bin/
+      ls
+      true
+    lib/
+      libc6.so
+      modules/
+    sbin/
+      mkfs
+    usr/
+      local/
+      bin/
+      sbin/
+  tags/
+  branches/
+\endcode
+
+Repository in URL \c machine1 (similar for machine2):
+\code
+  trunk/
+    etc/
+      HOSTNAME
+      adjtime
+      network/
+        interfaces
+      passwd
+      resolv.conf
+      shadow
+    var/
+      log/
+        auth.log
+        messages
+  tags/
+  branches/
+\endcode
+
+
+\subsection howto_masloc_prep_user User data versioning
+
+If you want to keep the user data versioned, too, a idea might be to start 
+a new working copy in \b every home directory; this way 
+- the system- and (several)  user-commits can be run in parallel,
+- the intermediate \c home directory in the repository is not needed, and 
+- you get a bit more isolation (against FSVS failures, out-of-space errors 
+	and similar). 
+- Furthermore FSVS can work with smaller file sets, which helps performance 
+	a bit (less dentries to cache at once, less memory used, etc.).
+
+\code
+  A/
+	  Andrew/
+			.bashrc
+			.ssh/
+			.kde/
+    Alexander/
+			.bashrc
+			.ssh/
+			.kde/
+  B/
+	  Bertram/
+\endcode
+
+A cronjob could simply loop over the directories in \c /home, and 
+call fsvs for each one; giving a target URL name is not necessary if every 
+home-directory is its own working copy.
+
+\note URL names can include a forward slash \c / in their name, so you 
+might give the URLs names like \c home/Andrew - although that should not 
+be needed, if every home directory is a distinct working copy.
+
+
+\section howto_masloc_using Using master/local repositories
+
+Imagine having 10 similar machines with the same base-installation.
+
+Then you install one machine, commit that into the repository as 
+\c base/trunk, and make a copy as \c base/released.
+
+The other machines get \c base/released as checkout source, and another 
+(overlaid) from eg. \c machine1/trunk. \n
+Per-machine changes are always committed into the \c machineX/trunk of the 
+per-machine repository; this would be the host name, IP address, and similar 
+things.
+
+On the development machine all changes are stored into \c base/trunk; if 
+you're satisfied with your changes, you merge them (see \ref 
+howto_masloc_branches) into \c base/released, whereupon all other machines 
+can update to this latest version.
+
+So by looking at \c machine1/trunk you can see the history of the
+machine-specific changes; and in \c base/released you can check out every 
+old version to verify problems and bugs.
+
+\note You can take this system a bit further: optional software packages 
+could be stored in other subtrees.  They should be of lower priority than 
+the base tree, so that in case of conflicts the base should always be 
+preferred (but see \ref howto_masloc_note_1).
+
+
+Here is a small example; \c machine1 is the development machine, \c 
+machine2 is a \e client.
+\code
+  machine1$ fsvs urls name:local,P:200,svn+ssh://lserver/per-machine/machine1/trunk
+  machine1$ fsvs urls name:base,P:100,http://bserver/base-install1/trunk
+	# Determine differences, and commit them
+  machine1$ fsvs ci -o commit_to=local /etc/HOSTNAME /etc/network/interfaces /var/log
+  machine1$ fsvs ci -o commit_to=base /
+\endcode
+
+Now you've got a base-install in your repository, and can use that on the 
+other machine:
+\code
+  machine2$ fsvs urls name:local,P:200,svn+ssh://lserver/per-machine/machine2/trunk
+  machine2$ fsvs urls name:base,P:100,http://bserver/base-install1/trunk
+  machine2$ fsvs sync-repos
+	# Now you see differences of this machines' installation against the other:
+  machine2$ fsvs st
+	# You can see what is different: 
+  machine2$ fsvs diff /etc/X11/xorg.conf
+	# You can take the base installations files:
+  machine2$ fsvs revert /bin/ls
+	# And put the files specific to this machine into its repository:
+  machine2$ fsvs ci -o commit_to=local /etc/HOSTNAME /etc/network/interfaces /var/log
+\endcode
+
+Now, if this machine has a harddisk failure or needs setup for any other 
+reason, you boot it (eg. via PXE, Knoppix or whatever), and do (\ref 
+howto_masloc_note_3)
+\code
+  # Re-partition and create filesystems (if necessary) 
+  machine2-knoppix$ fdisk ...
+  machine2-knoppix$ mkfs ...
+	# Mount everything below /mnt
+  machine2-knoppix$ mount <partition[s]> /mnt/[...]
+  machine2-knoppix$ cd /mnt
+	# Do a checkout below /mnt
+  machine2-knoppix$ fsvs co -o softroot=/mnt <urls>
+\endcode
+
+
+\section howto_masloc_branches Branching, tagging, merging
+
+Other names for your branches (instead of \c trunk, \c tags and \c 
+branches) could be \c unstable, \c testing, and \c stable; your production 
+machines would use \c stable, your testing environment \c testing, and in 
+\c unstable you'd commit all your daily changes.
+
+\note Please note that there's no merging mechanism in FSVS; and as far as 
+I'm concerned, there won't be. Subversion just gets automated merging 
+mechanisms, and these should be fine for this usage too. (\ref 
+howto_masloc_note_4) 
+
+\subsection howto_masloc_branch_tags Thoughts about tagging
+
+Tagging works just like normally; although you need to remember to tag more 
+than a single branch. Maybe FSVS should get some knowledge about the 
+subversion repository layout, so a <tt>fsvs tag</tt> would tag all 
+repositories at once? It would have to check for duplicate tag-names (eg. on 
+the \c base -branch), and just keep it if it had the same copyfrom-source.
+
+But how would tags be used? Define them as source URL, and checkout? Would 
+be a possible case.
+
+Or should <tt>fsvs tag</tt> do a \e merge into the repository, so that a 
+single URL contains all files currently checked out, with copyfrom-pointers 
+to the original locations? Would require using a single repository, as such 
+pointers cannot be across different repositories. If the committed data 
+includes the \c $FSVS_CONF/.../Urls file, the original layout would be known, 
+too - although to use it a \ref sync-repos would be necessary.
+
+
+\section howto_masloc_single_repos Using a single repository
+
+A single repository would have to be partitioned in the various branches 
+that are needed for bookkeeping; see these examples.
+
+Depending on the number of machines it might make sense to put them in a 1- 
+or 2 level deep hierarchy; named by the first character, like
+
+\code
+  machines/
+    A/
+      Axel/
+      Andreas/
+    B/
+      Berta/
+    G/
+      Gandalf/
+\endcode
+
+
+\subsection howto_masloc_single_simple Simple layout
+
+Here only the base system gets branched and tagged; the machines simply 
+backup their specific/localized data into the repository.
+
+\code
+# For the base-system:
+  trunk/
+    bin/
+    usr/
+    sbin/
+  tags/
+    tag-1/
+  branches/
+    branch-1/
+# For the machines:
+  machines/
+    machine1/
+      etc/
+        passwd
+        HOSTNAME
+    machine2/
+      etc/
+        passwd
+        HOSTNAME
+\endcode
+
+
+\subsection howto_masloc_single_per_area Per-area
+Here every part gets its \c trunk, \c branches and \c tags:
+
+\code
+  base/
+    trunk/
+      bin/
+      sbin/
+      usr/
+    tags/
+      tag-1/
+    branches/
+      branch-1/
+  machine1/
+    trunk/
+      etc/
+       passwd
+       HOSTNAME
+    tags/
+      tag-1/
+    branches/
+  machine2/
+    trunk/
+      etc/
+       passwd
+       HOSTNAME
+    tags/
+    branches/
+\endcode
+
+
+\subsection howto_masloc_single_common_ttb Common trunk, tags, and branches
+
+Here the base-paths \c trunk, \c tags and \c branches are shared:
+
+\code
+  trunk/
+    base/
+      bin/
+      sbin/
+      usr/
+    machine2/
+      etc/
+        passwd
+        HOSTNAME
+    machine1/
+      etc/
+        passwd
+        HOSTNAME
+  tags/
+     tag-1/
+  branches/
+     branch-1/
+\endcode
+
+
+\section howto_masloc_notes Other notes
+
+
+\subsection howto_masloc_note_1 1
+Conflicts should not be automatically merged.  
+If two or more trees bring the same file, the file from the \e highest 
+tree wins - this way you always know the file data on your machines.
+It's better if a single software doesn't work, compared to a machine that 
+no longer boots or is no longer accessible (eg. by SSH)).
+
+So keep your base installation at highest priority, and you've got good 
+chances that you won't loose control in case of conflicting files.
+
+
+\subsection howto_masloc_note_2 2
+If you don't know which files are diffent in your installs, 
+- install two machines,
+- commit the first into fsvs,
+- do a \ref sync-repos on the second,
+- and look at the \ref status output.
+
+\subsection howto_masloc_note_3 3
+As debian includes FSVS in the near future, it could be included on the 
+next KNOPPIX, too!
+
+Until then you'd need a custom boot CD, or copy the absolute minimum of 
+files to the harddisk before recovery.
+
+There's a utility \c svntar available; it allows you to take a snapshot of 
+a subversion repository directly into a \c .tar -file, which you can easily 
+export to destination machine. (Yes, it knows about the meta-data 
+properties FSVS uses, and stores them into the archive.)
+
+\subsection howto_masloc_note_4 4
+
+Why no file merging? Because all real differences are in the 
+per-machine files -- the files that are in the \c base repository are 
+changed only on a single machine, and so there's an unidirectional flow.
+
+BTW, how would you merge your binaries, eg. \c /bin/ls?
+
+\section howto_masloc_feedback Feedback
+
+If you've got any questions, ideas, wishes or other feedback, please tell 
+us in the mailing list <tt>users [at] fsvs.tigris.org</tt>. 
+
+Thank you!
+
+ */
+// vi: filetype=doxygen spell spelllang=en_us
+

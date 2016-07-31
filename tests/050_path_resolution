@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+sleep 1
+
+touch -dyesterday empty-file tree/b/2/file-x tree/a/new
+
+
+if [[ `$BINdflt st | wc -l` -ne 4 ]]
+then
+	$BINdflt st
+	$ERROR "Not ok for 1"
+fi
+if [[ `$BINdflt st . | wc -l` -ne 4 ]]
+then
+	$BINdflt st .
+	$ERROR "Not ok for 2"
+fi
+
+cd tree
+
+if [[ `$BINdflt st | wc -l` -ne 3 ]]
+then
+	$BINdflt st
+	$ERROR "Not ok for 3"
+fi
+if [[ `$BINdflt st . | wc -l` -ne 3 ]]
+then
+	$BINdflt st .
+	$ERROR "Not ok for 4"
+fi
+
+
+if [[ `$BINdflt st a | wc -l` -ne 2 ]]
+then
+	$BINdflt st a
+	$ERROR "Not ok for 5"
+fi
+if [[ `$BINdflt st b | wc -l` -ne 1 ]]
+then
+	$BINdflt st b
+	$ERROR "Not ok for 6"
+fi
+
+
+$SUCCESS "ok"

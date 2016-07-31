@@ -1,0 +1,42 @@
+Q: What does fsvs mean?
+A: You can take a bet.
+     -) Full System VerSioning
+     -) File System VerSioning
+     -) Fast System VerSioning
+   Other answers welcome.   
+
+Q: Why are the listings not sorted?
+A: Because of speed considerations the program does the files in
+   hard disk-order, ie. in the order they're on the hard disk.
+   Doing the run and output later would leave the user without feedback
+   for some time.
+
+Q: What meta-data is versioned?
+A: Currently modification time, user, group, and permissions are saved.
+
+Q: What kind of files are versioned?
+A: Files, directories, device nodes (block and char), symbolic links.
+   Sockets and pipes are normally regenerated upon opening and are therefore
+   not stored.
+
+Q: I don't like XYZ.
+A: Unified patches are welcome.
+
+Q: Why is it called fsvs and not X?
+A: I've had several great ideas myself, but after discarding SYSV
+   (SYStem Versioning) and SUBS (SUbversion Backup System) I just searched
+   for a unique string to describe this project.
+
+Q: Can I use some subdirectory of my repository instead of the root?
+A: Of course. You can use the normal subversion structures /trunk, /tags,
+   /branches - you just have to create them and point your working copy there.
+	 So you do
+	    svn mkdir $URL/branches $URL/tags $URL/trunk
+	 and use
+	    fsvs init $URL/trunk
+	 to use the trunk, or
+	    fsvs export $URL/tags/tag2
+	 to export your "tag2".
+	 Note: There's no way currently to "switch" between directories, although
+	 there might/should.
+			

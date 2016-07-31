@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e
+$INCLUDE_FUNCS
+cd $WC2
+
+$WC2_UP_ST_COMPARE

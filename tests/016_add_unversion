@@ -1,0 +1,179 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+DIR=dir
+IGN=ign
+PRE=take_
+file1=$DIR/${PRE}file1
+file2=$DIR/${PRE}something_different
+file_i=$DIR/${IGN}_file
+
+logfile=$LOGDIR/016.logfile
+
+mkdir $DIR
+sleep 1
+
+for a in  $file1 $file_i $file2
+do
+	echo Sample data for $a: $$ > $a
+done
+
+
+$BINq ignore './**'
+# Maybe we get a ., possibly a m ...
+# Depends on timing of directory/inode changes (eg. same/different second)
+if [[ `$BINdflt st | egrep -v ' .$'` == "" ]]
+then
+	$SUCCESS "all ignored"
+else
+	$ERROR_NB "Not all entries ignored?"
+	$BINdflt st
+	exit 1
+fi
+
+
+# The prepare_clean does a commit.
+# Remove the filelist, to test with a clean state, too.
+p=`$PATH2SPOOL . dir`
+# For better security
+if [[ "$p" == "" ]]
+then
+  $ERROR "PATH2SPOOL doesn't work!"
+fi
+
+mv "$p" "$p.bak"
+
+$BINq add $file1
+# Then move back, and try again.
+# The added file is un-added by this operation, so add it again.
+mv "$p.bak" "$p"
+# We cannot do a commit, because that would make the added file permanent.
+$BINq add $file2 $file1
+
+
+# The directory is marked as added, too.
+if [[ `$BINdflt st | egrep "^n[m.]\.\." | wc -l` -eq 3 ]]
+then
+	$SUCCESS "3 added"
+else
+	$ERROR "not added?"
+fi
+
+$BINdflt ci -m "add" > $logfile
+if [[ `egrep "^n\.\.\." < $logfile | grep $PRE | wc -l` -eq 2 ]]
+then
+	$SUCCESS "2 committed"
+else
+	$ERROR_NB "adds not committed!"
+	cat $logfile
+	exit 1
+fi
+
+if [[ `svn ls $REPURL/$DIR | grep $PRE | wc -l` -eq 2 ]]
+then 
+	$SUCCESS "Files exist in repository."
+else
+	$ERROR "Files not in repository!"
+fi
+
+if svn cat $REPURL/$file1 | cmp - $file1
+then 
+	$SUCCESS "Filedata correctly sent to repository."
+else
+	$ERROR "Filedata not in repository!"
+fi
+
+
+
+$BINq unversion $file2 > $logfile
+if [[ `$BINdflt st | egrep "^d\.\.\." | wc -l` -eq 1 ]]
+then
+	$SUCCESS "unversioned"
+else
+	$ERROR "not marked for unversioning?"
+fi
+
+if [[ `$BINdflt ci -m "unversion" | tee $logfile | egrep "^d\.\.\." | wc -l` -eq 1 ]]
+then
+	$SUCCESS "unversioned committed"
+else
+	$ERROR "unversioned entries not committed!"
+fi
+
+if [[ -e $file2 ]]
+then 
+	$SUCCESS "file still exists"
+else
+	$ERROR "file was removed!"
+fi
+
+if svn ls $REPURL/$file2 > $logfile 2>&1
+then 
+	$ERROR_NB "file still exists in the repository!"
+	exit 1
+else
+	$SUCCESS "file was removed from repository."
+fi
+
+# try committing an added but non-existing file
+rm $file2
+
+if $BINdflt add $file2 2>&1 > $logfile 2>&1
+then
+	$ERROR "Non-existing file added!"
+else
+	$SUCCESS "Adding a non-existing entry stops."
+fi
+
+# add entry again
+touch $file2
+$BINq add $file2
+rm $file2
+
+# We should always get an error, because the entry does not exist.
+if $BINdflt ci -m "non-exist, add" >> $logfile 2>&1
+then
+  $ERROR "commit sent a non-existing entry!"
+else
+  $SUCCESS "commit stopped on missing entry."
+fi
+
+if [[ `$BINdflt st | tee $logfile | grep $file2` == "n..!"* ]]
+then
+  $SUCCESS "status shows missing entry"
+else
+	$ERROR "status corrupted!"
+fi
+
+$BINdflt add $file2 > $logfile
+if [[ `grep $file2 < $logfile` != "n..!"* ]]
+then
+  $ERROR "add of non-existing gives wrong status"
+else
+	$SUCCESS "non-existing entries can be ignored"
+fi
+
+if [[ `$BINdflt unversion $file2 | tee $logfile | grep $file2` != "d..!"* ]]
+then
+  $ERROR "unversioning a missing entry shows wrong status!"
+else
+	$SUCCESS "non-existing entries can be unversioned"
+fi
+
+
+if $BINdflt -W entry-not-found=stop unversion $file2 > $logfile 2>&1
+then
+  $ERROR "entry mistakenly believed to exist"
+else
+  $SUCCESS "entry not here."
+fi
+
+# Here a WC2_UP_ST_COMPARE would fail, as the ignored and the unversioned files
+# won't get to the other wc.
+# We don't bother with them here. The next test should reinstate 
+# the wc as needed.
+

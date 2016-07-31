@@ -1,0 +1,297 @@
+/**
+\defgroup options Further options for FSVS
+\ingroup compat
+
+Some other options can be set for FSVS.
+
+\note Not all configuration files are read yet; currently only \c 
+$FSVS_CONF/config is used.
+
+These are read from the configuration files \c $FSVS_CONF/fsvs.conf and (if 
+\c $HOME is set) \c $HOME/.fsvs.conf or can be set on the commandline via 
+\c -o.
+
+The (planned) priorities are
+- command line \e (highest)
+- environment variables. These are named as <tt>FSVS_<i>{uppercase option 
+	name}</i></tt>.
+- \c $HOME/.fsvs/wc-dir/config
+- \c $FSVS_CONF/wc-dir/config
+- \c $HOME/.fsvs/config
+- \c $FSVS_CONF/config
+- Default value, compiled in \e (lowest)
+\note The \c $HOME-dependent configuration files are not implemented 
+currently. Volunteers?
+
+
+Example for the commandline:
+\code
+	 fsvs -o path=environment
+\endcode
+Using environment variables:
+\code
+	 FSVS_PATH=absolute fsvs st
+\endcode
+A configuration file:
+\code
+	 # FSVS configuration file
+	 path=wcroot
+\endcode
+
+
+\section o_opt_path Displaying paths
+
+You can specify how paths printed by FSVS should look like; this is used 
+for the entry status output of the various actions, and for the diff header 
+lines. 
+
+There are several possible settings, of which one can be chosen via the \c 
+path option.
+
+- \anchor pd_wcroot \c wcroot \n
+	This is the old, traditional FSVS setting, where all paths are printed 
+	relative to the working copy root.
+
+- \anchor pd_parm \c parameter \n
+	With this setting FSVS works like most other programs - it uses the first 
+	best-matching parameter given by the user, and appends the rest of the 
+	path.\n
+	This is the new default.
+	\note Internally FSVS still first parses all arguments, and then does a 
+	single run through the entries. So if some entry matches more than one 
+	parameter, it is printed using the first. \n
+
+- \anchor pd_absolute \c absolute \n
+	All paths are printed in absolute form. This is useful if you want to 
+	paste them into other consoles without worrying whether the current 
+	directory matches.
+
+The next two are nearly identical to \c absolute, but the beginning of 
+paths are substituted by environment variables. This makes sense if you 
+want the advantage of full paths, but have some of them abbreviated.
+- \anchor pd_env \c environment \n
+	Match variables to directories after reading the known entries, and use 
+	this cached information. This is faster, but might miss the best case if 
+	new entries are found (which would not be checked against possible longer 
+	hits). \n
+	Furthermore, as this works via associating environment variables to 
+	entries, the environment variables must at least match the working copy 
+	base - shorter paths won't be substituted.
+- \c full-environment \n
+	Check for matches just before printing the path. \n
+	This is slower, but find the best fit.
+\note The string of the environment variables must match a directory name; 
+the filename is always printed literally, and partial string matches are 
+not allowed. Feedback wanted.
+\note Only environment variables whose names start with \c WC are used for 
+substitution, to avoid using variables like \c $PWD, \c $OLDPWD, \c $HOME 
+and similar which might differ between sessions.
+Maybe the allowed prefixes for the environment variables should be settable 
+in the configuration. Opinions to the users mailing list, please.
+
+Example, with \c / as working copy base:
+\code
+$ cd /etc
+
+$ fsvs -o path=wcroot st
+.mC.     1001  ./etc/X11/xorg.conf
+
+$ fsvs -o path=absolute st
+.mC.     1001  /etc/X11/xorg.conf
+
+$ fsvs -o path=parameters st
+.mC.     1001  X11/xorg.conf
+$ fsvs -o path=parameters st .
+.mC.     1001  ./X11/xorg.conf
+$ fsvs -o path=parameters st /
+.mC.     1001  /etc/X11/xorg.conf
+$ fsvs -o path=parameters st X11
+.mC.     1001  X11/xorg.conf
+$ fsvs -o path=parameters st ../dev/..
+.mC.     1001  ../dev/../etc/X11/xorg.conf
+$ fsvs -o path=parameters st X11 ../etc
+.mC.     1001  X11/xorg.conf
+$ fsvs -o path=parameters st ../etc X11
+.mC.     1001  ../etc/X11/xorg.conf
+
+$ fsvs -o path=environ st
+.mC.     1001  ./etc/X11/xorg.conf
+$ WCBAR=/etc fsvs -o path=wcroot st
+.mC.     1001  $WCBAR/X11/xorg.conf
+$ WCBAR=/etc fsvs -o path=wcroot st /
+.mC.     1001  $WCBAR/X11/xorg.conf
+$ WCBAR=/e fsvs -o path=wcroot st
+.mC.     1001  /etc/X11/xorg.conf
+$ WCBAR=/etc WCFOO=/etc/X11 fsvs -o path=wcroot st
+.mC.     1001  $WCFOO/xorg.conf
+
+$ touch /etc/X11/xinit/xinitrc
+$ fsvs -o path=parameters st
+.mC.     1001  X11/xorg.conf
+.m.?     1001  X11/xinit/xinitrc
+$ fsvs -o path=parameters st X11 /etc/X11/xinit
+.mC.     1001  X11/xorg.conf
+.m.?     1001  /etc/X11/xinit/xinitrc
+\endcode
+
+\note At least for the command line options the strings can be abbreviated, 
+as long as they're still identifiable.
+Please use the full strings in the configuration file, to avoid having 
+problems in future versions when more options are available.
+
+
+
+\section o_diff Options relating to the "diff" action
+
+The diff is not done internally in FSVS, but some other program is called, 
+to get the highest flexibility.
+
+There are several option values:
+- <tt>diff_prg</tt>: The executable name, default "<tt>diff</tt>".
+- <tt>diff_opt</tt>: The default options, default "<tt>-pu</tt>".
+- <tt>diff_extra</tt>: Extra options, no default.
+
+The call is done as
+\code
+	$diff_prg $diff_opt $file1 --label "$label1" $file2 --label "$label2" $diff_extra
+\endcode
+
+\note In \c diff_opt you should use only use command line flags without 
+parameters; in \c diff_extra you can encode a single flag with parameter 
+(like "<tt>-U5</tt>").
+If you need more flexibility, write a shell script and pass its name as \c 
+diff_prg.
+
+
+\section o_colordiff Using colordiff
+
+If you have \c colordiff installed on your system, you might be interested 
+in the \c colordiff option.
+
+It can take on of these values:
+- \c no, \c off or \c false: Don't use \c colordiff.
+- \c yes, \c true or \c on: If this option is set on the commandline, or 
+	the output is a tty, pipe the output of the \c diff program (see \ref 
+	o_diff) to \c colordiff.
+- \c auto: Like yes, but don't throw an error if colordiff can't be 
+	started; just pipe the data as-is to \c STDOUT.
+
+The default value is \c auto.
+
+
+\section o_filter Filtering entries
+
+Please see the command line parameter \ref glob_opt_filter, which is 
+identical.
+
+
+\section o_warnings Setting warning behaviour
+
+Please see the command line parameter \ref glob_opt_warnings, which is 
+identical.
+
+
+\section o_softroot Using an alternate root directory
+
+This is a path that is prepended to \c $FSVS_WAA and \c $FSVS_CONF 
+(or their default values, see \ref envs), if they do not already 
+start with it, and it is cut off for the directory-name MD5 calculation.
+
+When is that needed? Imagine that you've booted from some Live-CD like 
+Knoppix; if you want to setup or restore a non-working system, you'd have 
+to transfer all files needed by the \c fsvs binary to it, and then start in 
+some kind of \c chroot environment.
+
+With this parameter you can tell \c fsvs that it should load its libraries 
+from the current filesystem, but use the given path as root directory for 
+its administrative data.
+
+This is used for recovery; see the example in \ref howto_backup_recovery.
+
+So how does this work?
+- The internal data paths derived from \c $FSVS_WAA and \c $FSVS_CONF use 
+	the value given for \c softroot as a base directory, if they do not 
+	already start with it.
+	(If that creates a conflict for you, eg. in that you want to use \c /var 
+	as the \c softroot, and your \c $FSVS_WAA should be \c /var/fsvs, you can 
+	make the string comparison fail by using <tt>/./var</tt> for either path.)
+- When a directory name for \c $FSVS_CONF or \c $FSVS_WAA is derived from 
+	some file path, the part matching \c softroot is cut off, so that the 
+	generated names match the situation after rebooting.
+
+Previously you'd have to \ref export your data back to the filesystem and 
+call \ref urls "<tt>fsvs urls</tt>" and \c fsvs \ref sync-repos 
+"sync-repos" again, to get the WAA data back.
+
+\note A plain \c chroot() would not work, as some needed programs (eg. 
+the decoder for update, see \ref s_p_n) would not be available.
+
+\note The easy way to understand \c softroot is: If you want to do a 
+\c chroot() into the given directory (or boot with it as \c /), you'll want 
+this set.
+
+
+\section o_logoutput "fsvs log" output format
+
+You can modify aspects of the \ref log "fsvs log" output format by setting 
+the \c log_output option to a combination of these flags:
+- \c color: This uses color in the output, similar to \c cg-log 
+	(cogito-log); the header and separator lines are highlighted.
+	\note This uses ANSI escape sequences, and tries to restore the default 
+	color; if you know how to do that better (and more compatible), please 
+	tell the developer mailing list.
+- \c indent: Additionally you can shift the log message itself a space to 
+	the right, to make the borders clearer.
+
+Furthermore the value \c normal is available; this turns off all special 
+handling.
+
+\note If you start such an option, the value is reseted; so if you specify 
+\c log_output=color,indent in the global config file, and use \c 
+log_output=color on the commandline, only colors are used. This is a 
+difference to the \ref o_filter option, which is cumulating.
+
+
+\section o_status_color Status output coloring
+
+\c FSVS can colorize the output of the status lines; removed entries will 
+be printed in red, new ones in green, and otherwise changed in blue.  
+Unchanged (for \c -v) will be given in the default color.
+
+For this you can set \c stat_color=yes; this is turned \c off per default.
+
+As with the other colorizing options this gets turned \c off automatically 
+if the output is not on a tty; on the command line you can override this, 
+though.
+
+
+\section o_dir_sort Directory sorting
+
+If you'd like to have the output of \ref status sorted, you can use the 
+option \c dir_sort=yes.
+\c FSVS will do a run through the tree, to read the status of the entries, 
+and then go through it again, but sorted by name. (See dir_enumerator().)
+
+\note If \c fsvs aborts with an error during \ref status output, you might 
+want to turn this option off again (eg. on the commandline with \c 
+-odir_sort=no) to see where \c fsvs stops.
+
+
+\section o_commit_to Destination URL for commit
+
+If you defined multiple URLs for your working copy, \c FSVS needs to know 
+which URL to commit to.
+
+For this you would set \c commit_to to the \b name of the URL; see this 
+example:
+\code
+		fsvs urls N:master,P:10,http://... N:local,P:20,file:///...
+		fsvs ci /etc/passwd -m "New user defined" -ocommit_to=local
+\endcode
+
+\section o_debug_output Destination for debug output
+
+See \ref glob_opt_deb.
+
+*/
+// vi: filetype=doxygen spell spelllang=en_us formatoptions+=ta : 

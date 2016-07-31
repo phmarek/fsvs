@@ -1,0 +1,122 @@
+#!/bin/bash
+
+set -e
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+file=empty-file
+propname=blablubli
+propvalue=foobarbaz
+
+$BINdflt ps "$propname" "$propvalue" "$file"
+propvalread=`$BINdflt pg "$propname" "$file"`
+if [[ "$propvalread" == "$propvalue" ]]
+then
+	$SUCCESS "Property successfully read back"
+else
+	$ERROR "Property not read!"
+fi
+
+if [[ `$BINdflt pl -v $file` == "$propname=$propvalue" ]]
+then
+	$SUCCESS "Property successfully listed"
+else
+	$ERROR "Property not listed!"
+fi
+
+# empty property
+$BINdflt ps "$propname" "" "$file"
+if [[ `$BINdflt pl -v $file` == "$propname=" ]]
+then
+	$SUCCESS "Property successfully emptied"
+else
+	$ERROR "Property not emptied!"
+fi
+
+# delete property
+$BINdflt pd "$propname" "$file"
+if [[ `$BINdflt pl $file` == "$file has no properties." ]]
+then
+	$SUCCESS "Property successfully removed"
+else
+	$ERROR "Property not removed!"
+fi
+
+
+# re-set.
+$BINdflt ps "$propname" "$propvalue" "$file"
+
+$BINq ci -m "prop"
+
+cd $WC2
+
+$BINq up
+$INFO "Updated other working copy."
+
+propvalread=`$BINdflt pg "$propname" "$file"`
+if [[ "$propvalread" == "$propvalue" ]]
+then
+	$SUCCESS "Property successfully read back"
+else
+	$ERROR "Property not read!"
+fi
+
+
+if $BINq ps a b does-not-exist 2> /dev/null
+then
+  $ERROR "Sets properties for unknown entries"
+else
+  $SUCCESS "Rejects unknown entries"
+fi
+
+
+file=abc.$RANDOM
+function CheckStatus
+{
+	exp=$1
+  verb=$2
+
+	# We need -C for the test with only changed mtime, but again with 0 
+	# bytes.
+
+	if [[ `$BINdflt st $file -C | cut -c1-5` != "$exp" ]]
+	then 
+		$BINdflt st $file
+		$ERROR "Wrong status output - expected '$exp'."
+	fi
+
+	if [[ `$BINdflt st $file -v -C | cut -c1-7` != "$verb" ]]
+	then 
+		$BINdflt st $file -v
+		$ERROR "Wrong verbose status output - expected '$verb'."
+	fi
+}
+
+touch -d 12:00 $file
+CheckStatus "N... " "N..... "
+
+$BINq ps a b $file
+CheckStatus "nP.. " "n..P.. "
+
+$BINq ci -m2
+CheckStatus "" "...... "
+
+$BINq ps a c $file
+CheckStatus ".P.. " "...P.. "
+
+echo aaaa > $file
+touch -d 12:00 $file
+CheckStatus ".PC. " "...PC. "
+
+rm $file
+touch $file
+CheckStatus ".m.. " ".t.P.. "
+
+$SUCCESS "All status outputs are ok."
+
+# What happens if we change a property on a deleted entry? The property 
+# change would simply get lost - we only send the delete to the repository.
+
+

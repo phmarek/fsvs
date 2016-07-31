@@ -1,0 +1,80 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+if [[ "$UID" -eq 0 ]]
+then
+  # If we simply changed to another uid (eg. via perl $< = $> = 1),
+	# how could we be sure that all needed areas (wc, wc2, repos, ...)
+	# are writeable by that other user?
+	# Currently only test if non-root.
+	$WARN "Test for EPERM-warnings not done for UID 0."
+	exit
+fi
+
+
+file=file
+
+touch $file
+$BINq ci -m "x"
+
+
+# Now change owner/group
+# Sadly svn won't do "svn ps file://...."
+svn co $REPURL tmp/
+for prop in svn:owner svn:group
+do
+	old=`svn pg $prop tmp/$file`
+	new=`perl -e 'print shift() ^ 1' $old`
+	svn ps $prop $new tmp/$file
+done
+svn ci -m "x" tmp
+rm -rf tmp
+
+
+logfile=$LOGDIR/030.logfile
+
+
+# We test with stop first, as with a simple warning the file could
+# checked out and the next update would have nothing to do.
+# Now we get an error:
+echo "Testing stopping"
+if $BINdflt -v up -W chown-eperm=stop > $logfile 2>&1
+then
+	$ERROR_NB "not stopped!"
+	cat $logfile
+	exit 1
+else
+	if [[ `grep chown-eperm $logfile | wc -l` -eq 1 ]]
+	then
+		$SUCCESS "stopped."
+	else
+		$ERROR_NB "stopped for wrong reason?"
+		cat $logfile
+		exit 1
+	fi
+fi
+
+
+# We get a warning:
+echo "Testing warning"
+$BINdflt up -v > $logfile 2>&1 
+# && $ERROR "no exit status!"
+# should a warning give an exit status?
+if [[ `grep chown-eperm $logfile | wc -l` -ge 1 ]]
+then
+	$SUCCESS "warning given"
+else
+	$ERROR_NB "warning NOT given"
+	cat $logfile
+	exit 1
+fi
+
+
+rm $logfile
+
+$WC2_UP_ST_COMPARE > /dev/null 2>&1
+

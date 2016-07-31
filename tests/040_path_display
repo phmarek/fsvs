@@ -1,0 +1,120 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/040.paths.log
+
+sleep 1
+
+seq 1 10 > tree/b/2/file-x
+
+# Locally remove WC1, so that only WC matches
+export WC1=barbaz
+
+
+# Now test the filename display
+function T
+{
+	path=$1
+	pat=$2
+	chg=${3:-.mC.}
+
+	$BINdflt st $path -opath=$pathparm > $logfile
+	if [[ `wc -l < $logfile` -ne 1 ]]
+	then
+		$ERROR_NB "too many lines:"
+		cat $logfile
+		exit 1
+	fi
+
+	if grep "^$chg \+[a-z0-9]\+ \+$pat" < $logfile > /dev/null
+	then
+		true
+	else
+		echo "path=$pathparm of $path ~~ $pat"
+		echo '  '`cat $logfile`
+		$ERROR "doesn't match $pat"
+	fi
+}
+
+cd tree/b
+
+
+pathparm=parameter
+$INFO "testing '-opath=$pathparm'"
+T "" "2/file-x"
+T "." "./2/file-x"
+T ".." "../b/2/file-x"
+T "../a/.." "../a/../b/2/file-x"
+T "2" "2/file-x"
+T "2/file-x" "2/file-x"
+T "../a/../b/2/file-x" "../a/../b/2/file-x"
+
+for pathparm in environment full-environment
+do
+	$INFO "testing '-opath=$pathparm'"
+	T "" "\$WC/tree/b/2/file-x"
+	T "." "\$WC/tree/b/2/file-x"
+	T ".." "\$WC/tree/b/2/file-x"
+	T "../a/.." "\$WC/tree/b/2/file-x"
+	# variable has only part of name
+	export WCBLUBB=$WC/tre
+	T "" "\$WC/tree/b/2/file-x"
+	export WCBLUBB=$WC/tree/b/2
+	T "../a/.." "\$WCBLUBB/file-x"
+	WCBLUBB=
+done
+
+pathparm=wcroot
+$INFO "testing '-opath=$pathparm'"
+T ""         "./tree/b/2/file-x"
+T "."        "./tree/b/2/file-x"
+T "../b"     "./tree/b/2/file-x"
+T "../a/.."  "./tree/b/2/file-x"
+T "2"        "./tree/b/2/file-x"
+
+pathparm=absolute
+$INFO "testing '-opath=$pathparm'"
+T ""         "$WC/tree/b/2/file-x"
+T "."        "$WC/tree/b/2/file-x"
+T "../b"     "$WC/tree/b/2/file-x"
+T "../a/.."  "$WC/tree/b/2/file-x"
+
+
+$INFO "checking for new entries"
+mkdir -p h/j
+pathparm=environment
+T h/j "\$WC/tree/b/h/j" N...
+WCBLUBB=$WC/tree/b/h T h/j "\$WC/tree/b/h/j" N...
+pathparm=full-environment
+T h/j "\$WC/tree/b/h/j" N...
+WCBLUBB=$WC/tree/b/h T h/j "\$WCBLUBB/j" N...
+
+$SUCCESS "Status output ok."
+
+
+$INFO "Testing diff"
+function D
+{
+	how=$1
+	pat=$2
+	$BINdflt diff 2 -opath=$how > $logfile
+	if [[ `grep -c "$pat" < $logfile` -ne 3 ]]
+	then
+		$ERROR "Diff output wrong"
+	fi
+}
+
+for x in environment full-environment
+do
+	D $x "\$WC/tree/b/2/file-x"
+	WCBLUBB=$WC/tree/b D $x "\$WCBLUBB/2/file-x"
+	WC=asf D $x "$WC/tree/b/2/file-x"
+done
+
+
+$SUCCESS "Diff output ok."
+

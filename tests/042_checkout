@@ -1,0 +1,62 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+
+
+# export to new directory
+CODIR=$WC2/checkout
+if [[ -e $CODIR ]]
+then
+  rm -r $CODIR
+fi
+
+dir_norm=`$PATH2SPOOL $CODIR dir`
+dir_sr=`$PATH2SPOOL $CODIR dir $WC2`
+echo Got filenames:
+echo "   normal   "$dir_norm
+echo "   softroot "$dir_sr
+rm $dir_norm $dir_sr 2> /dev/null || true
+
+mkdir $CODIR
+$BIN checkout $REPURL $CODIR
+$COMPAREWITH $CODIR
+
+rm -rf $CODIR
+mkdir $CODIR
+$BINq checkout -r 3 $REPURL $CODIR
+$BINq up -r 3 $WC
+$COMPAREWITH $CODIR
+
+if [[ -e $dir_norm && ! -e $dir_sr ]]
+then
+  $SUCCESS "Checkout makes the correct dir file (1)"
+else
+  $ERROR "Checkout doesn't create the dir listings (1)"
+fi
+
+# Test softroot
+rm -rf $CODIR
+mkdir -p $CODIR $WC2/$FSVS_CONF $WC2/$FSVS_WAA
+rm $WC2/$dir_norm $WC2/$dir_sr $dir_norm $dir_sr 2>/dev/null || true
+# Test normalization too - make extra slashes
+$BINq checkout -o softroot=//$WC2/././ $REPURL //$CODIR// # > $LOGDIR/042.checkout_softroot
+$BINq up $WC
+$COMPAREWITH $CODIR
+
+if [[ ! -e $WC2/$dir_norm && -e $WC2/$dir_sr &&
+			! -e $dir_norm && ! -e $dir_sr ]]
+then
+  $SUCCESS "Checkout makes the correct dir files (2)"
+else
+	LC_ALL=C ls -la $WC2/$dir_norm $WC2/$dir_sr $dir_norm $dir_sr 2>&1 | perl -pe 'sub BEGIN { $x=shift() } s#$x/##;' $TESTBASE || true
+  $ERROR "Checkout doesn't create the correct dir listings (2)"
+fi
+
+
+# Lets see if a later update works
+$BINq update -r 3 -o softroot=/./$WC2/.// /./$CODIR// 
+$BINq update -r HEAD -o softroot=/././$WC2/././ /./$CODIR// 
+$COMPAREWITH $CODIR
+

@@ -1,0 +1,78 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+umask 0
+touch -t 200502281400.13 empty-file
+echo blabla > blabla
+chmod 2741 blabla || chmod 741 blabla
+
+# symlinks
+ln -s blabla blabla-symlink
+ln -s reclink reclink
+ln -s non-existant invalid-symlink
+
+umask 023
+mkdir dir-with-perms
+
+ln -s dir-with-perms symlink-to-empty-dir
+ln -s tree symlink-to-dir
+
+mkdir long_name_dir
+perl -e 'print pack("c",$_) for (33..125)' > long_name_dir/chars
+date > long_name_dir/28374fwlifuazwlgvkaj.sbg.awilgzq3a5zgh-aenr.kahw4tgeoa34zht2l3kj4zhwq34tgza.we24ltzkn351243tgwerg
+
+# just a bit above 512kB
+filename=big_file
+seq 1 99999 > $filename
+
+for i in a b c
+do
+  for j in 1 2 3
+	do
+		p=tree/$i/$j
+		mkdir -p $p
+		for k in x y z
+		do
+		  echo $RANDOM > $p/file-$k
+		done
+	done
+done
+
+#ln /dev/urandom .
+if [[ `id -u` -eq 0 ]]
+then
+  cp -a /dev/null device
+	chmod 765 device
+	chown 1.2 device
+  cp -a /dev/null device-2be-updated
+	chmod 123 device-2be-updated
+fi
+
+# If we're not UID 0, that's simply a dangling link more.
+ln -s device device-link
+
+# encoder/decoder
+encoder="openssl enc -e -a"
+decoder="openssl enc -d -a"
+filename=enc-dec
+echo $encoder $decoder > $filename
+$BINq ps fsvs:commit-pipe "$encoder" $filename
+$BINq ps fsvs:update-pipe "$decoder" $filename
+
+
+$BINq ci -m "some entries"
+$BINq st
+
+echo new file > newfile1
+echo new file > newfile2
+$BINq ci -m "newfile"
+rm newfile2
+$BINq ci -m "rm newfile"
+
+cat long_name_dir/chars > copied
+$BINq cp long_name_dir/chars copied
+$BINq ci -m "copy"

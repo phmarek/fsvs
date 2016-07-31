@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# How many parallel working copies are used
+DATA_WCs=4
+# Which working copy is used for updating
+UP_WC=`expr $DATA_WCs + 1`
+# Which working copy gets the data per rsync
+CMP_WC=`expr $UP_WC + 1`
+
+set -e
+$PREPARE_CLEAN WC_COUNT=$CMP_WC > /dev/null
+$INCLUDE_FUNCS
+
+
+for i in `seq 1 $DATA_WCs`
+do
+  cd $WCBASE$i
+	tu=$REPURL/$i
+	svn mkdir $tu -m $i
+	echo $tu | $BINq urls load
+	mkdir dir-$i common
+	touch file-$i dir-$i/file-$i common/file-$i
+	echo "Overlay $i" > overlayed
+	$BINq ci -m "ci$i"
+done
+
+cd $TESTBASE
+
+# In the first run we do an update, the others do changes.
+export _WC=$WCBASE$UP_WC
+make -C $TEST_PROG_DIR prepare_wc > /dev/null
+cd $_WC
+
+for prio_has in `seq 1 $DATA_WCs`
+do
+	$INFO "Going with prio_has=$prio_has"
+	# Construct the URL list and build the compare-directory
+	urls=
+	parm=--delete
+	echo "" | $BINq urls load
+	for i in `seq 1 $DATA_WCs`
+	do
+# rotate the highest-priority URL
+	  nr=`perl -e 'print 1+(shift()-1+shift()-1) % shift()' $prio_has $i $DATA_WCs`
+		$BINq urls P:$i,$REPURL/$nr
+
+		rsync -a $parm $WCBASE$nr/ $WCBASE$CMP_WC/
+		parm=--ignore-existing
+	done
+
+	$BINq up > /dev/null
+	$COMPARE $WCBASE$UP_WC/ $WCBASE$CMP_WC/
+done
+
+$SUCCESS "Multi-url update test passed."

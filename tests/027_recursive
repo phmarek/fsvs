@@ -1,0 +1,110 @@
+#!/bin/bash
+
+set -e
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+LOGFILE=$LOGDIR/027.recursive
+
+mkdir -p 1/2/3/4/5/6
+mkdir 1/2/3/4/5/d
+list="1/2/3/4/5/6 1/2/3/4 1/2"
+for f in $list
+do
+	echo $f > $f-changed
+	echo $f > $f-same
+done
+# commit some of the files
+$BINdflt ci -m 1 -q
+( cd $WC2 && $BINq up )
+sleep 1
+
+for n in new changed
+do
+	for f in $list
+	do
+		echo $n `date` > $f-$n
+	done
+done
+# Change directories' mtime
+touch $list
+# remove directory
+rmdir 1/2/3/4/5/d
+
+
+function check
+{
+	cmd=$1
+	shift
+	msg=$3
+	$BINdflt $cmd $1 > $LOGFILE
+	if [[ `wc -l < $LOGFILE` -ne $2 ]]
+	then
+		$ERROR "$msg failed - wrong number of output lines."
+	fi
+
+	shift 3
+	while [[ "$1" != "" ]]
+	do
+		if [[ `grep $1 < $LOGFILE | wc -l` -ne $2 ]]
+		then
+			$ERROR_NB "$msg"
+			cat $LOGFILE
+			$ERROR "expected $2 $1."
+		fi
+		shift 2
+	done
+
+	$SUCCESS "$msg"
+}
+
+function status
+{
+	check status "$@"
+}
+
+function revert
+{
+	check revert "$@"
+}
+
+status "" 13 "Recursive status from root" changed 3 new 3 same 0
+status "1/2/3" 9 "Partial recursive status" changed 2 new 2 same 0
+status "1/2/3 -N" 4 "Partial non-recursive status" changed 1 new 1 same 0
+status "1/2/3 -N -N" 1 "Partial atomic status" changed 0 new 0 same 0
+status "1/2/3/4/5/6?* -N -N" 2 "Status with wildcard" changed 1 new 1 same 0
+status "1/2/3/4/5/6?* -N -N -v" 3 "Verbose status with wildcard" changed 1 new 1 same 1
+
+
+# Revert prints the revision it reverts to, so we get an extra line.
+revert "1/2/3/4/5/d" 2 "Revert of directory deletion" /d 1 changed 0 same 0 new 0
+revert "1/2/3/4/5/6-changed" 2 "Single revert" changed 1 same 0 new 0
+status "1/2/3/4/5/6-changed -v" 1 "Status after revert" changed 1 same 0 new 0 "-F ....." 1
+echo $RANDOM > 1/2/3/4/5/6-changed
+revert "1/2/3/" 4 "Non-recursive revert" changed 1 same 0 new 0 ".m.?" 2 dir 2
+revert ". -R" 7 "Recursive revert" changed 2 same 0 new 0
+status "." 6 "Status after revert" new 3 changed 0 same 0
+status ". -v" 17 "Verbose status after revert" new 3 changed 3 same 3 "-F ......" 11
+
+# Don't try this at home!
+rm -r *
+revert ". -R" 15 "Full revert" changed 3 same 3 /d 1 new 0 dir 8 5/6 3
+# Now the status is empty - all is like it was.
+status "." 0 "Rec st after full revert" changed 0 new 0 same 0 "-F ......" 0
+status ". -v" 14 "Rec verb st after full revert" changed 3 new 0 same 3 "-F ......" 14 /d 1
+$WC2_UP_ST_COMPARE
+
+sleep 1
+for f in $list
+do
+	echo something-else > $f-changed
+	echo something-else > $f-same
+done
+
+# Directories whose entries got changed get a new mtime.
+revert ". -R" 10 "Full revert 2" changed 3 same 3 /d 0 new 0 ./1/2 8
+# Now the status is empty - all is like it was.
+status "." 0 "Rec st after full revert 2" changed 0 new 0 same 0 "-F ....." 0
+status ". -v" 14 "Rec verb st after full revert 2" changed 3 new 0 same 3 "-F ....." 14 /d 1
+$WC2_UP_ST_COMPARE

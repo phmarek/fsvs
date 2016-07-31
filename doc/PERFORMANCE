@@ -1,0 +1,85 @@
+- Program size is 280kB with debug information, 96kB without.
+  Needed libraries not counted.
+	Some debug code could be eliminated by "configure --enable-release".
+
+- Initial checkin can take a while - there's a lot of data to transfer.
+
+- memory usage: my test machine with 150000 files never grew 
+  over 34MB in memory usage.
+  (That is, with apr_pool_destroy(); with apr_pool_clean() I had to kill
+  the process at 170MB)
+
+- The fsfs backend makes two files out of one date file - one for meta-data
+  (properties) and one for the real file-data.
+  So 300000 files are created for a commit of 130000 files. 
+	** On ext3 enable dir_index ** (see "tune2fs", "fsck.ext3 -D") or use bdb.
+
+- "fsvs status" is (on cold caches) faster than "find"!
+	See here:
+	Script started on Mon 09 Jul 2007 16:48:34 CEST
+	# How many entries are here?
+		dolly:/example# find . | wc -l
+		22147
+	# Initialize fsvs, so that it knows its basepath
+		dolly:/example# fsvs urls file:////
+	# Warm up caches
+		dolly:/example# find . > /dev/null
+	# find with hot cache:
+		dolly:/example# time find . > /dev/null
+
+		real	0m0.096s
+		user	0m0.052s
+		sys	0m0.044s
+	# Warm up cache (should already be done by find)
+		dolly:/example# fsvs st > /dev/null
+	# fsvs with hot cache:
+		dolly:/example# time fsvs st > /dev/null
+
+		real	0m0.175s
+		user	0m0.088s
+		sys	0m0.088s
+	# Clear cache
+		dolly:/example# echo 3 > /proc/sys/vm/drop_caches 
+	# find with cold cache - harddisk must seek a fair bit.
+		dolly:/example# time find . > /dev/null
+
+		real	0m8.279s
+		user	0m0.084s
+		sys	0m0.212s
+	# Clear cache
+		dolly:/example# echo 3 > /proc/sys/vm/drop_caches 
+	# fsvs with cold cache - harddisk must seek again
+		dolly:/example# time fsvs st > /dev/null
+
+		real	0m7.333s
+		user	0m0.148s
+		sys	0m0.372s
+	# Now build a list of entries, like the one that exists after commit
+		dolly:/example# fsvs _build > /dev/null
+	# Clear cache
+		dolly:/example# echo 3 > /proc/sys/vm/drop_caches 
+	# fsvs with cold cache, but using a sorted list of existing entries -
+	# harddisk doesn't need to seek as much
+		dolly:/example# time fsvs st > /dev/null
+
+		real	0m6.000s
+		user	0m0.240s
+		sys	0m0.372s
+	# Result:
+		dolly:/example# bc -l
+		bc 1.06
+		Copyright 1991-1994, 1997, 1998, 2000 Free Software Foundation, Inc.
+		This is free software with ABSOLUTELY NO WARRANTY.
+		For details type `warranty'.
+		8.279/6.00
+		1.37983333333333333333
+		6.00/8.279
+		.72472520835849740306
+	# 28% (or 38%) time saved!
+		dolly:/example# exit
+	Script done on Mon 09 Jul 2007 16:50:13 CEST
+
+- testing goes much faster if you create a /tmp/ram directory and mount a
+  tmpfs there. *** DO NOT USE ramfs !!! *** ramfs doesn't update the
+	directory modification time on file creations, so fsvs won't work.
+

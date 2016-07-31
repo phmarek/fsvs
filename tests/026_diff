@@ -1,0 +1,52 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+file=diff-file
+log=$LOGDIR/026.diff-log
+
+echo "line" > $file
+$BINq ci -m "repos-vers"
+
+echo "something else" > $file
+sleep 1
+
+if [[ `$BINdflt diff $file | wc -l` -eq 6 ]]
+then
+	$SUCCESS "We get a diff"
+else
+	$ERROR "No diff shown."
+fi
+
+# Only headerline
+if [[ `FSVS_DIFF_PRG=true $BINdflt diff $file | wc -l` -eq 1 ]]
+then
+	$SUCCESS "FSVS_DIFF_PRG is honored"
+else
+	$ERROR "FSVS_DIFF_PRG doesn't work?"
+fi
+
+FSVS_DIFF_PRG=true $BINdflt diff -v $file > $log
+# We cannot be absolutely sure that the mtime doesn't wrap into the next 
+# second, so there might be +- lines for meta-data.
+if [[ `grep -E '^.(Mode|MTime|Owner|Group): ' $log | wc -l` -lt 4 ]]
+then
+	$ERROR "Meta-data output missing?"
+else
+	$SUCCESS "Meta-data is printed"
+fi
+
+
+$BINq revert $file
+
+if [[ `$BINdflt diff $file | wc -l` -eq 0 ]]
+then
+	$SUCCESS "No diff if not changed"
+else
+	$ERROR "Too much output for unchanged files!"
+fi
+
+

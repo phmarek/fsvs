@@ -1,0 +1,32 @@
+## Stops automatically in _do_component_tests.
+## Test for option parsing.
+
+set debuglevel=1
+
+set opt__list[OPT__FILTER].i_val=0
+set opt__list[OPT__FILTER].prio=0
+#= 0
+print opt__list[OPT__FILTER].i_val
+print opt__list[OPT__FILTER].prio
+
+set buffer="filter=any"
+call opt__parse(buffer, 0, 1)
+#= -1
+print opt__list[OPT__FILTER].i_val
+
+set buffer="filter\0none;text"
+call opt__parse(buffer, buffer+7, 2)
+#= 5
+print opt__list[OPT__FILTER].i_val
+
+set buffer="filter=none"
+call opt__parse(buffer, 0, 3)
+#= 0
+print opt__list[OPT__FILTER].i_val
+
+
+call strcpy(buffer, "filter=mtime,owner:group")
+call opt__parse(buffer, 0, 4)
+#= 0xe0
+print /x opt__list[OPT__FILTER].i_val
+

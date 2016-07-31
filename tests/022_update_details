@@ -1,0 +1,77 @@
+#!/bin/bash
+# Test whether "fsvs up" hides previously new files.
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+filename=new-file-XYZ
+dir=new-dir-ABC
+file2=$dir/EFGH
+
+logfile=$LOGDIR/022.logfile
+
+
+# We don't use backticks here - in case there's an error in fsvs, the shell
+# would not stop.
+$BIN up > $logfile
+# this next line has two tabulators - in grep and cut
+rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d"."` 
+echo "now at rev. $rev"
+
+touch empty-file
+$BIN ci -m "new file"
+# Goto old revision
+$BIN up -r$rev
+
+# as to detect WC changes ...
+sleep 1
+
+# Modify WC
+mkdir $dir
+echo A > $filename
+echo B > $file2
+
+# Save current state
+$BINdflt st | grep new > $logfile
+
+# Goto last revision
+$BIN up
+
+# The status must not have changed!
+if $BINdflt st | grep new | cmp $logfile -
+then
+  $SUCCESS "update keeps new files, status shows them"
+else
+  $ERROR_NB "update hides new files:"
+	$ERROR_NB "old was:"
+	cat $logfile
+	$ERROR_NB "new is:"
+	$BINdflt st
+	exit 1
+fi
+
+# Now commit, so that the new files are versioned
+$BINq ci -m "new"
+
+
+# now set a fixed target revision
+$INFO	"Testing fixed target revision $rev"
+$BINq urls target:$rev,$REPURL
+$BINq up
+( cd $WC2 ; $BINq up -r$rev )
+$COMPAREWITH $WC2
+
+# But command-line has still precedence
+$BINq up -rHEAD
+( cd $WC2 ; $BINq up )
+$COMPAREWITH $WC2
+
+# Return to old revision
+$BINq up
+( cd $WC2 ; $BINq up -r$rev )
+$COMPAREWITH $WC2
+
+
+$SUCCESS "Update-behaviour passed."

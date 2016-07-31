@@ -1,0 +1,214 @@
+###########################################################################
+ # Copyright (C) 2005-2006 Philipp Marek.                                #
+ #                                                                       #
+ # This program is free software;  you can redistribute it and/or modify #
+ # it under the terms of the GNU General Public License version 2 as #
+ # published by the Free Software Foundation.                            #
+###########################################################################
+
+
+
+################################ Definitions ################################
+DIR	:= /usr/share/doc
+
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.11/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 1124 $"
+VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
+
+CFLAGS	:= @CFLAGS@
+CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"' 
+LDFLAGS	:= @LDFLAGS@
+FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_ra-1 -lsvn_client-1 -lpcre -lgdbm
+
+ifdef RPATH
+LDFLAGS	+= -Wl,-rpath,$(RPATH)
+endif
+
+ifeq (@ENABLE_DEBUG@, 1)
+	CFLAGS += -DDEBUG -g
+	LDFLAGS += -g
+ifeq (@ENABLE_GCOV@, 1)
+	CFLAGS += -fprofile-arcs -ftest-coverage
+	LDFLAGS += -fprofile-arcs
+endif
+endif
+
+
+C_FILES	:= $(wildcard *.c)
+H_FILES	:= $(wildcard *.h)
+D_FILES := $(C_FILES:%.c=.%.d)
+DEST	:= fsvs
+
+
+################################ Targets ###################################
+ifeq (@CHROOTER_JAIL@, )
+all:	deps tags $(DEST) lsDEST
+else
+all:	tools/fsvs-chrooter
+endif
+
+
+tags:	$(C_FILES) $(wildcard *.h)
+	@echo "     $@"
+	@-ctags $^
+.IGNORE: tags
+clean:
+	rm -f *.o *.s $(D_FILES) $(DEST) 2> /dev/null || true
+
+lsDEST: $(DEST)
+	@ls -la $<
+
+version:
+	@echo $(VERSION)
+
+version-nnl:
+	@perl -e '$$_=shift; s/\s+$$//; print;' $(VERSION)
+
+.SILENT: version.nnl version
+
+
+################################ Distribution ###############################
+
+# No automatic rebuild (?)
+#../doc/USAGE: $(C_FILES) $(H_FILES)
+#.PHONY: ../doc/USAGE
+DOXDIR=../../www/doxygen/html/
+DOXFLAG=../../www/doxygen/html/index.html
+$(DOXFLAG):
+	( cat doxygen-data/Doxyfile ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
+$(DOXDIR)/group__cmds.html: $(DOXFLAG)
+	touch $@
+$(DOXDIR)/group__ignpat.html: $(DOXFLAG)
+	touch $@
+
+../doc/USAGE: $(DOXDIR)/group__cmds.html
+	dev/dox2txt.pl $< > $@
+../doc/IGNORING: $(DOXDIR)/group__ignpat.html
+	dev/dox2txt.pl $< > $@
+doc.g-c: ../doc/USAGE
+	# Generate static text strings
+	( cat $< ; echo "end" ) | dev/make_doc.pl > $@
+docs: $(DOXFLAG) ../doc/USAGE ../doc/IGNORING doc.g-c
+.PHONY: docs $(DOXFLAG)
+
+
+################################ Rules ######################################
+%.o:	%.c
+	@echo "     CC $<"
+	@$(CC) $(CFLAGS) -c -o $@ $<
+
+# if the Makefile has changed, the output will (at least sometimes)
+# change, too.
+$(DEST): $(C_FILES:%.c=%.o)
+	@echo "     Link $@"
+	@$(CC) $(FSVS_LDFLAGS) $(LDLIBS) -o $@ $^
+ifeq (@ENABLE_RELEASE@, 1)
+	-strip $@
+endif
+
+
+# For debugging: generate preprocessed, generate assembler
+%.s:	%.c
+	$(CC) $(CFLAGS) -S -o $@ $< || true
+%.P	: %.c
+	$(CC) $(CFLAGS) -E -o $@ $<
+
+
+############################### Dependencies ################################
+deps:	$(D_FILES)
+.%.d:	%.c
+	@echo "     deps for $<"
+	@$(CC) $(INCS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
+#	$(CC) $(INCS) -MM -MF $@ $<
+include $(D_FILES)
+
+tools/fsvs-chrooter: tools/fsvs-chrooter.c
+tools/fsvs-chrooter: interface.h config.h
+
+############################### Benchmarking ################################
+tts:	$(DEST) 
+	time ./$< st -B $(DIR) > /dev/null || true
+tt:	$(DEST) 
+	time ./$< st $(DIR) > /dev/null || true
+ft:
+	time find $(DIR) -mtime +1 > /dev/null || true
+cgt:
+	time callgrind --collect-systime=yes --collect-jumps=yes --dump-instr=yes fsvs st $(DIR)
+
+oom:
+	@echo doing oom ...
+	@sysctl -q -n -e -w kernel.printk=0 || true
+	@perl -e '$$a="01234567" x 1024; $$b.=$$b.$$a while 1' 2>/dev/null || true
+	@sysctl -q -n -e -w kernel.printk=7 || true
+
+waaclean:
+	@( test -n "$(FSVS_WAA)" && rm $(FSVS_WAA)/*/*/* ) || true
+
+benchmark:
+	@$(MAKE) --no-print-directory oom DIR=$(DIR)
+	@$(MAKE) --no-print-directory ft DIR=$(DIR)
+	@$(MAKE) --no-print-directory oom DIR=$(DIR)
+	@$(MAKE) --no-print-directory tts DIR=$(DIR)
+	@$(MAKE) --no-print-directory oom DIR=$(DIR)
+	@$(MAKE) --no-print-directory tt DIR=$(DIR)
+
+
+ifeq (@ENABLE_GCOV@, 1)
+GCOV_FILES := $(C_FILES:%.c=%.c.gcov)
+GCOV_SMRY_FILES := $(GCOV_FILES:%.gcov=%.gcov.smry)
+GCOV_DATA := $(C_FILES:%.c=%.gcda) $(C_FILES:%.c=%.gcno)
+
+gcov:  $(GCOV_FILES)
+	dev/gcov-summary.pl $(GCOV_SMRY_FILES)
+
+%.c.gcov:	%.c
+	gcov -f $< > $<.gcov.smry
+
+gcov-clean:
+	rm -f *.gcov *.gcov.smry *.gcda 2> /dev/null || true
+
+gcov-unused-funcs:
+	grep -B1 ":0.00%" *.gcov.smry
+
+.PHONY: gcov gcov-clean
+endif
+
+
+
+.PHONY: waaclean oom ft tt tts benchmark version version-nnl
+
+
+################################ Statistics #################################
+diffstat:
+	svk diff | diffstat
+
+count:
+	@echo "sum of lines:                        "`cat $(C_FILES) $(H_FILES) | wc -l -`
+	@echo "sum w/o comments, {, }, empty lines: "`perl -e 'undef $$/; while (<>) { 1 while s#//.*##; 1 while s#/\\*[\\x00-\\xff]*?\\*/##; 1 while s#\s*[{}]\s*##; $$c++ while s#[\r\n]+# #; }; sub END { print $$c,"\n" } ' $(C_FILES) $(H_FILES)` 
+
+revcount: count
+	@last_rev=$(shell svk info | grep Revision | cut -d" " -f2) ; echo "number of edits up to revision $$last_rev:" ; for r in `seq 2 $$last_rev` ; do svk diff -r`expr $$r - 1`:$$r /svn2/trunk ; done | perl -pe 's#\ssrc/# #g;' | diffstat
+
+.PHONY:	revcount count diffstat
+
+
+################################ Testing ####################################
+run-tests: $(DEST)
+	$(MAKE) -C ../tests BINARY=$(shell pwd)/$(DEST) $(TESTS)
+ifeq (@ENABLE_GCOV@, 1)
+# I don't know why, but gcov wants to open the .gcda and .gcno
+# files Read-Write. I filed a bug report for this.
+# If the tests are run as root (which is currently necessary because
+# of the devices and device-tests), the normal user who compiled
+# the sources will not be allowed to open this files ...
+	@chmod 777 $(GCOV_DATA)
+endif
+
+ext-tests: $(DEST)
+	dev/permutate-all-tests.sh
+
+.PHONY:	run-tests ext-tests
+
+
+################################ -- THE END -- ##############################
+## vi: ts=8 sw=8

@@ -1,0 +1,105 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+######################################################################
+#
+# Preferable we should not only do such a mini-test for locales,
+# but do the whole test-suite with both language settings.
+# 
+# - Define an environment variable for the unicode-characters 
+#   (eg FSVSTEST_CH)
+# - Skip this script if FSVSTEST_CH is set
+# - Call the testsuite with FSVSTEST_CH and locale set to UTF8
+# - Call the testsuite with FSVSTEST_CH with local encodings
+# - Change the testsuite to use $FSVSTEST_CH in the filenames
+#   (and commit messages)
+#
+# Contributions?? Thank you!
+#
+######################################################################
+
+
+function testfunc
+{
+	filename=$1
+
+		touch file-$filename
+		ln -s file-$filename link-$filename
+		ln -s bad-$filename badlink-$filename
+		$BIN ci -m "locale ci $filename"
+		$WC2_UP_ST_COMPARE
+
+    if [[ `svn ls $REPURL/ | grep -F "$filename" | wc -l` -eq 3 ]]
+		then
+			echo "Ok, found all 3 entries."
+		else
+		  $ERROR "En/Decode problem - entries not found."
+		fi
+
+		# TODO: test whether the entries are correct in the other locale.
+
+		rm *
+		$BIN ci -m "locale ci $filename cleanup"
+		$WC2_UP_ST_COMPARE
+}
+
+
+
+# look for UTF8
+utf8_locale=`locale -a | grep .utf8 | head -1`
+if [[ "$utf8_locale" != "" ]]
+then
+  echo "Found UTF8-locale '$utf8_locale', using that for testing."
+else
+  echo "Found no utf8-locale, cannot test"
+fi
+
+
+# look for non-utf8
+loc_locale=`locale -a | egrep -v "(POSIX|C|utf8$)" | head -1`
+if [[ "$loc_locale" != "" ]]
+then
+  echo "Found non-UTF8-locale '$loc_locale', using that for testing, too."
+else
+  echo "Found no non-utf8-locale, cannot test"
+fi
+
+
+# Trivial test with current settings
+# We must use only ASCII as we don't know in which locale 
+# this script is parsed.
+$INFO "testing default locale"
+testfunc test12
+$SUCCESS "default locale"
+	
+# Clear environment
+unset LC_ALL LC_CTYPE
+
+# Test UTF8
+if [[ "$utf8_locale" != "" ]]
+then
+	$INFO "testing utf8 locale $utf8_locale"
+	export LC_ALL=$utf8_locale
+	# The bytes here must be \xc2\xa9; in utf8 that's 3 horizontal lines.
+	# Use a hex editor.
+	testfunc Â©
+	$SUCCESS "utf8 locale"
+fi
+
+# Test non-UTF8
+if [[ "$loc_locale" != "" ]]
+then
+	$INFO "testing non-utf8 locale $loc_locale"
+	export LC_ALL=$loc_locale
+	# The bytes here must be \xc2\x61, that is an invalid UTF8-sequence.
+	# Use a hex editor.
+	testfunc Âa
+	$SUCCESS "non-utf8 locale"
+fi
+
+
+# vi: binary

@@ -1,0 +1,53 @@
+## Test for details in waa__find_common_base.
+## Stops automatically in _do_component_tests.
+
+## case 0: No arguments.
+
+print waa__init()
+
+set wc_path="$#$ENV{'WC'}#"
+
+set start_path=wc_path
+set start_path_len=strlen(start_path)
+
+## set opt_debugprefix=0
+
+set charp_array_1[0]="$#$ENV{'WC'}#/a"
+set charp_array_1[1]="$#$ENV{'WC'}#/b"
+set charp_array_1[2]="$#$ENV{'WC'}#/c"
+#= 0
+print waa__find_common_base(3, charp_array_1, &charpp)
+#~ 0x\w+ "a"
+print charpp[0]
+#~ 0x\w+ "b"
+print charpp[1]
+#~ 0x\w+ "c"
+print charpp[2]
+
+set charp_array_1[0]="$#$ENV{'WC'}#/a/h"
+set charp_array_1[1]="$#$ENV{'WC'}#/b"
+#= 0
+print waa__find_common_base(2, charp_array_1, &charpp)
+#~ 0x\w+ "a/h"
+print charpp[0]
+#~ 0x\w+ "b"
+print charpp[1]
+
+set charp_array_1[0]="$#$ENV{"WC"}#/a/h"
+set charp_array_1[1]="$#$ENV{"WC"}#/a/j"
+#= 0
+print waa__find_common_base(2, charp_array_1, &charpp)
+#~ 0x\w+ "a/h"
+print charpp[0]
+#~ 0x\w+ "a/j"
+print charpp[1]
+
+set charp_array_1[0]="/does_never/exist"
+set charp_array_1[1]="/never/so_we/get_an/error"
+#= 2
+print waa__find_common_base(2, charp_array_1, &charpp)
+
+
+kill
+
+

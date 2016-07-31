@@ -1,0 +1,174 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+dir1=dA
+dir2=dB
+dir3=dC
+dir31=dC/dA
+dir32=dC/dB
+dir4=dD
+dirN=dNew
+
+file11=$dir1/1
+file12=$dir1/2
+file111=$dir11/1
+file112=$dir11/2
+file21=$dir2/1
+file22=$dir2/2
+
+log=$LOGDIR/020.logfile
+
+
+if [[ "$VERBOSE" == 1 ]]
+then
+#	BINdflt="$BINdflt -d"
+ true
+fi
+
+function ChangeData
+{
+	for dir in d? d?/d?
+	do
+		[ -e $dir ] || continue
+		for file in 1 2
+		do
+			echo "A testline $RANDOM $RANDOM" > $dir/$file
+		done
+	done
+
+	sleep 2
+}
+
+
+mkdir $dir1
+$BINq ci -m "def dir"
+
+ChangeData
+
+
+$BINdflt ci -m "new file" $file11 > $log
+# file, directory
+# The / is necessary to exclude the directory itself, but to include
+# the other file, if it should show up.
+if [[ `grep $dir1/ < $log | wc -l` -eq 1 ]]
+then
+  $SUCCESS "Ok, commit of a file beneath another new file works"
+else
+  $ERROR_NB "wrong data committed (1); only $file11 expected!"
+	cat $log
+	exit 1
+fi
+
+$BINdflt ci -m "new file2" $dir1 > $log
+if [[ `grep $dir1 < $log | wc -l` -eq 2 ]]
+then
+  $SUCCESS "commit of a file beneath a committed file works"
+else
+  $ERROR_NB "wrong data committed (2); only $dir1 and $file12 expected!"
+	cat $log
+	exit 1
+fi
+
+
+mkdir $dir2
+
+ChangeData
+
+
+$BINdflt ci -m "new file" $file21 > $log
+if [[ `grep $dir2 < $log | wc -l` -eq 2 ]]
+then
+  $SUCCESS "commit of a changed file beneath another changed file works"
+else
+  $ERROR_NB "wrong data committed (3); only $file21 expected!"
+	cat $log
+	exit 1
+fi
+
+if false
+then
+# This test currently doesn't work - that's the same bug as
+# with an update-before-commit.
+	$BINdflt st
+	# now the directory should still show as changed:
+	if [[ `$BINdflt st | grep $dir2 | wc -l` -eq 1 ]]
+	then
+		$SUCCESS "directory still shows as changed"
+	else
+		$BINdflt st
+		$ERROR_NB "directory isn't seen as changed"
+		exit 1
+	fi
+fi
+
+# This time the directory gets committed, too - so it will be stored
+# with correct values and won't show as changed.
+$BINdflt ci -m "new dir" $dir2 > $log
+#cat $log
+#exit 1
+if [[ `grep $dir2 $log | wc -l` -eq 2 ]]
+then
+  $SUCCESS "commit of a single directory works"
+else
+  $ERROR_NB "wrong data committed (4); only 2 lines expected!"
+	cat $log
+	exit 1
+fi
+
+
+# Now test for an initial commit - where no previous dir file exists.
+# Remove file list ...
+rm `$PATH2SPOOL $WC dir`
+mv $dir1 $dirN
+$BINdflt ci -m "new dir" $dirN > $log
+if [[ `grep -F " $dirN" < $log | wc -l` -eq 3 ]]
+then
+  $SUCCESS "initial commit works"
+else
+  $ERROR_NB "wrong data committed (5); only 3 lines expected!"
+	cat $log
+	exit 1
+fi
+
+
+# A more complex commit, fails with unpatched fsvs 1.0.15...
+rm `$PATH2SPOOL $WC dir`
+mkdir $dir3 $dir4 $dir31 $dir32
+$BINdflt ci -m "new dir, more complex case" $dir31 > $log
+if [[ `grep -F " $dir31" < $log | wc -l` -eq 1 ]]
+then
+  $SUCCESS "complex initial commit works"
+else
+  $ERROR_NB "wrong data committed (6); only 2 lines expected!"
+	cat $log
+	exit 1
+fi
+
+
+if false
+then
+## sync-repos and commit, currently always fails.
+## I originally wanted to show another failure here, no "directory
+## not found". In my tests, even a patched fsvs 1.0.15 committed
+## expluded stuff on a partial commit after a sync-repos.
+## In this environment it simply fails with an error message, I
+## don't know why...
+
+ChangeData
+
+$BINdflt sync-repos > /dev/null
+
+$BINdflt ci -m "changed files after sync-repos" $dir31 > $log
+if [[ `grep ./ < $log | wc -l` -eq 2 ]]
+then
+  $SUCCESS "complex partial commit after sync-repos works"
+else
+  $ERROR_NB "wrong data committed (7); only 2 lines expected!"
+	cat $log
+	exit 1
+fi
+fi

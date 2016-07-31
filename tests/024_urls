@@ -1,0 +1,98 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+# clean up
+echo "" | $BINq urls load
+
+prio=15
+for p in http https svn svn+ssh file
+do
+	$BINq urls N:$p,prio:$prio,T:$prio,$p://$p/some/path
+	# Do pseudo-random
+	prio=`perl -e 'print +(shift()*11+41) % 61' $prio`
+done
+$SUCCESS "Set all known protocols"
+
+if $BINq urls unknown:///void 2> /dev/null
+then
+  $ERROR "Invalid protocols are accepted"
+else
+  $SUCCESS "Invalid protocols are rejected"
+fi
+
+
+# Having a invalid sequence
+if $BINq urls dump '\\\r\n\t\f\x01\*' > /dev/null 2>&1 ||
+	$BINq urls dump '%n%t%u%p%r%%%/' > /dev/null 2>&1 
+then
+  $ERROR "Parsing escape sequences doesn't work"
+fi
+
+
+# We would have to do the sorting afterwards - if the program fails, 
+# we wouldn't get the error.
+# But if there's an priority, the output order is defined.
+$BINq urls dump > urls.txt
+$BINq urls load < urls.txt
+$BINq urls dump > urls2.txt
+
+if cmp urls.txt urls2.txt
+then
+  $SUCCESS "Dump/Load works"
+else
+  $ERROR "Dump/Load gives different results!"
+fi
+
+url=http://egal
+echo "name:1qay,P:9812,target:HEAD,$url" | $BINq urls load
+if [[ `$BINdflt urls dump '%p'` != 9812 ]]
+then
+  $ERROR "Dumping priority with '%p'"
+fi
+if [[ `$BINdflt urls dump '%u'` != $url ]]
+then
+  $ERROR "Dumping url with '%u'"
+fi
+if [[ `$BINdflt urls dump '%n'` != 1qay ]]
+then
+  $ERROR "Dumping name with '%n'"
+fi
+if [[ `$BINdflt urls dump '%%\x20%%'` != "% %" ]]
+then
+  $ERROR "Dumping some other format"
+fi
+if [[ `$BINdflt urls dump '%t'` != "HEAD" ]]
+then
+	$ERROR "Dumping target revision with '%t'"
+fi
+$SUCCESS "URL load/dump tests pass"
+
+
+$BINq urls "prio:22,N:XX,$url"
+if [[ `$BINdflt urls dump | wc -l` -ne 1 ]]
+then
+  $ERROR "URL taken twice"
+fi
+if [[ `$BINdflt urls dump '%p'` != 22 ]]
+then
+  $ERROR "Changing priority with '%p'"
+fi
+if [[ `$BINdflt urls dump '%n'` != XX ]]
+then
+  $ERROR "Changing name with '%n'"
+fi
+$SUCCESS "URL change tests pass"
+
+
+if $BINq urls "N:XX,$url/g" > /dev/null 2>&1
+then
+	$ERROR "Duplicate names should not be allowed"
+else
+	$SUCCESS "Duplicate names rejected"
+fi
+
+

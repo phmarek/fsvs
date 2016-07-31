@@ -1,0 +1,34 @@
+## Stops automatically in _do_component_tests.
+## Test for the function hlp__strncmp_uline_eq_dash().
+
+
+#= 0
+call hlp__strncmp_uline_eq_dash("aaa", "aaa", -1)
+#= 0
+call hlp__strncmp_uline_eq_dash("aaa", "aaa", 3)
+#= 0
+call hlp__strncmp_uline_eq_dash("aaa", "aaa", 4)
+
+#= 1
+call hlp__strncmp_uline_eq_dash("aab", "aaa", -1)
+#= 1
+call hlp__strncmp_uline_eq_dash("aaa", "aaab", 4)
+#= 1
+call hlp__strncmp_uline_eq_dash("aaab", "aaa", 4)
+
+#= 0
+call hlp__strncmp_uline_eq_dash("aaab", "aaab", 3)
+#= 0
+call hlp__strncmp_uline_eq_dash("aaab", "aaab", 4)
+
+## should fail, because the first hlp__string is defined to have only _, no -
+#= 1
+call hlp__strncmp_uline_eq_dash("aa-b", "aa_b", 4)
+#= 0
+call hlp__strncmp_uline_eq_dash("aa_b", "aa-b", 4)
+
+#= 0
+call hlp__strncmp_uline_eq_dash("aaab", "aaabsss", 4)
+#= 1
+call hlp__strncmp_uline_eq_dash("aaab", "aaabsss", 5)
+

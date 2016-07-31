@@ -1,0 +1,143 @@
+#!/bin/bash
+
+set -e
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/033.status
+
+file=empty-file
+
+
+function Filter
+{
+	filt=$1
+	exp=$2
+
+	$BINdflt st -C -f $filt $file > $logfile
+	if [[ `wc -l < $logfile` -ne $exp ]]
+	then
+		cat $logfile
+		$ERROR "Status output wrong - filter $filt, expected $exp."
+	fi
+}
+
+function FiltMTOGNDA
+{
+	Filter meta $1
+	Filter text $2
+	Filter owner $3
+	Filter group $4
+	Filter new $5
+	Filter deleted $6
+	Filter any $7
+
+	$SUCCESS "Trial run $1$2$3$4$5$6$7 ok."
+}
+
+
+# without any change?
+FiltMTOGNDA 0 0 0 0 0 0 0
+
+
+# meta-data change.
+touch -t 200101270007 $file
+FiltMTOGNDA 1 0 0 0 0 0 1
+
+
+# set as known state.
+$BINdflt ci -m 1
+
+
+# text change, meta-data same
+echo aiikortv > $file
+touch -t 200101270007 $file
+FiltMTOGNDA 0 1 0 0 0 0 1
+
+
+# text and meta-data change
+echo adehlnor > $file
+touch -t 200210291240 $file
+
+FiltMTOGNDA 1 1 0 0 0 0 1
+
+
+# deleted
+rm $file
+FiltMTOGNDA 0 0 0 0 0 1 1
+
+# replaced
+mkdir $file
+FiltMTOGNDA 1 1 0 0 1 1 1
+
+
+# Test with a removed directory
+mkdir -p a/b/c/d a/b/c/e a/b/d a/h/u a/h/j
+( cd a/h ; touch -d yesterday some files in dir )
+$BINq ci -m 2
+rmdir a/b/c/d a/b/c/e a/b/c a/h/u
+
+date > a/h/some
+date > a/h/dir
+
+$BINdflt st -C -o filter=deleted > $logfile
+if [[ `wc -l < $logfile` -ne 4 || 
+	`grep -w dir < $logfile | wc -l` -ne 4 ||
+	`grep a/ < $logfile | wc -l` -ne 4 ]]
+then
+	cat $logfile
+	$ERROR "Status output wrong (deleted directories #1)"
+fi
+
+$BINdflt st -C -o filter=text > $logfile
+if [[ `wc -l < $logfile` -ne 4 || 
+	`grep a/ < $logfile | wc -l` -ne 4 ]]
+then
+	cat $logfile
+	$ERROR "Status output wrong (deleted directories #2)"
+fi
+
+$BINdflt st -C > $logfile
+if [[ `wc -l < $logfile` -ne 8 || 
+	`grep a/ < $logfile | wc -l` -ne 8 ]]
+then
+	cat $logfile
+	$ERROR "Status output wrong (deleted directories #3)"
+fi
+
+
+$SUCCESS "Ok, filter works."
+
+
+
+# set as known state.
+$BINq ci -m 2
+sleep 1
+$INFO "Testing sorting"
+
+# Try sorting.
+funsort=$logfile.unsort
+fsort=$logfile.sort
+touch z a y b x c w
+for parm in "" "-v"
+do
+	# We do non-recursive here, because the subdirectories come unsorted.
+	$BINdflt st -N ? > $funsort
+	$BINdflt st -N ? -o dir_sort=yes > $fsort
+
+	if cmp -s $funsort $fsort
+	then
+	  $WARN "Sorted equals unsorted?"
+	fi
+
+	if sort -k3 $funsort | cmp -s - $fsort
+	then
+	  echo "Sorting ok"
+	else
+	  $ERROR "Didn't sort (cmdline='$parm')"
+	fi
+done
+$SUCCESS "Sorting works."
+
+

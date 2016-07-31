@@ -1,0 +1,92 @@
+#!/bin/bash
+# Tests whether parallel changes in multiple working copies are ok.
+
+# How many WCs we use
+NUM_WC=5
+# How often we do that (change*n ; update) cycles
+NUM_LOOPS=15
+
+set -e 
+$PREPARE_CLEAN WC_COUNT=$NUM_WC > /dev/null
+$INCLUDE_FUNCS
+
+# We're much too fast
+sleep 1
+
+LOG=
+#LOG=-d
+
+
+#
+# Thread i
+#   - creates file i+1
+#   - changes file i
+#   - removes file (i-1)
+# i <= i+4, modulo (4*N)
+
+for loop in `seq 1 $NUM_LOOPS`
+do
+  $INFO "Parallel changes -- loop #$loop of $NUM_LOOPS."
+	exec 5> $LOGDIR/023.round_$loop.log
+	perl -e '
+	$wc_cnt=shift;
+	$base=shift;
+	$loop=shift;
+	$mult=5;
+	sub FN { return "$base$i/$n"; }
+	sub P { print(join("\t","°°",$loop,$wc_cnt,$mult,$i,$n,$$,$_[0],FN()),"\n"); }
+	for $i (1 .. $wc_cnt)
+	{
+	  $n=1000 + ( $i*$mult + $loop ) % ($wc_cnt * $mult);
+		P("-");
+
+		(
+		  unlink(FN()) &&
+		  P("remove")
+		) || die $!  if -f FN() && !(($i + $loop) % 7);
+		$n++;
+
+		(
+		 open(F,">> ".FN()) && 
+		 print(F $$," ",$i," ",$n,"\n") &&
+		 close(F) &&
+		 P("append")
+		) || die $! if -f FN();
+		$n++;
+
+		(
+		 open(F,"> ".FN()) && 
+		 print(F localtime()." ",$$," ",$i," ",$n,"\n") &&
+		 close(F) &&
+		 P("write")
+		) || die $! if !-f FN();
+	}
+	' $NUM_WC $WCBASE $loop  >&5 2>&5
+
+	for i in `seq 1 $NUM_WC`
+	do
+		( cd $WCBASE$i &&
+			echo "=== update $i" && $BINdflt $LOG up &&
+			echo "=== commit $i" && $BINdflt $LOG ci -m "$i-$loop" ) || false
+	done >&5 2>&5
+
+	for i in `seq 1 $NUM_WC`
+	do
+		( cd $WCBASE$i &&
+			echo "=== update $i" && $BINdflt $LOG up &&
+			echo "=== status $i" && $BINdflt st -C -C ) || false
+		echo "=== check  $i"
+		if [[ `cd $WCBASE$i && $BINdflt st` != '' ]]
+		then
+			$ERROR "$WCBASE$i has a bad status!" > `tty` 2>&1
+		fi
+		echo "=== compare $i"
+		$COMPAREWITH $WCBASE$i
+	done >&5 2>&5
+done
+
+
+$SUCCESS "Parallel working copy modifications ok."
+# cat /tmp/ram/fsvs-test-1000/log/023.round_* | grep °° | sort -n -k2 -k5 | grep 1011
+
+

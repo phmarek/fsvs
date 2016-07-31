@@ -1,0 +1,23 @@
+#!/bin/bash
+
+set -e
+$INCLUDE_FUNCS
+
+echo "     ** up" 
+cd $WC2 
+$BINq up 
+echo "     ** st" 
+if [[ `$BINdflt st | wc -l` -eq 0 ]]
+then
+  # null statement
+	true
+else
+  $ERROR_NB "expected _no_ output, but got one:"
+	$BINdflt st
+	exit 1
+fi
+
+echo "     ** compare"
+$COMPARE_1_2
+
+$SUCCESS "2nd working copy correctly updated."

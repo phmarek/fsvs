@@ -1,0 +1,144 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC2
+
+
+# The temporary filenames for the lists after update, sync, and from wc
+TMP_UP=$LOGDIR/015.sync-repos-test.up.tmp
+TMP_UP0=$LOGDIR/015.sync-repos-test.up0.tmp
+TMP_SYNC=$LOGDIR/015.sync-repos-test.sync.tmp
+TMP_WC=$LOGDIR/015.sync-repos-test.wc.tmp
+
+dir_path=`$PATH2SPOOL $WC2 dir`
+
+echo "Directory file is $dir_path"
+
+REV=HEAD
+
+
+# Get the dir-files.
+################################
+
+# If we do the sync-repos later it should take the inodes from the working
+# copy, so that both entry lists are identically sorted.
+
+function copy_dir
+{
+# TODO - do fsvs:md5 or suchlike for encoded files!
+# Quick fix: the files $sync and $up won't be identical, as the RF_CHECK
+# flag will be set for some entries.
+	perl -e 'print scalar(<>); while (<>) { @a=split(/(\s+)/); $a[6] &= ~4; print join("",@a) unless $a[-1] eq "enc-dec\0"; }'
+}
+
+echo "step 1: update from empty set."
+rm -rf $WC2/*
+rm $dir_path
+# re-set the URL, so that we start empty.
+echo $REPURL | $BINq urls load
+
+$BIN up -r $REV
+ls -lad tree/b
+cp -a $dir_path $TMP_UP-ORIG
+copy_dir < $dir_path > $TMP_UP
+up_md5=`md5sum < $TMP_UP`
+
+echo "step 2: update from already-up-to-date."
+$BIN up -r $REV
+cp -a $dir_path $TMP_UP-ORIG2
+copy_dir < $dir_path > $TMP_UP0
+up0_md5=`md5sum < $TMP_UP0`
+
+echo "step 3: build new list"
+rm $dir_path
+$BINq _build-new-list -C
+cp $dir_path $TMP_WC
+wc_md5=`md5sum < $TMP_WC`
+
+echo "step 4: sync"
+# Do the sync at last, so that a correct list is left
+# for other tests.
+rm $dir_path
+$BIN sync-repos -r $REV
+# As the RF_CHECK flag is set, we need to normalize:
+# - Header is taken unchanged
+# - Keep the whitespace separator, to get the line as identical as possible.
+# - The 4th field (counted beginning with 1 :-) has index 6 (separators).
+cp -a $dir_path $TMP_SYNC-ORIG
+copy_dir < $dir_path > $TMP_SYNC
+sync_md5=`md5sum < $TMP_SYNC`
+
+echo "found MD5s:      update=$up_md5"
+echo "            noop update=$up0_md5"
+echo "                   sync=$sync_md5"
+echo "                from wc=$wc_md5"
+
+
+if [[ $up_md5 == $up0_md5  ]]
+then
+	$SUCCESS "update ident with noop update"
+	# remove temporary files on successful testing.
+	# we keep them if any tests fails, though.
+	rm $TMP_SYNC $TMP_UP0 $TMP_WC
+else
+	$ERROR_NB "$TMP_UP and $TMP_UP0 are different"
+	diff -au $TMP_UP $TMP_UP0
+	$ERROR "'fsvs update error"
+fi
+
+
+# test if status and update work
+# root modified is allowed.
+if [[ `$BINdflt st | wc -l` -le 1 ]]
+then
+	$SUCCESS "no status output"
+else
+	$BINdflt st -d > $LOGDIR/015.status
+	$ERROR_NB "status prints something:"
+	$BINdflt st 
+	exit 1
+fi
+
+# Update to HEAD
+$BIN up 
+
+REV=3
+# Now go down, sync with older revision, and go up again
+$BIN up -r $REV
+$BIN sync-repos -r $REV
+$BIN up -r HEAD
+
+
+$INFO "Updating entries without meta-data"
+# Now do some other entries *without* the meta-data properties, and look.
+# We have to get rid of special devices ... svn would bail out.
+find . -not -type f -and -not -type d -exec rm {} \;
+$BIN ci -m "no more special nodes"
+
+svn import --no-ignore --no-auto-props -m no-meta . $REPURL/no-meta > /dev/null
+
+# We'd like to fake some device entry; but that's not easily possible, as 
+# there's no "svn propset URL" currently.
+
+$BIN up
+if [[ `$BINdflt st | wc -l` -eq 0 ]]
+then
+	$SUCCESS "No status output after meta-data less update"
+else
+	$BINdflt st -d > $LOGDIR/015.status
+  $ERROR "Status output for meta-data-less entries unexpected"
+	$BINdflt st 
+	exit 1
+fi
+
+# Symlinks have lrwxrwxrwx, all other entries should be not writeable for 
+# group/others.
+if [[ `find no-meta -not -type l -printf "%U %m\n" | grep -v "^$UID [67]00\$"` -eq 0 ]]
+then
+	$SUCCESS "Owner and mode correctly set."
+else
+	$ERROR "Wrong rights set"
+fi
+

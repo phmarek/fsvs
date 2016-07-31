@@ -1,0 +1,219 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+# To test:
+# - ignoring a file
+#   - via shell-pattern
+#   - pcre
+# - not ignoring a file (take-pattern)
+# - all of these in subdirectories
+
+
+export PREFIX=igntest
+export TAKE=TAKE
+export IGNORE=IGN
+# To separate changed directories from wanted/not wanted files,
+# we grep for this postfix.
+# Change caused by using tmpfs, which (correctly!) changed the directories'
+# mtime - using ramfs before didn't do that.
+export POSTFIX=txt
+
+# delete the old ignore file
+ign_file=`$PATH2SPOOL $(pwd) Ign`
+test -e $ign_file && rm $ign_file
+# remove old test files
+find . -depth -iname "*$PREFIX*$POSTFIX" -exec rm -rf {} \;
+
+# create some files
+# Matrix:            shell          pcre
+#  ignored           s.i.IGN        p.i.IGN
+#  taken             s.t.TAKE       s.t.TAKE
+function M()
+{
+  test -d "$1" || mkdir -p $1
+  for p in s p e
+  do
+    for t in $TAKE $IGNORE
+    do
+      for a in `seq 1 1`
+      do
+        echo $p.$t.$a > $1/$PREFIX-$p.$t.$a.$counter.$POSTFIX
+        counter=`expr $counter + 1`
+      done
+    done
+  done
+}
+
+DIRLIST=". ign-dir1 $IGNORE-s-dir2 ign-dir2/sub ign-dir2/$IGNORE-p-dir3 deep/dir/for/wild/wild/cards"
+for d in $DIRLIST
+do
+  mkdir -p $d
+done
+$BINq ci -m "create dirs"
+
+sleep 1 # so that we get changed mtimes on the directories ...
+
+$WC2_UP_ST_COMPARE
+
+# So we have a constant amount of digits (sorted ls)
+counter=1000
+
+for d in $DIRLIST
+do
+  M $d
+done
+
+all_new=`$BINdflt st | grep $POSTFIX | wc -l`
+take_new=`$BINdflt st | grep $POSTFIX | grep $TAKE | wc -l`
+take_new_list=`$BINdflt st | grep $POSTFIX | grep $TAKE`
+echo $all_new new files, $take_new to take.
+
+PATTERN_COUNT=11
+# We need the patterns in the order take, ignore.
+# Test the --prepend here, too.
+$BIN ignore "./**$PREFIX-s**" "PCRE:.*$PREFIX-p\."
+$BIN ignore prepend "t./**$PREFIX-s.$TAKE**" "tPCRE:.*$PREFIX-p\.$TAKE"
+$BIN ignore at=1 "ti./*/dir/*/W?LD/**/$PREFIX-s.$TAKE**"
+$BIN ignore at=1 "ti./**/$PREFIX-[ef].$TAKE**"
+$BIN ignore "i./**/$PREFIX-[ef]**"
+$BIN ignore prepend "DEVICE:<0" "DEVICE:>=0xff:0xff"
+
+ignored_file=`ls $PREFIX*$IGNORE*$POSTFIX | head -1`
+$BIN ignore prepend `perl -e '@f=stat(shift); $f[1] || die $!; printf "INODE:%d:%d:%d", $f[0] >> 8, $f[0] & 0xff, $f[1];' $ignored_file`
+
+# this should never match
+$BIN ignore prepend "DEVICE:0xff:0xff"
+
+if [[ `$BINdflt ignore dump  | wc -l` -eq $PATTERN_COUNT ]]
+then
+  $SUCCESS '"ignore dump" returns the correct number of lines'
+else
+  $ERROR '"ignore dump" gives bad number of lines'
+fi
+
+
+# Comparing strings with embedded newlines doesn't seem to work,
+# so we take the MD5 of the returned lists
+before=`$BINdflt ignore dump | md5sum`
+transfer=`$BINdflt ignore dump | $BINdflt ignore load`
+after=`$BINdflt ignore dump | md5sum`
+if [[ $transfer = "$PATTERN_COUNT patterns loaded." && $after = $before ]]
+then
+  $SUCCESS "'ignore dump | ignore load' gives identity"
+else
+  $ERROR_NB "ignore dump/load error"
+  echo "**** Got: $after"
+  echo "**** expected: $before"
+  echo "**** Transfer said: $transfer"
+  exit 1
+fi
+
+
+filt_new=`$BINdflt st | grep $POSTFIX | wc -l`
+echo $filt_new after filtering.
+if [[ $filt_new -ne $take_new ]]
+then
+  $BINdflt st
+  $ERROR "   mismatch!"
+fi
+
+echo "Testing for files which should not be found ..."
+if $BINdflt st | grep $POSTFIX | grep $IGNORE | grep -v $TAKE > /dev/null 2>&1
+then
+  $ERROR "other files found??"
+fi
+
+echo "Testing for files which should be found ..."
+take_filt=`$BINdflt st | grep $TAKE | wc -l`
+if [[ $take_filt -ne $filt_new ]]
+then
+  $ERROR "  wrong files found??\n"
+fi
+
+
+committed=`$BINdflt ci -m "ci" | grep "^N" | wc -l`
+echo "     committed $committed files, expect $filt_new"
+if [[ "$committed" -ne "$filt_new" ]]
+then
+  $ERROR "change in which files are committed"
+fi
+
+# update other wc
+  pushd $WC2 > /dev/null
+  echo "     up-x"
+  $BINq up
+
+  # If we find differences in ignore files, it is ok - they should not
+  # be committed, after all.
+  # Files that should be taken should have no difference.
+  set +e
+  # grep should find no matches, so it would return an error.
+  # The verbose rsync gives all files; ignore files that are said to be 
+  # up-to-date.
+  after_up=`$COMPARE_1_2 expect-diff | grep -v "is uptodate" | grep $TAKE || true`
+  set -e
+  if [[ "$after_up" = "" ]]
+  then
+    $SUCCESS "update gets no ignored files"
+  else
+    $ERROR "update gets ignored files!"
+  fi
+popd > /dev/null
+
+# Restore wcs
+echo "Restoring working copies to an equal state."
+find . -depth -iname "*$PREFIX*" -exec rm -rf {} \;
+$BINq st
+$BINq ci -m asf 
+  pushd $WC2 > /dev/null
+  $BINq up 
+popd > /dev/null
+
+
+echo "Testing pattern list edits."
+echo "" | $BINq ignore load
+#if [[ `cat $ign_file` == 0 ]]
+if [[ `md5sum - < $ign_file` == "897316929176464ebc9ad085f31e7284"* ]]
+then
+  $SUCCESS "empty state."
+else
+  $ERROR_NB "not emptied:"
+  cat $ign_file
+  exit 1
+fi
+
+$BINq ignore prepend ./1
+$BINq ignore append ./3
+$BINq ignore at=1 ./2
+$BINq ignore prepend ./0
+file=dump.txt
+$BINq ignore dump > $file
+if ( echo ./0 ; echo ./1 ; echo ./2 ; echo ./3 ) | cmp -s - $file 
+then
+  $SUCCESS "pattern edit operations work."
+else
+  $ERROR_NB "dump gives wrong results:"
+  cat $file
+  exit 1
+fi
+
+rm $file
+
+$WC2_UP_ST_COMPARE
+
+# Now we put the WAA in there and test again, to see whether it gets 
+# correctly ignored.
+new=$WC/waa
+cp -a $FSVS_WAA $new
+FSVS_WAA=$new
+if [[ `$BIN st -C` == "" ]]
+then
+  $SUCCESS "WAA gets ignored"
+else
+  $ERROR "WAA would get versioned"
+fi
+

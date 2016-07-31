@@ -1,0 +1,120 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+data=Testdata-$$
+fn=file
+fn1=$fn-1
+fn2=$fn-2
+
+log=$LOGDIR/043.cp_mv
+
+echo $data > $fn1-a
+$BINq ci -m a
+mkdir d1
+sleep 1
+
+cat $fn1-a > $fn1-b
+$BINdflt copyfrom-detect > $log
+
+if [[ $(echo `cat $log`) == "$fn1-b md5:$fn1-a" ]]
+then
+  $SUCCESS "Simple copy found (md5)."
+else
+	cat $log
+  $ERROR "md5 check not passed"
+fi
+
+rm $fn1-b
+
+echo x$data > $fn2-a
+$BINq ci -m a
+sleep 1
+
+cat $fn1-a > $fn1-b
+cat $fn2-a > d1/$fn2-b
+mkdir d2
+cat $fn2-a > d2/$fn2-c
+$BINdflt copyfrom-detect > $log
+# We have to sort, as the order is not defined.
+if [[ $(echo `sort $log`) == "d1/$fn2-b d2/$fn2-c $fn1-b md5:$fn1-a md5:$fn2-a md5:$fn2-a" ]]
+then
+  $SUCCESS "Pairwise copies found (md5)."
+else
+	cat $log
+  $ERROR "md5 didn't find pairwise copies"
+fi
+
+# Get a distinct file for next test, and save the wc
+date > $fn1-22
+mkdir di1
+$BINq ci -m a
+# TODO: check that copyfrom was used
+sleep 1
+
+
+mv $fn1-22 $fn1-23
+# A simple move would find the identical MD5, so change the data.
+echo XX >> $fn1-23
+mv di1 di2
+# A file and a directory may not be associated.
+# But how could we (reliable) get a directory with the same inode# as a 
+# (just) removed file? The only way I see is using some hex-editor!
+# TODO
+
+$BINdflt copyfrom-detect > $log
+if [[ $(echo `sort < $log`) == "di2 file-1-23 inode:di1 inode:file-1-22" ]]
+then
+  $SUCCESS "Moved, changed file found."
+else
+	cat $log
+  $ERROR "inode check didn't work."
+fi
+
+
+# Get some unique value
+echo $RANDOM-$RANDOM-$RANDOM-$RANDOM > $fn1-a
+$BINq ci -m a
+# TODO: check that copyfrom was used
+sleep 1
+
+
+# check that files not given as arguments can be a source, too.
+# files *not* listed should not be found.
+function arg_check
+{
+  num=$1
+	arg=$2
+  src=${3:-$fn1-a}
+  dst=${4:-di2/asf}
+	$BINdflt copyfrom-detect $arg > $log
+  if [[ $(echo `sort < $log`) == "$dst md5:$src" ]]
+  then
+    $SUCCESS "Argument usage check ($1)"
+  else
+    echo "--- Expected:"
+    echo "$dst"
+    echo "  md5:$src"
+		echo "--- Got:"
+  	cat $log
+    $ERROR "Arguments not parsed correctly ($1)."
+  fi
+}
+
+# The names of the directory and the file must be alphabetically before
+# "md5", so that the sort check above works.
+cat $fn1-a > di2/asf
+cat $fn1-a > ignoreme
+arg_check 1 di2 "$WC/$fn1-a" 
+arg_check 2 di2/asf "$WC/$fn1-a" 
+
+arg_check 3 di2/. "$WC/$fn1-a" "di2/./asf"
+cd di2
+arg_check 4 . "$WC/$fn1-a" "./asf"
+arg_check 5 "" "$WC/$fn1-a" "asf"
+cd ..
+

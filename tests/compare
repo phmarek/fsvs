@@ -1,0 +1,33 @@
+#!/usr/bin/perl
+
+$s=shift;
+$d=shift;
+($s && $d) || die "Which directories to compare???\n";
+
+$expect_fail=!!(shift());
+
+# strace -o /tmp/asdga -f -tt 
+$cmd=qq'LANG=C rsync -n -v -v --delete -a --stats "$s" "$d"';
+$_=`$cmd`;
+
+$SIG{"__DIE__"} = sub { print STDERR '$ ',$cmd,"\n",$_,@_; exit 1; };
+
+($count)=( m#Number of files transferred: (\d+)#i );
+($deleted)=( m#[\r\n]deleting (?!in \.)#i );
+
+
+defined($count) || die "----- Cannot interpret this answer\n";
+
+if ($expect_fail && ($count || $deleted))
+{
+	print "----- expected differences\n";
+# pass output for further processing
+	print $_;
+	exit 0;
+}
+
+die "----- Differences were found\n" if ( $count || $deleted );
+
+print "----- comparison of directory gave no differences\n";
+exit 0;
+

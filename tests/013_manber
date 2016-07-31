@@ -1,0 +1,201 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+# fsvs is too good at finding differences.
+# If we just save a timestamp in another file (via "touch -r"),
+# it carps about the sub-second part (which isn't done by touch).
+# If we just set a round time, the ctime is found as changed (after dd).
+# So we'd have to set the ctime too ...
+# But how should that be done? utime() only sets atime and mtime,
+# and I found no way to set a ctime.
+# Hardlinks don't help, too - as the data must be changed for step 2,
+# and that changes ctime ...
+# I thought about trying "tee file1 file2" ... but how to change the data?
+# So it will have to be a perl one-line script or something like that.
+#
+# PS: The perl-script works as expected.
+# But mv (which may, according to POSIX, be implemented as atomic link/unlink),
+# changes the ctime again ...
+# So now I use two directories, remove one, and rename the other.
+
+
+filename=big_file
+subdir1=dir1
+subdir2=dir2
+file1=$subdir1/$filename
+file2=$subdir2/$filename
+timestamp=200602231527.00
+
+
+function L()
+{
+	if [[ "$VERBOSE" != "" ]]
+	then
+		ls -la --full-time $file1
+		ls -cla --full-time $file1
+	fi
+}
+
+function T()
+{
+	TS=$1
+  OK=$2
+	NOK=$3
+  OPT=$4
+	# Please note that we cannot easily substitute the grep for the filename;
+	# for the case that the entry is a directory, we get its children, too.
+	# Using "-N" changes the behaviour ("-C" doesn't work anymore - TODO)
+	x=`$BINdflt st $OPT $file1 | grep "$file1"'$' || true`
+	set -- $x
+	if [[ "$1" = "$TS" ]]
+	then
+		$SUCCESS "       $OK ('$TS', with '$OPT')"
+	else
+		$ERROR_NB "       $NOK (expected '$TS', with '$OPT')"
+		$ERROR_NB "       '"$*"'"
+		if [[ "$VERBOSE" != "" ]]
+		then
+			$BINdflt st $OPT
+		fi
+		exit 1
+	fi
+}
+
+function TestExtensively
+{
+  test_ch_wo_mtime=$1
+
+	L
+	echo "     ci1"
+	$BIN ci -m "big file"
+
+	# Data and mtime not changed
+	T "......" 'Ok, not seen as changed (1)' 'Seen as changed? (1)' '-v'
+	T "......" 'Ok, not seen as changed (2)' 'Seen as changed? (2)' '-v -C'
+	T "......" 'Ok, not seen as changed (3)' 'Seen as changed? (3)' '-v -C -C'
+
+	sleep 1
+
+	# Data not changed, mtime changed
+	echo "  touch, but don't change"
+	touch $file1
+	L
+
+	# Directories do not show a '?'
+	if [[ $test_ch_wo_mtime == 0 ]] ; then poss='.m.?'
+	else poss='.m..' ; fi
+
+	T $poss  'Ok, possibly changed (4)' 'Not as possibly changed seen! (4)' ''
+	T '.m..' 'Ok, not changed (5)' 'Saw more than meta-data-change! (5)' "-C"
+	T '.m..' 'Ok, not changed (6)' 'Saw more than meta-data-change! (6)' "-C -C"
+
+	# Data changed, mtime not changed
+	echo "  change, but with original timestamp"
+	# see comment above.
+	rm -r $subdir1
+	mv $subdir2 $subdir1
+	L
+
+  # These tests fail on directories, as these are normally found 
+	# as changed (size changed).
+	if [[ "$test_ch_wo_mtime" != 2 ]]
+	then
+		# this is the test that failed because of the ctime(s):
+		T "......" 'Ok, not seen as changed (7)' 'Seen as changed? (7)' '-v'
+
+		# without the -v the file is not printed, because the size and 
+		# timestamps are the same, so it's not seen as changed.
+		T '......' 'Ok, change not seen (8)' 'Change found! (8)' '-C -v'
+	fi
+
+	if [[ "$test_ch_wo_mtime" != 1 ]]
+	then
+		# Only with two -C the file is checksummed (because timestamps and size
+		# are as expected). So here it should be changed.
+		T '....C.' 'Ok, change found (9)' 'Change not found! (9)' '-C -C -v'
+	fi
+
+	touch $file1
+	echo "     ci2"
+}
+
+
+if [[ -e $file1 ]]
+then
+  rm $file1
+	$BINq ci -m "delete the test-file"
+fi
+
+test -d $subdir1 || mkdir $subdir1
+test -d $subdir2 || mkdir $subdir2
+seq 1 199999 | perl -e '
+open(F1,"> " .shift) || die $!;
+open(F2,"> " .shift) || die $!;
+while (<>)
+{
+  print F1;
+	# do change in line 10000 for F2
+	substr($_, 0, 1) = "%" if $. == 10000;
+	print F2;
+}
+
+# do at "same" time.
+$t=time();
+1 while (time() == $t);
+
+close(F1) || die $!;
+close(F2) || die $!;
+' $file1 $file2
+
+# verify that exactly one line has changed
+if [[ `diff -U0 $file1 $file2 | egrep "^[^ ]" | wc -l` -ne 5 ]]
+then
+  $ERROR 'NOK, more than one line changed??'
+	exit 1
+fi
+
+# ignore the 2nd file
+$BINq ignore ./$subdir2
+
+
+# test with big files
+echo "=== Testing with a big file ==="
+TestExtensively 0
+
+rm $file1
+$BIN ci -m "del big file"
+
+
+# test with empty directory
+echo "=== Testing with an empty directory ==="
+mkdir $subdir2
+mkdir $file1 $file2
+
+$BIN ci -m "empty dir 1"
+
+TestExtensively 1
+
+$BIN ci -m "empty dir 2"
+
+
+# test with non-empty directory
+echo "=== Testing with an non-empty directory ==="
+rmdir $file1
+mkdir $subdir2
+mkdir $file1 $file2 $file2/child
+# make 2nd timestamp equal
+rsync $subdir1/ $subdir2/ -a
+
+$BIN ci -m "dir 1"
+
+TestExtensively 2
+
+$BIN ci -m "dir 2"
+
+
+$WC2_UP_ST_COMPARE
+

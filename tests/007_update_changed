@@ -1,0 +1,67 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+filename=update-file
+
+echo "A testline #1" > $filename
+echo "A testline #2" >> $filename
+
+echo "     ci1"
+$BIN ci -m "new file"
+orig=`md5sum $filename`
+
+$WC2_UP_ST_COMPARE
+
+echo "A further line" >> $filename
+echo "     ci2"
+$BIN ci -m "new file"
+
+pushd $WC2 > /dev/null
+echo "A newly changed line" >> $filename
+echo "     up1"
+
+if $BIN up 2> /dev/null
+then
+  $ERROR "The modified file was overwritten!"
+else
+  $SUCCESS "Modified files are not overwritten."
+fi
+
+
+#$BINdflt -d revert $filename
+if $BIN revert $filename
+then
+	$SUCCESS "The modified file was reverted."
+else
+	$ERROR "Not reverted?"
+fi
+
+now=`md5sum $filename`
+echo "  Before: $orig"
+echo "  After : $now"
+if [[ $now == $orig ]]
+then
+ $SUCCESS "The modified file was really reverted."
+else
+ $ERROR "Revert did not work!"
+fi
+
+if [[ `$BINdflt st | grep -v "\.$"` == "" ]]
+then
+	$SUCCESS "No status output after revert."
+else
+	$ERROR_NB "Some status change??"
+	$BINdflt st
+	exit 1
+fi
+
+rm $filename
+
+popd > /dev/null
+
+$WC2_UP_ST_COMPARE
+

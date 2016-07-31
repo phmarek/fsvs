@@ -1,0 +1,9 @@
+## This test *should* fail, so that we see that the matching works.
+
+b main
+
+## Without any parameter we get a 1 (program name)
+r
+
+#= 2
+print argc

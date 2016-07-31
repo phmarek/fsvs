@@ -1,0 +1,63 @@
+#!/bin/bash
+
+
+# This cannot be a plain function, because $LINENO would be 
+# relative to this file
+# \todo: unset -x while in this function
+function _MSG
+{
+	_exitc=$1
+	_msg=$2
+	_col=$3
+  unused=$4
+	shift 4
+
+	rec=${#BASH_LINENO[*]}
+	# It took me a long time to find out that expr returns an errorlevel,
+	# if it's result is 0; eg. 2 - 2 returns errorlevel 1.
+	# That's why we have -le and not -lt.
+	if [[ $rec -le 2 ]]
+	then
+	  idx=0
+	else
+		idx=`expr $rec - 2`
+	fi
+	line=${BASH_LINENO[$idx]}
+
+	# If the terminal doesn't support color switching, we should not
+	# stop - so ignore return value.
+  tput setaf $_col || true
+
+	if [[ $_msg == "OK" || $_msg == "INFO" ]]
+	then
+		# Tests that were ok need not be a jump mark
+		echo "$CURRENT_TEST at $line: $@"
+	else
+		echo "\"$CURRENT_TEST\":$line: $_msg: $@"
+	fi
+
+  tput op || true
+
+	if [[ $_exitc == 1 ]] 
+	then
+		trap '' ERR
+		exit 1
+	fi
+}
+
+export INFO="_MSG 0 INFO 5 \$LINENO"
+export SUCCESS="_MSG 0 OK 2 \$LINENO"
+export WARN="_MSG 0 WARNING 3 \$LINENO"
+export ERROR="_MSG 1 NOK 1 \$LINENO"
+# error, non-breaking
+export ERROR_NB="_MSG 0 NOK 1 \$LINENO"
+
+
+export COMPARE="$TEST_PROG_DIR/compare"
+export COMPAREWITH="$COMPARE $WC/"
+export COMPARE_1_2="$COMPAREWITH $WC2/"
+export PATH2SPOOL=$TEST_PROG_DIR/path2spool
+
+trap '$ERROR shell error' ERR
+
+set -e -E

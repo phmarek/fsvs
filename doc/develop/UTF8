@@ -1,0 +1,31 @@
+
+UTF8 in FSVS
+------------
+
+
+Some points which trouble me a bit, and some random thoughts; everything
+connected with UTF-8:
+
+- Properties we get from the repository might be easiest stored locally 
+  as UTF8, if we don't do anything with them (eg. svn:entry).
+
+- In which properties can be non-ASCII-characters? Does someone define
+  user/group names in UTF-8? Can eg. xattr have Unicode characters in them?
+	Does that happen in practical usage?
+
+- The currently used properties should be safe. I've never heard from
+  non-ASCII groups or users, and the mtime should always be in the same
+	format.
+
+- I thought whether I should just do *everything* in UTF-8.
+  But that is a performance trade off; on a simple "fsvs status" we'd 
+	have to all filenames from the waa-directory. It may not be much work,
+	but if it's not necessary ...
+
+- I'd like to have the subversion headers to define a utf8_char *, which
+  would (with gcc) be handled distinct from a normal char * ...
+	(see linux kernel, include/linux/types.h: #define __bitwise ...)
+	But that won't happen, as there's already too much software which relies
+	on the current definitions.
+
+

@@ -1,0 +1,79 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+fn1=file1
+fn2=file2
+
+logfile=$LOGDIR/044.copyfrom
+
+# Check for set/overwrite logic.
+$BINdflt cp 1 2
+$BINdflt cp a 3
+$BINdflt cp 5 6
+$BINdflt cp 4 3
+if [[ $(echo `$BINdflt cp dump | sort`) == '. . 1 2 3 4 5 6' ]]
+then
+  $SUCCESS "Setting and overwriting copyfrom information works."
+else
+	$BINdflt cp dump
+  $ERROR "Setting or overwriting makes mistakes?"
+fi
+
+( 
+  echo s
+  echo 2
+  echo .
+  echo 3
+  echo 4
+  echo .
+  echo 1
+  echo 2
+) | $BINdflt cp load
+if [[ $(echo `$BINdflt cp dump | sort`) == '. 1 2 3 4' ]]
+then
+  $SUCCESS "Loading copyfrom information works."
+else
+	$BINdflt cp dump
+  $ERROR "Loading copyfrom fails."
+fi
+
+if [[ `true | $BINdflt cp load -v` == "0 copyfrom relations loaded." ]]
+then
+  $SUCCESS "Purging copyfrom works"
+else
+  $ERROR "Purging copyfrom fails"
+fi
+
+
+# Test copyfrom on commit.
+seq 1 100 > $fn1
+$BINdflt ci -m "file1"
+sleep 1
+
+cat $fn1 > $fn2
+$BINq cp $fn1 $fn2
+# TODO: check status.
+$BINq ci -m "file2"
+
+
+LC_ALL=C svn log -v -r HEAD $REPURL/$fn2 > $logfile
+if grep "   A /$REPSUBDIR/$fn2 .from /$REPSUBDIR/$fn1:" $logfile
+then
+  # ------------------------------------------------------------------------
+  # r5 | flip | 2007-11-22 18:39:20 +0100 (Thu, 22 Nov 2007) | 1 line
+  # Changed paths:
+  #    A /trunk/file2 (from /trunk/file1:4)
+  # 
+  # file2
+  # ------------------------------------------------------------------------
+	$SUCCESS "File was copied"
+else
+  cat $logfile
+  $ERROR "No copyfrom in commit"
+fi
+

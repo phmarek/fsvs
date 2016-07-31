@@ -1,0 +1,262 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+file=x
+msg=xxtestxxWörstCäseTäßt
+
+logfile=$LOGDIR/018.log
+
+# Exercise the commit msg editor code
+echo $msg > $file
+EDITOR="cp $file" $BIN ci 
+
+if svn log $REPURL -rHEAD | grep $msg > $logfile 2>&1
+then
+	$SUCCESS "message was taken"
+else
+	$ERROR "message not fetched from editor!"
+fi
+
+$BIN log -rHEAD > $logfile 2>&1
+if grep $msg < $logfile > /dev/null
+then
+	$SUCCESS "fsvs log works."
+else
+	$ERROR "fsvs log doesn't work."
+fi
+
+# Test -F for commit message
+echo $msg$msg > $file
+$BIN ci -F $file
+
+if svn log $REPURL -rHEAD | grep $msg$msg > $logfile 2>&1
+then
+	$SUCCESS "message was taken"
+else
+	$ERROR "message not read from file!"
+fi
+
+# Test log -v
+$BIN log -rHEAD -v > $logfile 2>&1
+if grep $file < $logfile > /dev/null
+then
+	$SUCCESS "fsvs log -v works."
+else
+	$ERROR "fsvs log -v doesn't work."
+fi
+
+
+# Test warning messages
+if ! $BIN -Wunknown-warning-string-346246262=ignore st > $logfile 2>&1
+then
+	$SUCCESS "unknown warnings are rejected"
+else
+	$ERROR "unknown warnings are NOT rejected!"
+fi
+
+if ! $BIN -Wmeta-user=UNKNOWN-action st > $logfile 2>&1
+then
+	$SUCCESS "unknown warning actions are rejected"
+else
+	$ERROR "unknown warning actions are NOT rejected!"
+fi
+ 
+if [[ 1$opt_DEBUG == 11 ]]
+then
+	# We need a sub-shell, as we expect an error returned and have to remove
+	# the error trap.
+	# Simply remembering the error trap doesn't work here; bash doesn't 
+	# print the needed " in "trap -p ERR".
+	# There's no easy way to return values from the sub-shell; but
+	# as the complete output of fsvs is written to a file we simply
+	# take STDOUT as the error code.
+	el=$(
+		trap '' ERR ;
+		set +e ;
+		$BINdflt -W_test-warning=stop > $logfile 2>&1 ;
+		echo $?
+	)
+
+	if [[ $el -ne 0 && `grep WARNING: $logfile` ]]
+	then
+		$SUCCESS "test-warning can stop fsvs"
+	else
+		$ERROR "Doesn't break for test-warning!"
+	fi
+
+
+	$BIN -W_test-warning=once st > $logfile 2>&1
+	el=$?
+	if [[ $el -eq 0 && `grep test-warning $logfile` ]]
+	then
+		$SUCCESS "test-warning can be set to non-fatal"
+	else
+		$ERROR "non-fatal test-warning failed"
+	fi
+
+	# Check whether the config file is respected
+	echo 'warning=_test-warning=stop' > $FSVS_CONF/config
+	if $BIN -d st > $logfile 2>&1
+	then
+		$ERROR "Warning levels NOT read from config file."
+	else
+		$SUCCESS "Warning levels read from config"
+	fi
+
+	if $BIN -W_test-warning=ignore st > $logfile 2>&1
+	then
+		$SUCCESS "Commandline overrides config file."
+	else
+		$ERROR "Commandline does NOT override config file."
+	fi
+	echo '' > $FSVS_CONF/config
+else
+	$INFO "Cannot test test-warning for non-debug builds."
+fi
+
+
+# Test whether / at the end of an URL are removed
+$BINq init $REPURL/////
+if $BIN st > $logfile
+then
+	$SUCCESS "slashes at end of URLs are ignored."
+else
+	$ERROR "slashes make fsvs fail??"
+fi
+
+if [[ `$BINq help | wc -l` -gt 10 &&
+`$BINq -h | wc -l` -gt 10 &&
+`$BINq -V` == "FSVS"*"version "* ]]
+then
+	$SUCCESS "version and help are given"
+else
+	$ERROR "version or help are not printed?"
+fi
+
+if [[ "$opt_DEBUG" == "1" ]]
+then
+	if FSVS_DEBUGLEVEL=1 $BINdflt -v -D main | grep LC_ALL > $logfile &&
+		test `$BINdflt -v -d -D main | egrep "^[^ ]+ +main" | wc -l` -ge 4
+	then
+		$SUCCESS "Debug messages seem to work"
+	else
+		$ERROR "debug doesn't work?"
+	fi
+fi
+
+
+if [[ `$BINdflt s 2>&1 ` == *"Action \"s\" is ambiguous."* &&
+	`$BINdflt invalid-action-which-will-never-exist 2>&1` == \
+		*"Action "*" not found."* ]]
+then
+	$SUCCESS "actions are checked"
+else
+	$ERROR "actions are not verified?"
+fi
+
+
+if $BINdflt st /$RANDOM/$RANDOM/$RANDOM/$RANDOM/$RANDOM > $logfile 2>&1
+then
+	$ERROR "non-existing directories don't fail?"
+else
+	$SUCCESS "error for non-existing directories"
+fi
+
+
+# Define an empty configuration directory, and try to do a status (without 
+# a wc file).
+if FSVS_CONF=$WC $BINdflt status -N -N /sbin /bin > $logfile 2>&1
+then
+	$ERROR "Didn't expect status output"
+else
+	$SUCCESS "No status output for non-committed WCs"
+fi
+
+# make a wc, and retry
+( cd / ; FSVS_CONF=$WC $BINq ignore './*' )
+if FSVS_CONF=$WC $BINdflt status -N -N /sbin /bin > $logfile 2>&1
+then
+	if ! grep '^N\.\.\. \+dir \+/s\?bin$' $logfile > $logfile.2
+	then
+	  $ERROR "Wrong status output"
+	fi
+
+	if [[ `wc -l < $logfile` -eq 2 &&
+				`wc -l < $logfile.2` -eq 2 ]]
+	then
+		$SUCCESS "Status output for two root entries as expected."
+	else
+		$ERROR "Wrong status output"
+	fi
+else
+	$ERROR "No status output for non-committed WCs?"
+fi
+
+
+# Test whether an invalid/not existing $FSVS_WAA allows "help" to work
+if FSVS_WAA=/tmp/not-existing-$RANDOM$RANDOM$RANDOM$RANDOM$RANDOM $BIN help status > $logfile 2>&1
+then
+	$SUCCESS 'help needs no $FSVS_WAA'
+else
+	$ERROR 'help tries to access $FSVS_WAA'
+fi
+
+if $BINdflt -V | grep version | grep GPL | grep Marek > /dev/null
+then
+  $SUCCESS "Version is printed"
+else
+  $ERROR "Version printing error"
+fi
+
+if $BINdflt -v -V | grep "compile options" > /dev/null
+then
+  $SUCCESS "Compile options are printed"
+else
+  $ERROR "Verbose version printing error"
+fi
+
+if $BINdflt help | grep "Known commands:" > /dev/null
+then
+  $SUCCESS "Help gets printed"
+else
+  $ERROR "No help output?"
+fi
+
+if $BINdflt help help | grep 'Help for command "help".' > /dev/null
+then
+  $SUCCESS "Help for help gets printed"
+else
+  $ERROR "No help help output?"
+fi
+
+if $BINdflt help -h | grep 'Help for command "help".' > /dev/null
+then
+  $SUCCESS "Help -h gets printed"
+else
+  $ERROR "No help -h output?"
+fi
+
+if $BINdflt help -? | grep 'Help for command "help".' > /dev/null
+then
+  $SUCCESS "Help -? gets printed"
+else
+  $ERROR "No help -? output?"
+fi
+
+
+
+# If we have an invalid charset, ANSI_X3.4-1968 is returned (=ASCII).
+# So there should never be an error, unless nl_langinfo fails.
+#if ! LC_ALL=invalid LC_CTYPE=invalid $BINdflt -Wcharset-invalid=stop st 2> $logfile
+#then
+#  $SUCCESS "invalid locales can stop fsvs"
+#else
+#  $ERROR_NB "invalid locales don't give an error?" 
+#	exit 1
+#fi
+#
+

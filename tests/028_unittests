@@ -1,0 +1,32 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+log=$LOGDIR/028.units
+if [[ "$opt_DEBUG" != "1" ]]
+then
+# This test will run in any case via ext-tests.
+	$WARN "Cannot do unit tests without --enable-debug."
+	exit 0
+fi
+
+for path in `pwd`/empty-file tree/a/1/file-z tree/../tree/b/2/./file-y ././/tree/././c/3/.././//2/.././../../dir-with-perms/../tree/c/./3/file-x 
+do
+	p=`$BINdflt -d -D hlp__pathcopy st $path | tee $log | grep finished | cut -f6 -d" "`
+	rl=`readlink -f $path`
+	if [[ "$rl" != "$p" ]]
+	then
+	  $ERROR_NB "fsvs and readlink disagree:"
+	  $ERROR_NB "   readlink: $rl"
+	  $ERROR    "   fsvs:     $p"
+	fi
+
+	$INFO "Reduced to $p"
+done # > $log 2>&1
+
+$SUCCESS "Unit tests successfull."
+
+# vi: textwidth=0 formatoptions=

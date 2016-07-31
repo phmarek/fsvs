@@ -1,0 +1,41 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+
+
+# export to new directory
+EXPDIR=$TESTBASE/export
+if [[ -e $EXPDIR ]]
+then
+  rm -r $EXPDIR
+fi
+
+dir_path=`$PATH2SPOOL $WC2 dir`
+if [[ -f $dir_path ]]
+then
+  rm $dir_path
+fi
+
+mkdir $EXPDIR
+cd $EXPDIR
+$BIN export $REPURL
+
+if [[ -f $dir_path ]]
+then
+  $ERROR "$dir_path was made"
+fi
+
+$COMPAREWITH $EXPDIR
+
+cd ..
+rm -rf $EXPDIR
+
+mkdir $EXPDIR
+cd $EXPDIR
+$BIN export -r 3 $REPURL
+$BIN up -r 3 $WC
+
+$COMPAREWITH $EXPDIR
+

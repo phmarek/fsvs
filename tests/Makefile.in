@@ -1,0 +1,186 @@
+###
+#
+# BINARY needs to be set to the program to test.
+#
+# CHECKER can eg. be strace or valgrind
+# if VERBOSE is set, debug and verbose level is turned on.
+# TEST_LIST can be a list of test scripts to run.
+# TL_FROM can be a pattern from which to (re-)start the scripts.
+# 
+ifndef BINARY
+$(error Which program should I test?)
+endif
+
+
+TEST_PROG_DIR	:= $(shell pwd)
+
+
+VALGRIND	:= valgrind --trace-children=no -v --error-exitcode=1 --log-file-exactly=/tmp/valgrind.out --suppressions=$(TEST_PROG_DIR)/valgrind-suppressions
+CALLGRIND	:= valgrind -q --tool=callgrind --collect-systime=yes --collect-jumps=yes --dump-instr=yes
+MEMCHECK	:= valgrind --leak-check=full --show-reachable=yes --num-callers=15 --log-file=/tmp/valgrind.out --time-stamp=yes 
+# MEMCHECK	:= valgrind --leak-check=full --show-reachable=yes --num-callers=15 --log-file-exactly=../valgrind.out --time-stamp=yes 
+
+export VALGRIND CALLGRIND
+ifeq ($(CHECKER),valgrind)
+override CHECKER	:= $(VALGRIND)
+endif
+ifeq ($(CHECKER),callgrind)
+override CHECKER	:= $(CALLGRIND)
+endif
+ifeq ($(CHECKER),callgrind)
+override CHECKER	:= $(MEMCHECK)
+endif
+
+
+# if $BINARY starts with /, it's an absolute path; take it.
+# else prepend the current path.
+BIN_FULLPATH	:= $(if $(BINARY:/%=),$(shell pwd)/$(BINARY),$(BINARY))
+
+# Binary with no special parameters
+BINdflt	:= $(CHECKER) $(BIN_FULLPATH)
+
+# Binary quiet
+BINq	:= $(BINdflt) -q
+# Binary, with optional verbosity (VERBOSE=1) or quiet
+BIN	:= $(BINdflt)
+ifdef VERBOSE
+BIN	+= -d -v
+BASH_VERBOSE := -x
+else
+BIN	+= -q
+BASH_VERBOSE := 
+endif
+
+# options from configure
+opt_DEBUG	= @ENABLE_DEBUG@
+export opt_DEBUG
+
+
+ifdef TEST_LIST
+# only run the specified tests ...
+else
+# A common problem (at least for me) is that I write
+#   TL_FROM=018*
+# analogous to
+#   TEST_LIST=018*
+# But the one thing is a grep, the other a shell pattern ...
+# So a * at the end gets removed.
+TEST_LIST := $(shell cd $(TEST_PROG_DIR) && ls ???_* | sort | grep -A 2000 "$(TL_FROM:%*=%)" )
+endif
+
+ifeq ($(PROTOCOL), svn+ssh)
+override PROTOCOL=svn+ssh://localhost/
+endif
+
+
+
+UID	:= $(shell id -u)
+TESTBASEx ?= /tmp
+TESTBASE	:= $(TESTBASEx)/fsvs-test-$(UID)
+
+REP	:= $(TESTBASE)/repos
+LOGDIR	:= $(TESTBASE)/log
+PROTOCOL ?= file://
+REPURLBASE:= $(PROTOCOL)$(REP)
+REPSUBDIR	:= trunk
+REPURL	:= $(REPURLBASE)/$(REPSUBDIR)
+
+WCBASE	:= $(TESTBASE)/wc-
+# Please note that if your test script uses more than the normal 
+# two working copies only WC1 (=WC) and WC2 are defined
+WC_COUNT	?= 2
+WC	:= $(WCBASE)1
+WC2	:= $(WCBASE)2
+WC1	:= $(WC)
+
+DFLT_REPO	:= $(TESTBASE)/default-repos.dump
+
+export REP REPURL REPSUBDIR REPURLBASE WC WC2 DFLT_REPO WC_COUNT WCBASE
+export BIN BINdflt BINq TEST_PROG_DIR LOGDIR
+
+PREPARE_REPOS	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_repos 
+PREPARE_WC1	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_wc1 
+PREPARE_WC2	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_wc2 
+PREPARE_DEFAULT	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_repos
+PREPARE_CLEAN	:= $(MAKE) -s -C $(TEST_PROG_DIR) prepare_clean
+INCLUDE_FUNCS	:= . $(TEST_PROG_DIR)/test_functions
+
+export PREPARE_REPOS PREPARE_WC1 PREPARE_WC2 PREPARE_CLEAN PREPARE_DEFAULT 
+export INCLUDE_FUNCS TESTBASE
+
+WC2_UP_ST_COMPARE	:= $(TEST_PROG_DIR)/up_st_cmp
+export WC2_UP_ST_COMPARE
+COMPONENT_SCRIPT	:= $(TEST_PROG_DIR)/component-test.pl
+export COMPONENT_SCRIPT
+
+
+FSVS_WAA	:= $(TESTBASE)/waa
+FSVS_CONF	:= $(TESTBASE)/conf
+
+export FSVS_WAA FSVS_CONF
+
+all: $(TESTBASE) $(FSVS_WAA) $(FSVS_CONF) $(DFLT_REPO) run_tests 
+
+$(TESTBASE):
+	test -d $(TESTBASE) || mkdir -p $(TESTBASE)
+$(FSVS_WAA):
+	test -d $(FSVS_WAA) || mkdir -p $(FSVS_WAA)
+$(FSVS_CONF):
+	test -d $(FSVS_CONF) || mkdir -p $(FSVS_CONF)
+
+diag:
+	@echo testbase: $(TESTBASE)
+	@echo tests   : $(TEST_LIST)
+	@echo binary  : $(BIN)
+	@echo checker : $(CHECKER)
+	@echo verbose : $(VERBOSE)
+	@echo def.repo: $(DFLT_REPO)
+	@echo waa     : $(FSVS_WAA)
+	@echo conf    : $(FSVS_CONF)
+
+$(DFLT_REPO): $(TEST_PROG_DIR)/001_init_dir
+	@echo Preparing default repository.
+	@$<
+	@svnadmin dump -q $(REP) > $@
+
+prepare_empty:
+	@echo Preparing clean repository ...
+	test -d $(REP) && rm -rf $(REP) || true
+	test -d $(LOGDIR) || mkdir $(LOGDIR)
+	svnadmin create $(REP)
+	echo '' > $(FSVS_CONF)/config
+
+prepare_clean:
+	$(MAKE) -s prepare_empty 
+	svn mkdir -m "mkdir trunk" $(REPURL)
+	$(MAKE) -s CMD="ci -m x" prepare_wcs WC_COUNT=$(WC_COUNT)
+
+prepare_repos:
+	@echo Loading repository ...
+	$(MAKE) -s prepare_empty
+	svnadmin load -q $(REP) < $(DFLT_REPO)
+	$(MAKE) -s CMD="up" prepare_wcs WC_COUNT=$(WC_COUNT)
+
+prepare_wcs:
+	for i in `seq 1 $(WC_COUNT)` ; do $(MAKE) prepare_wc "CMD=$(CMD)" _WC=$(WCBASE)$$i ; done
+
+.PHONY: prepare_repos prepare_clean prepare_empty
+
+ifdef _WC
+prepare_wc:
+	@echo Preparing $(_WC) ...
+	test -d $(_WC) && rm -rf $(_WC) || true
+	mkdir $(_WC)
+	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC)  "")/* || true 2> /dev/null
+	rm $(shell $(TEST_PROG_DIR)/path2spool $(_WC) "^")/* || true 2> /dev/null
+	cd $(_WC) && echo $(REPURL) | $(BINq) urls load
+ifdef CMD
+	cd $(_WC) && $(BINq) $(CMD)
+endif
+endif
+
+run_tests:
+	@echo Running tests...
+	@echo '' > $(FSVS_CONF)/config
+	@set -e ; for test in $(TEST_LIST) ; do echo "" ; tput setaf 4 || true ; echo "_______________________________________________________" ; echo "  \"$$test\":1: ("`date`")"`tput op` ; xx=`pwd`/$$test ; ( cd $(TESTBASE) && CURRENT_TEST=$$test bash $(BASH_VERBOSE) $$xx 2>&1 ) || { echo "----++---- $$xx failed ----++----" ; exit 1 ; } ; done
+

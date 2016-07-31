@@ -1,0 +1,37 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+logfile=$LOGDIR/060.comp-tests 
+
+if [[ "$opt_DEBUG" != 1 ]]
+then
+	$INFO "No debugging compiled in, cannot do componenttests."
+	exit 0
+fi
+
+# test for matching
+if $COMPONENT_SCRIPT $logfile $TEST_PROG_DIR/comp-test/fail-test.ct > /dev/null 2>&1
+then
+	$ERROR "Component-test doesn't fail when it should!"
+else
+	$SUCCESS "Component-tests running"
+fi
+
+base=$TEST_PROG_DIR/comp-test
+for scr in `cd $base && ls ???_*.ct`
+do
+	echo "testing $scr"
+	if $COMPONENT_SCRIPT $logfile $base/$scr 
+	then
+	  $INFO "$scr ok"
+	else
+		echo "$scr:1: unexpected answer"
+	  $ERROR "Component-test failed"
+	fi
+done
+
+$SUCCESS "ok"

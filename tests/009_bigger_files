@@ -1,0 +1,119 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+function CheckSyntax
+{
+# verify that the byte numbers are ascending, continually (?), and
+# that the MD5s are correct
+  perl -e '
+	  use Digest::MD5 qw(md5_hex);
+
+		open(DATA,shift) || die "open: $!"; 
+		$data=join("", <DATA>); 
+		close DATA;
+
+		open(MD,shift) || die "open: $!";
+		$pos=0;
+		while (<MD>)
+		{
+			# line found
+			$cnt--;
+			($md5, $hash, $start, $length)=split(/\s+/);
+			die "start $start != position $pos\n" if $start != $pos;
+			die "MD5 differs\n" if $md5 ne md5_hex(substr($data, $pos, $length));
+
+			$pos=$start+$length;
+		}
+
+		exit 0;
+	' $1 $2
+}
+
+
+filename=big_file
+sparse=sparse
+
+if [[ -e $filename ]]
+then
+  rm $filename
+	$BIN ci -m "delete the test-file"
+fi
+
+sparse_md5s=`$PATH2SPOOL $sparse md5s`
+test -f $sparse_md5s && rm $sparse_md5s
+
+# There was a performance problem with bytes of many zero bytes (but not 
+# starting with them) ... every zero byte got its own manber-block or some 
+# such.
+( echo Test1 ; dd if=/dev/zero bs=1024k count=1 ; echo Test2 ) > many_0
+# TODO: do sparse files on update, and test for it.
+
+seq 1 199999 > $filename
+dd if=/dev/null of=$sparse bs=1024 count=1 seek=4096 2> /dev/null
+echo "     ci1"
+$BIN ci -m "big files"
+ci_md5=`$PATH2SPOOL $filename md5s`
+echo $ci_md5
+CheckSyntax $filename $ci_md5
+
+if [[ -f $sparse_md5s ]]
+then
+  $ERROR "For a sparse file no md5s should be written!"
+else
+  $SUCCESS "No md5s for a sparse file."
+fi
+
+echo "Another line" >> $filename
+echo "     ci2"
+$BIN ci -m "big file 2"
+CheckSyntax $filename $ci_md5
+
+if [[ -e $ci_md5 ]]
+then
+  $SUCCESS "Committing a big file creates the md5s-data"
+else
+  $ERROR "Committing a file doesn't create the md5s-data"
+fi
+
+
+# update other wc
+$WC2_UP_ST_COMPARE
+up_md5=`$PATH2SPOOL $WC2/$filename md5s`
+
+if cmp $ci_md5 $up_md5
+then
+  $SUCCESS "Update and commit give the same manber-hashes and MD5s"
+else
+  $ERROR_NB "Update and commit give DIFFERENT manber-hashes and/or MD5s!!"
+	diff -uw $ci_md5 $up_md5
+  $ERROR "Update and commit disagree"
+fi
+
+# for identical files this should always be correct, but better check ...
+CheckSyntax $WC2/$filename $up_md5
+
+# now delete the file and test if the .../md5s is gone.
+rm $filename
+$BIN ci -m "delete the big test-file"
+
+$WC2_UP_ST_COMPARE
+
+if [[ -e $ci_md5 ]]
+then
+  $ERROR "Committing a deleted file doesn't remove the md5s-data"
+else
+  $SUCCESS "Committing a deleted file removes the md5s-data"
+fi
+
+if [[ -e $up_md5 ]]
+then
+  $ERROR "Updating a deleted file doesn't remove the md5s-data"
+else
+  $SUCCESS "Updating a deleted file removes the md5s-data"
+fi
+

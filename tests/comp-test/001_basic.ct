@@ -1,0 +1,14 @@
+## Comment
+
+b main
+r
+#= 1
+print argc
+
+kill
+r 123
+
+#= 2
+print argc
+
+

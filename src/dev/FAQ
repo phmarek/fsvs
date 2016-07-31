@@ -1,0 +1,17 @@
+Why do the functions have a "-." in their comment block?
+- Ask doxygen. The first part of documentation is in the .h file, so doxygen
+  throws away the "brief" part in the corresponding .c file.
+	We need to have an empty sentence.
+
+How to run the tests?
+- Simple case: "make run-tests".
+- Running some tests: "make run-tests TEST_LIST=001*"
+- Running with valgrind: "make run-tests CHECKER=valgrind". It's strongly
+	recommended to use TEST_LIST and test only single calls.
+
+What about gcov?
+- Configure with "--enable-debug --enable-gcov"; compile with make.
+  Start a clean environment with "make gcov-clean".
+	Start one or more tests.
+	Look at the summary with "make gcov"; the details are in <file>.gcov, and
+	per-file summaries in <file>.gcov.smry. Example: "fsvs.c.gcov.smry".

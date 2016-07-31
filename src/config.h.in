@@ -1,0 +1,117 @@
+/************************************************************************
+ * Copyright (C) 2006-2007 Philipp Marek.
+ *
+ * This program is free software;  you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ ************************************************************************/
+
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
+
+/** \file
+ * \c Autoconf results storage. */
+
+/** \defgroup compat Compatibility and interfaces
+ *
+ * For a reference on how to use \c fsvs on older system, please see also 
+ * \ref howto_chroot.
+ * */
+
+/** \defgroup compati Compilation-only
+ * \ingroup compat
+ * */
+
+/** \defgroup autoconf Autoconf results.
+ * \ingroup compati
+ *
+ * Here are the results of \c configure stored.
+ * They get defined by the system and are used to tell \c fsvs whether
+ * optional parts can be activated or not. */
+/** @{ */
+
+/** Whether the valgrind headers were found.
+ * Then some initializers can specifically mark areas as initialized. */
+#undef HAVE_VALGRIND_VALGRIND_H
+
+/** If this is defined, some re-arrangements in struct-layout are made,
+ * and additional bug-checking code may be included. */
+#undef ENABLE_DEBUG
+
+/** Whether gcov test-coverage is wanted. */
+#undef ENABLE_GCOV
+
+/** If set to 1, disable debug messages. */
+#undef ENABLE_RELEASE
+
+/** OpenBSD has no locales support. */
+#undef HAVE_LOCALES
+
+/** Unsigned 32bit type.
+ * The value of \c AC_CV_C_UINT32_T changed between autoconf 2.59e and 2.60.
+ * Since 2.60 we get \c yes instead of the type.
+ * And there's no \c HAVE_UINT32_T ... 
+ * I don't seem to get that to work properly.
+ * So I changed configure.in to substitute \c yes to \c uint32_t. */
+#undef HAVE_UINT32_T
+/* #if HAVE_UINT32_T
+  #include <stdint.h> 
+  #include <inttypes.h>
+#endif
+*/
+#undef AC_CV_C_UINT32_T 
+
+/** Whether \c linux/types.h was found. */
+#undef HAVE_LINUX_TYPES_H
+/** Whether \c linux/unistd.h was found. */
+#undef HAVE_LINUX_UNISTD_H
+
+/** Whether \c dirfd() was found (\ref dir__get_dir_size()). */
+#undef HAVE_DIRFD
+/** Whether there's an additional microsecond field in struct stat. */
+#undef HAVE_STRUCT_STAT_ST_MTIM
+
+/** The chroot jail path given at configure time. */
+#undef CHROOTER_JAIL
+
+/** Comparision function definition (for \c qsort()) */
+#undef HAVE_COMPARISON_FN_T
+#ifndef HAVE_COMPARISON_FN_T
+typedef int (*comparison_fn_t) (__const void *, __const void *);
+#endif
+
+#undef HAVE_O_DIRECTORY
+#ifndef HAVE_O_DIRECTORY
+#define O_DIRECTORY (0)
+#endif
+
+/** Does \c linux/kdev_t.h exist?
+ * Needed for \a MAJOR() and \a MINOR() macros. */
+#undef HAVE_LINUX_KDEV_T_H
+#ifdef HAVE_LINUX_KDEV_T_H
+#include <linux/kdev_t.h>
+#else
+/** \name fakedev Fake definitions, as reported with configure.
+ * Taken from \c linux/kdev_t.h. */
+/** @{ */
+#define MAJOR(dev)	((dev)>>8)
+#define MINOR(dev)	((dev) & 0xff)
+#define MKDEV(ma,mi)	((ma)<<8 | (mi))
+/** @} */
+#endif
+
+/** @} */
+
+/** i386 has the attribute fastcall; this is used for a few
+ * small functions. */
+#undef HAVE_FASTCALL
+
+#ifdef HAVE_FASTCALL
+#define FASTCALL __attribute__((fastcall))
+#else
+#define FASTCALL
+#endif
+
+
+#endif
+

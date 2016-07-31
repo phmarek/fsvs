@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+rm empty-file blabla
+rm -r tree/c
+
+echo "     ci"
+$BIN ci -m "deleted file, dir and symlink"
+echo "     st1"
+$BIN st
+
+$WC2_UP_ST_COMPARE

@@ -1,0 +1,91 @@
+
+FSVS - a fast system versioning tool.
+http://fsvs.tigris.org
+Developer mailing list at dev@fsvs.tigris.org
+Users mailing list at users@fsvs.tigris.org
+
+(C)opyrights by philipp@marek.priv.at 2005-2007
+
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the  GNU  General Public License  version 2 as 
+    published by the Free Software Foundation.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+
+What does it do?
+----------------
+
+fsvs is a backup/archival-tool, which uses subversion backends for storage.
+This means that previous versions of all files are available in case of 
+hardware problems, data loss, virus infections, user problems etc.
+
+fsvs is used to take snapshots of the current machine and restore them;
+all advanced operations (taking diffs, merging, etc.) should be done via
+some repository browser.
+
+fsvs runs currently only on linux.
+
+
+Why was it written?
+-------------------
+
+Well, mostly to scratch an itch :-)
+Backup methods using rsync have no or very limited history, 
+svn saves no metadata and needs double local storage, svk doesn't understand
+all file types and is (IMO) too slow for full system versioning.
+
+
+How is it used?
+---------------
+
+Please take a look at subversion [1]'s documentation; subversion's libraries
+(and by implication apr [2]) are needed for operation. See also the 
+subversion book [3].
+
+First install subversion (and, by implication, apr). 
+Next compile fsvs.
+	cd src
+	make
+Make a repository somewhere, preferably on another machine.
+	svnadmin create /path/to/repos
+Create a local directory for the "working copy administrative area". If you'd
+like to use another path, just set the environment variable WAA to it.
+	mkdir -p /var/spool/fsvs
+Go to the base path for versioning:
+	cd /
+Tell fsvs which URL it should use:
+	fsvs url svn+ssh://username@machine/path/to/repos
+Define ignore patterns - all virtual filesystems (/proc, /sys, etc.), and 
+(assuming that you're in / currently) the temporary files in /tmp:
+	fsvs ignore DEVICE:0 ./tmp/*
+And you're ready to play!
+Check your data in:
+	fsvs commit -m "First import"
+
+
+See doc/USAGE for more details.
+
+If it bails out with an error, I'd appreciate if you'd run the failing command
+with the option "-v" (verbose) and send the last lines to the developers
+mailing list; sometimes it may be necessary to see the complete debug log 
+file, which you can get by using "-v -d".
+
+
+
+Notes/Links
+-----------
+
+1: http://subversion.tigris.org/
+2: http://apr.apache.org/
+3: http://svnbook.red-bean.com/
+

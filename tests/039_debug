@@ -1,0 +1,37 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+if [[ "$opt_DEBUG" != "1" ]]
+then
+# This test will run in any case via ext-tests.
+	$WARN "Cannot do debug tests without --enable-debug."
+	exit 0
+fi
+
+logfile=$LOGDIR/039.debug
+logfile1=$logfile-1
+logfile2=$logfile-2
+logfile3=$logfile-3
+
+# We have to give some option so that the number or parameters is the same.
+$BINdflt -o diff_extra=1 -d -D main | cut -f2- -d' ' > $logfile1
+
+$BINdflt -o debug_output=$logfile3 -d -D main
+cut -f2- -d' ' < $logfile3 > $logfile2
+
+$BINdflt -o debug_output="| cut -f2- -d' ' > $logfile3" -d -D main
+
+if [[ `md5sum $logfile-* | cut -f1 -d" " | sort -u | wc -l` -eq 1 ]]
+then
+	$SUCCESS "Debug tests successfull."
+else
+  md5sum $logfile-*
+  $ERROR "Debug output is different."
+fi
+
+
+# vi: textwidth=0 formatoptions=

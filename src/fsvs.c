@@ -1,0 +1,1083 @@
+/************************************************************************
+ * Copyright (C) 2005-2007 Philipp Marek.
+ *
+ * This program is free software;  you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ ************************************************************************/
+
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <sys/time.h>
+#include <time.h>
+#include <stdarg.h>
+#include <langinfo.h>
+#include <locale.h>
+
+#include <apr_pools.h>
+
+#include <subversion-1/svn_error.h>
+
+#include "global.h"
+#include "interface.h"
+#include "ignore.h"
+#include "checksum.h"
+#include "helper.h"
+#include "waa.h"
+#include "options.h"
+#include "status.h"
+#include "url.h"
+#include "warnings.h"
+#include "options.h"
+#include "actions.h"
+#include "racallback.h"
+
+/** \file
+ * The central parts of fsvs (main).
+ * */
+
+
+/** \defgroup perf Performance points
+ * Some effort has been taken to get \c fsvs as fast as possible.
+ * */
+
+/** \defgroup add_unv_ign Adding and removing entries from versioning
+ *
+ * Normally all new entries are taken for versioning.
+ * The following chapters show you how to get finer control. 
+ *
+ * Furthermore please take a look at the \ref ignore , and \ref add 
+ * and \ref unversion commands. */
+
+/** \defgroup dev Hints and documentation for developers
+ * Some description of data structures, and similar.
+ * */
+
+/** \defgroup cmds Command line actions and parameters
+ * \ingroup compat
+ *
+ * The following commands are understood by FSVS:
+ * - Local configuration and information:
+ *   - \ref urls
+ *   - \ref status
+ *   - \ref info
+ *   - \ref log
+ *   - \ref diff
+ * - Defining which entries to take:
+ *   - \ref ignore
+ *   - \ref unversion
+ *   - \ref add
+ * - Commands working with the repository:
+ *   - \ref commit
+ *   - \ref update
+ *   - \ref checkout
+ *   - \ref revert
+ *   - \ref remote-status
+ * - Property handling
+ *   - \ref prop-get
+ *   - \ref prop-set
+ *   - \ref prop-list
+ * - Additional commands used for recovery and debugging:
+ *   - \ref export
+ *   - \ref sync-repos
+ *
+ * \note Not all commands are ready for multi-url-operations.
+ *
+ * 
+ * \section glob_opt Universal options
+ *
+ * \subsection glob_opt_version -V -- show version
+ * \c -V makes \c fsvs print the version and a copyright notice, and exit.
+ *
+ * \subsection glob_opt_deb -d and -D -- debugging
+ * If \c fsvs was compiled using \c --enable-debug you can enable printing 
+ * of debug messages (to \c STDOUT) with \c -d.
+ * Per default all messages are printed; if you're only interested in a 
+ * subset, you can use \c -D \e start-of-function-name.
+ * \code
+ *      fsvs -d -D waa_ status
+ * \endcode
+ * would call the \a status action, printing all debug messages of all WAA 
+ * functions - \c waa__init, \c waa__open, etc.
+ *
+ * Furthermore you can specify the debug output destination with 
+ * the option \c debug_output. This can be a simple filename 
+ * (which gets truncated), or, if it starts with a \c |, a 
+ * command that the output gets piped into.
+ *
+ * If the destination cannot be opened (or none is given), 
+ * debug output goes to \c STDOUT.
+ *
+ * \note That string is taken only once - at the first debug output line.
+ * So you have to use the correct order of parameters: 
+ * <tt>-o debug_output=... -d</tt>.
+ *
+ * An example: writing the last 200 lines of debug output into a file.
+ * \code
+ *   fsvs -o debug_output='| tail -200 > /tmp/debug.log' -d ....
+ * \endcode
+ *
+ * \subsection glob_opt_rec -N, -R -- recursion
+ * The \c -N and \c -R switches in effect just decrement/increment a  
+ * counter; the behavious is chosen depending on that. So <tt>-N -N -N 
+ * -R -R</tt> is equivalent to \c -N. 
+ *
+ * \subsection glob_opt_verb -q, -v -- verbose/quiet
+ * Like the options for recursive behaviour (\c -R and \c -N) \c -v and \c 
+ * -q just inc/decrement a counter. The higher the value, the more verbose.
+ * \n Currently only the values \c -1 (quiet), \c 0 (normal), and \c +1 
+ * (verbose) are used.
+ *
+ * \subsection glob_opt_chksum -C -- checksum
+ * \c -C increments the checksum flag.
+ * Normally \a status tells that a file has \b possible modification, if 
+ * its mtime has changed but its size not.
+ * Using \c -C you can tell the commands to be extra careful and \b always 
+ * check for modifications.
+ *
+ * The values are
+ * <table>
+ * <tr><td>0 </td><td> Normal operations
+ * <tr><td>1 </td><td> Check files for modifications if possibly changed
+ * <tr><td>2 </td><td> Do an MD5 verification for all files, and check all 
+ * directories for new entries.
+ * </table>
+ *
+ * If a files size has changed, we can be sure that it's changed;
+ * a directory is checked for changes if any of its meta-data has changed 
+ * (mtime, ctime, owner, group, size, mode).
+ *
+ * \note \a commit and \a update set the checksum flag to <b>at least</b> 
+ * 1, to avoid missing changed files.
+ *
+ * 
+ * \subsection glob_opt_filter -f -- filter entries
+ * This parameter allows to do a bit of filtering of entries, or, for some 
+ * operations, modification of the work done on given entries.
+ *
+ * It requires a specification at the end, which can be any combination of 
+ * \c any, \c text, \c new, \c deleted, \c meta, \c mtime, \c group or \c 
+ * owner.
+ *
+ * By giving eg. the value \c text, with a \ref status action only entries 
+ * that are new or changed are shown; with \c mtime,group only entries 
+ * whose group or modification time has changed are printed.
+ *
+ * \note The list does not include \b possibly changed entries; see \ref 
+ * glob_opt_chksum \c -C.
+ *
+ * \note If an entry gets replaced with an entry of a different type (eg. a 
+ * directory gets replaced by a file), that counts as \c deleted \b and \c 
+ * new.
+ *
+ * If you use \c -v, it's used as a \c any internally.
+ *
+ * If you use the string \c none, it resets the bitmask to \b no entries 
+ * shown; then you can built a new mask.
+ * So \c owner,none,any,none,delete would show deleted entries.
+ * If the value after all commandline parsing is \c none, it is reset to 
+ * the default.
+ *
+ * 
+ * \subsection glob_opt_warnings -W warning=action -- set warnings
+ *
+ * Here you can define the behaviour for certain situations that should not 
+ * normally happen, but which you might encounter.
+ *
+ * The general format here is \e specification = \e action, where \e 
+ * specification is a string matching the start of at least one of the 
+ * defined situations, and \e action is one of these:
+ * - \e once to print only a single warning,
+ * - \e always to print a warning message \b every time,
+ * - \e stop to abort the program,
+ * - \e ignore to simply ignore this situation, or
+ * - \e count to just count the number of occurrences.
+ *
+ * If \e specification matches more than one situation, all of them are 
+ * set; eg. for \e meta=ignore all of \e meta-mtime, \e meta-user etc. are 
+ * ignored.
+ *
+ * If at least a single warning that is \b not ignored is encountered 
+ * during the program run, a list of warnings along with the number of 
+ * messages it would have printed with the setting \e always is displayed, 
+ * to inform the user of possible problems.
+ *
+ * The following situations can be handled with this:
+ * <table>
+ * <tr><td>\e meta-mtime, \e meta-user, \e meta-group, \e meta-umask
+ * <td>These warnings are issued if a meta-data property that was fetched 
+ * from the repository couldn't be parsed. This can only happen if some 
+ * other program or a user changes properties on entries.<br>
+ * In this case you can use \c -Wmeta=always or \c -Wmeta=count, until the 
+ * repository is clean again.
+ *
+ * <tr><td>\e no-urllist<td>
+ * This warning is issued if a \ref info action is executed, but no URLs 
+ * have been defined yet.
+ *
+ * <tr><td>\e charset-invalid<td>
+ * If the function \c nl_langinfo(3) couldn't return the name of the current 
+ * character encoding, a default of UTF-8 is used.
+ * You might need that for a minimal system installation, eg. on recovery.
+ *
+ * <tr><td>\e chmod-eperm, \e chown-eperm<td>
+ * If you update a working copy as normal user, and get to update a file 
+ * which has another owner but you may modify, you'll get errors because 
+ * neither the user, group, nor mode can be set.
+ *
+ * <tr><td>\e chmod-other, \e chown-other<td>
+ * If you get another error than \c EPERM in the situation above, you might 
+ * find these useful.
+ *
+ * <tr><td>\e overlayed-entries<td>
+ * This is not yet used.
+ *
+ * <tr><td>\e mixed-rev-wc<td>
+ * If you specify some revision number on a \ref revert, it will complain 
+ * that mixed-revision working copies are not allowed.
+ * By using this specification you cannot enable mixed-revision working 
+ * copies, of course, but you can avoid getting told every time.
+ *
+ * <tr><td>\e propname-reserved<td>
+ * It is normally not allowed to set a property with the \ref prop-set 
+ * action with a name matching some reserved prefixes.
+ *
+ * <tr><td>\e diff-status<td>
+ * GNU diff has defined that it returns an exit code 2 in case of an error; 
+ * sadly it returns that also for binary files, so that a simply <tt>fsvs 
+ * diff some-binary-file text-file</tt> would abort without printing the 
+ * diff for the second file.
+ * So the exit status of diff is per default ignored, but can be used by 
+ * setting this option to eg. \e stop.
+ *
+ * </table>
+ *
+ * Also an environment variable \c FSVS_WARNINGS is used and parsed.
+ *
+ *
+ * \subsection glob_options -o [name[=value]] -- other options
+ * This is used for setting some seldom used option, for which default can 
+ * be set in a configuration file (to be implemented, currently only 
+ * command-line).
+ *
+ * For a list of these please see \ref options.
+ * */
+
+
+char parm_dump[]="dump",
+		 parm_load[]="load";
+
+
+int debuglevel=0,
+		only_check_status=0,
+		/** -. We start with recursive by default. */
+		opt_recursive=1,
+		opt_verbose=0,
+		opt_checksum=0;	
+
+svn_ra_session_t *session;
+svn_revnum_t target_revision;
+svn_revnum_t opt_target_revision=SVN_INVALID_REVNUM;
+svn_revnum_t opt_target_revision2=SVN_INVALID_REVNUM;
+int opt_target_revisions_given=0;
+
+char *opt_commitmsg,
+		 *opt_debugprefix,
+		 *opt_commitmsgfile;
+
+/** -.
+ * Is there some better way? And I don't want to hear about using C++ 
+ * templates and generating each function twice - once with output and once  
+ * without!
+ * Maybe with some call that encapsulates this functionality, and uses some 
+ * stack? Although we can simply increment/decrement this value. */
+int make_STOP_silent=0;
+
+/** Remember how the program was called. */
+static char *program_name;
+/** -. */
+char *start_path=NULL;
+/** -. */
+int start_path_len=0;
+
+#ifdef HAVE_LOCALES
+char *local_codeset;
+#endif
+
+apr_pool_t *global_pool;
+
+struct url_t *current_url;
+
+
+/** -.
+ * Never called directly, used only via the macro DEBUGP().  */
+void _DEBUGP(const char *file, int line, 
+		const char *func, 
+		char *format, ...)
+{
+	static struct timeval tv;
+	static struct timezone tz;
+	struct tm *tm;
+	va_list va;
+	static FILE *debug_out=NULL;
+	static int was_popened=0;
+	int ms;
+	FILE *tmp;
+	const char *fn;
+
+/* Uninit? */
+	if (!file)
+	{
+		/* Error checking makes not much sense ... */
+		if (debug_out)
+		{
+			if (was_popened)
+				pclose(debug_out);
+			else
+				fclose(debug_out);
+			debug_out=NULL;
+		}
+		return;
+	}
+
+	if (!debuglevel) return;
+
+	/* look if matching prefix */
+	if (opt_debugprefix &&
+			strncmp(opt_debugprefix, func, strlen(opt_debugprefix)))
+		return;
+
+	if (!debug_out)
+	{
+		/* Default to STDOUT. */
+		debug_out=stdout;
+
+		fn=opt__get_string(OPT__DEBUG_OUTPUT);
+		if (fn)
+		{
+			was_popened= (fn[0] == '|');
+			if (was_popened)
+				tmp=popen(fn+1, "w");
+			else
+				tmp=fopen(fn, "w");
+
+			if (tmp) debug_out=tmp;
+			else DEBUGP("'%s' cannot be opened: %d=%s", 
+					opt__get_string(OPT__DEBUG_OUTPUT),
+					errno, strerror(errno)); 
+		}
+	}
+
+	gettimeofday(&tv, &tz);
+	tm=localtime(&tv.tv_sec);
+	ms=(tv.tv_usec+500)/1000;
+	/* You wouldn't believe it, but I saw xx:xx:xx.1000 as time stamp ... */
+	if (ms == 1000)
+		ms=999;
+	/* Repeated incrementing of sec, min, hour is too much. */
+
+	fprintf(debug_out, "%02d:%02d:%02d.%03d %s[%s:%d] ",
+			tm->tm_hour, tm->tm_min, tm->tm_sec, ms,
+			func,
+			file, line);
+
+	va_start(va, format);
+	vfprintf(debug_out, format, va);
+
+	fputc('\n', debug_out);
+	fflush(debug_out);
+}
+
+
+/** -.
+ * It checks the given status code, and (depending on the command line flag
+ * \ref glob_opt_verb) prints only the first error or the whole call stack.
+ * If \ref debuglevel is set, prints some more details - time, file and 
+ * line.
+ * Never called directly; only via some macros.
+ *
+ * In case the first character of the \a format is a "<tt>!</tt>", it's a 
+ * user error - here we normally print only the message, without the error 
+ * code line. The full details are available via \c -d and \c -v. */
+int _STOP(const char *file, int line, const char *function,
+		int errl, const char *format, ...)
+{
+	static int already_stopping=0;
+	static int error_number;
+	int is_usererror;
+	struct timeval tv;
+	struct timezone tz;
+	struct tm *tm;
+	va_list va;
+	FILE *stop_out=stderr;
+	char errormsg[256];
+
+
+	if (make_STOP_silent) return errl;
+
+	is_usererror= format && *format == '!';
+	if (is_usererror) format++;
+
+
+	if (already_stopping++)
+	{
+		/* Unless verbose only the first line is printed. */
+		if (opt_verbose<=0) 
+			return error_number;
+	}
+	else
+	{
+		/* flush STDOUT and others */
+		fflush(NULL);
+
+		if (is_usererror)
+		{
+			va_start(va, format);
+			vfprintf(stop_out, format, va);
+			if (!(debuglevel || opt_verbose>0)) goto eol;
+		}
+
+
+		fputs("\n\nAn error occurred", stop_out);
+
+		if (debuglevel || opt_verbose>0)
+		{
+			gettimeofday(&tv, &tz);
+			tm=localtime(&tv.tv_sec);
+			fprintf(stop_out, " at %02d:%02d:%02d.%03d",
+					tm->tm_hour, tm->tm_min, tm->tm_sec,  (int)(tv.tv_usec+500)/1000);
+		}
+
+		errormsg[0]=0;
+		svn_strerror (errl, errormsg, sizeof(errormsg));
+		fprintf(stop_out, ": %s (%d)\n",
+				errormsg[0] ? errormsg : strerror(abs(errl)), errl);
+	}
+
+	/* Stacktrace */
+	fputs("  in ", stop_out);
+	fputs(function, stop_out);
+	if (debuglevel)
+		fprintf(stop_out, " [%s:%d]", file, line);
+
+	if (format)
+	{
+		fputs(": ", stop_out);
+
+		va_start(va, format);
+		vfprintf(stop_out, format, va);
+	}
+
+eol:
+	fputc('\n', stop_out);
+	fflush(stop_out);
+
+	error_number=errl;
+	already_stopping=1;
+	return errl;
+}
+
+
+#define _STRINGIFY(x) #x
+#define STRINGIFY(x) " " #x "=" _STRINGIFY(x)
+
+/** For keyword expansion - the version string. */
+const char* Version(FILE *output)
+{
+	static const char Id[] ="$Id: fsvs.c 1220 2007-11-23 13:05:05Z pmarek $";
+
+	fprintf(output, "FSVS (licensed under the GPLv2), (C) by Ph. Marek;"
+			" version " FSVS_VERSION "\n");
+	if (opt_verbose>0)
+	{
+		fprintf(output, "compile options:\n\t"
+#ifdef HAVE_VALGRIND_VALGRIND_H
+				STRINGIFY(HAVE_VALGRIND_VALGRIND_H)
+#endif
+#ifdef ENABLE_DEBUG
+				STRINGIFY(ENABLE_DEBUG)
+#endif
+#ifdef ENABLE_GCOV
+				STRINGIFY(ENABLE_GCOV)
+#endif
+#ifdef ENABLE_RELEASE
+				STRINGIFY(ENABLE_RELEASE)
+#endif
+#ifdef HAVE_LOCALES
+				STRINGIFY(HAVE_LOCALES)
+#endif
+#ifdef HAVE_UINT32_T
+				STRINGIFY(HAVE_UINT32_T)
+#endif
+#ifdef AC_CV_C_UINT32_T
+				STRINGIFY(AC_CV_C_UINT32_T)
+#endif
+#ifdef HAVE_LINUX_TYPES_H
+				STRINGIFY(HAVE_LINUX_TYPES_H)
+#endif
+#ifdef HAVE_LINUX_UNISTD_H
+				STRINGIFY(HAVE_LINUX_UNISTD_H)
+#endif
+#ifdef HAVE_DIRFD
+				STRINGIFY(HAVE_DIRFD)
+#endif
+#ifdef HAVE_STRUCT_STAT_ST_MTIM
+				STRINGIFY(HAVE_STRUCT_STAT_ST_MTIM)
+#endif
+#ifdef CHROOTER_JAIL
+				STRINGIFY(CHROOTER_JAIL)
+#endif
+#ifdef HAVE_COMPARISON_FN_T
+				STRINGIFY(HAVE_COMPARISON_FN_T)
+#endif
+#ifdef HAVE_O_DIRECTORY
+				STRINGIFY(HAVE_O_DIRECTORY)
+#endif
+#ifdef O_DIRECTORY
+				STRINGIFY(O_DIRECTORY=)#O_DIRECTORY
+#endif
+#ifdef HAVE_LINUX_KDEV_T_H
+				STRINGIFY(HAVE_LINUX_KDEV_T_H)
+#endif
+				"\n");
+	}
+	return Id;
+}
+
+
+/** \addtogroup cmds
+ *
+ * \section help
+ *
+ * \code
+ * help [command]
+ * \endcode
+ *
+ * This command shows general or specific \ref help (for the given 
+ * command). A similar function is available by using \c -h or \c -? after 
+ * a command.
+ * */
+/** -.
+ * Prints help for the given action.
+ * */
+int ac__Usage(struct estat *root UNUSED, 
+		int argc UNUSED, char *argv[])
+{
+	int status;
+	int i, hpos;
+	char const* const*names;
+
+
+	status=0;
+	Version(stdout);
+
+	/* Show help for a specific command? */
+	if (argv && *argv)
+	{
+		STOPIF( act__find_action_by_name(*argv, &action), NULL);
+		printf("\n"
+				"Help for command \"%s\".\n", action->name[0]);
+		names=action->name+1;
+		if (*names)
+		{
+			printf("Aliases: ");
+			while (*names)
+			{
+				printf("%s%s",
+						names[0],
+						names[1] ? ", " : "\n");
+				names++;
+			}
+		}
+
+		puts("");
+
+		puts(action->help_text);
+	}
+	else
+	{
+		/* Print generic help text: list of commands, parameters. */
+		printf(
+				"\n"
+				"Known commands:\n"
+				"\n  ");
+		hpos=2;
+		for(i=0; i<action_list_count; i++)
+		{
+			hpos += 2 + strlen(action_list[i].name[0]);
+			/* I know, that could be dependent on terminal width. */
+			if (hpos >= 75) 
+			{
+				printf("\n  ");
+				hpos=2;
+			}
+
+			printf("%s%s", action_list[i].name[0], 
+					i+1 == action_list_count ? "\n" : ", ");
+		}
+
+		puts(
+				"\n"
+				"Parameters:\n"
+				"\n"
+				"-v     increase verbosity\n"
+				"-q     decrease verbosity (quiet)\n"
+				"\n"
+				"-C     checksum possibly changed files;\n"
+				"       if given twice checksum *all* files.\n"
+				"\n"
+				"-V     show version\n"
+				"\n"
+				"Environment variables:\n"
+				"\n"
+				"$FSVS_CONF  defines the location of the FSVS Configuration area\n"
+				"            Default is /etc/fsvs, but any writeable directory is allowed.\n"
+				"$FSVS_WAA   defines the location of the Working copy Administrative Area\n"
+				"            Default is /var/spool/fsvs, but any writeable directory is allowed.\n"
+				);
+	}
+
+ex:
+	exit(status);
+
+	/* Never done */
+	return 0;
+}
+
+
+/** Signal handler for debug binaries.
+ * If the \c configure run included \c --enable-debug, we intercept 
+ * \c SIGSEGV and try to start \c gdb. 
+ *
+ * We use a pipe to stop the parent process; debugging within gdb normally
+ * starts with a \c bt (backtrace), followed by <tt>up 3</tt> to skip over
+ * the signal handler and its fallout. */
+#ifdef ENABLE_DEBUG
+/// FSVS GCOV MARK: sigDebug should not be executed
+void sigDebug(int num)
+{
+	char ppid_str[20];
+	int pid;
+	int pipes[2];
+
+
+	/* if already tried to debug, dump core on next try. */
+	signal(SIGSEGV, SIG_DFL);
+
+	/* We use a pipe here for stopping/continuing the parent.
+	 *
+	 * The parent tries to read from the pipe. That blocks.
+	 * The child tries to start gdb.
+	 *   - If the exec() returns with an error, we simply close
+	 *     the pipe, and the parent re-runs into its SEGV.
+	 *   - If the exec() works, the parent will be debugged.
+	 *     When gdb exits, the pipe end is closed, so the parent
+	 *     will no longer be blocked. */
+	pipes[0]=pipes[1]=-1;
+	if ( pipe(pipes) == -1) goto ex;
+
+	pid=fork();
+	if (pid == -1) return;
+
+	if (pid == 0)
+	{
+		/* Child tries to start gdb for parent. */
+		pid=getppid();
+
+		close(pipes[0]);
+
+		sprintf(ppid_str, "%d", pid);
+		execlp("gdb", "gdb", program_name, ppid_str, NULL);
+
+		close(pipes[1]);
+		exit(1);
+	}
+	else
+	{
+		/* Parent.
+		 * Either gdb attaches, or the child interrupts the read with
+		 * a signal. */
+		close(pipes[1]);
+		pipes[1]=-1;
+		read(pipes[0], &pid, 1);
+	}
+
+ex:
+	if (pipes[0] != -1) close(pipes[0]);
+	if (pipes[1] != -1) close(pipes[1]);
+}
+
+/** Handler for SIGPIPE.
+ * We give the running action a single chance to catch an \c EPIPE, to 
+ * clean up on open files and similar; if it doesn't take this chance, the 
+ * next \c SIGPIPE kills FSVS. */
+void sigPipe(int num)
+{
+	DEBUGP("got SIGPIPE");
+  signal(SIGPIPE, SIG_DFL);
+}
+
+
+/** This function is used for the component tests.
+ * When FSVS is run with "-d" as parameter, a call to fileno() is 
+ * guaranteed to happen here; a single "up" gets into this stack frame, and 
+ * allows easy setting/quering of some values. */
+void *_do_component_tests(int a)
+{
+	/* How not to have them optimized out? */
+	static int int_array[10];
+	static void *voidp_array[10];
+	static char *charp_array_1[10];
+	static char *charp_array_2[10];
+	static char **charpp;
+	static char buffer[1024];
+
+	int_array[0]=fileno(stdin);
+	voidp_array[0]=stdin+fileno(stdout);
+	buffer[0]=fileno(stderr);
+	charpp=charp_array_2+4;
+
+	switch(a)
+	{
+		case 4: return int_array;
+		case 9: return voidp_array;
+		case 6: return buffer;
+		case 2: return charp_array_1;
+		case 7: return charpp;
+		case 8: return charp_array_2;
+	}
+	return NULL;
+}
+#endif
+
+
+/** The main function. 
+ *
+ * It does the following things (not in that order):
+ * - Initializes the various parts 
+ *   - APR (apr_initialize()), 
+ *   - WAA (waa__init()), 
+ *   - RA (svn_ra_initialize()), 
+ *   - Callback functions (cb__init()) ...
+ *   - Local charset (\c LC_CTYPE)
+ * - Processes the command line. In glibc the options are reordered to the
+ *   front; on BSD systems this is not done, so there's an extra loop to do
+ *   that manually.
+ *   We want all options processed, and then the paths (or other parameters)
+ *   in a clean list.
+ * - And calls the main action.
+ * */
+int main(int argc, char *args[])
+{
+	struct estat root = { };
+	int status, help;
+	char *cmd;
+	svn_error_t *status_svn;
+	int eo_args;
+	void *mem_start, *mem_end;
+
+
+	help=0;
+	eo_args=1;
+	program_name=args[0];
+#ifdef ENABLE_DEBUG
+	/* If STDOUT and STDIN are on a terminal, we could possibly be 
+	 * debugged. Depends on "configure --enable-debug". */
+	if (isatty(STDIN_FILENO) && isatty(STDOUT_FILENO))
+		signal(SIGSEGV, sigDebug);
+
+	signal(SIGPIPE, sigPipe);
+
+	/* Very early debugging */
+	cmd=getenv(FSVS_DEBUG_ENV);
+	if (cmd)
+		debuglevel = atoi(cmd);
+#endif
+
+	mem_start=sbrk(0);
+
+
+#ifdef HAVE_LOCALES
+	/* Set the locale from the environment variables, so that we get the 
+	 * correct codeset told.
+	 * Do that while still in the chroot jail. */
+	cmd=setlocale(LC_ALL, "");
+	DEBUGP("LC_ALL gives %s", cmd);
+	/* The second call is in case that the above fails.
+	 * Sometimes eg. LC_PAPER is set to an invalid value; then the first
+	 * call fails, but the seconds succeeds.
+	 * See also the fsvs dev@ mailing list (April 2006), where a post
+	 * to dev@subversion is referenced */
+	cmd=setlocale(LC_CTYPE, "");
+	DEBUGP("LC_CTYPE gives %s", cmd);
+
+	local_codeset=nl_langinfo(CODESET);
+	if (!local_codeset)
+	{
+		STOPIF( wa__warn(WRN__CHARSET_INVALID, EINVAL,
+					"Could not retrieve the current character set - assuming UTF-8."),
+				"nl_langinfo(CODESET) failed - check locale configuration.");
+	}
+	else
+	{
+		DEBUGP("codeset found to be %s", local_codeset);
+		if (strcmp(local_codeset, "UTF-8")==0)
+			/* man page says "This pointer MAY point to a static buffer ..."
+			 * so no freeing. */
+			local_codeset=NULL;
+	}
+
+	if (!local_codeset)
+		DEBUGP("codeset: using identity");
+#else
+	DEBUGP("build without locales");
+#endif
+
+
+	/* Are we running in a chroot jail? Try to preload libraries, and escape.  
+	 * 
+	 * Originally there was an <tt>#ifdef CHROOTER_JAIL</tt> around this line.
+	 * But if this is compiled in unconditionally a precompiled binary of 
+	 * your favourite distribution should work, too! (So there could be a 
+	 * script that fetches all needed libraries out of eg. debian-testing and 
+	 * prepares a chroot for you. Any volunteers ;-?
+	 * 
+	 * As this function keeps quiet if \b no needed environment variable is 
+	 * set it's just a small bit of additional work. */
+	STOPIF( hlp__chrooter(), NULL);
+
+	/* Load options from environment variables. */
+	STOPIF( opt__load_env(environ), NULL);
+	STOPIF( waa__save_cwd(&start_path, &start_path_len, NULL), NULL);
+
+	STOPIF( wa__init(), NULL);
+
+  if (!isatty(STDOUT_FILENO))
+    opt__set_int( OPT__STATUS_COLOR, PRIO_PRE_CMDLINE, 0);
+
+	/* direct initialization doesn't work because
+	 * of the anonymous structures */
+	root.repos_rev=0;
+	root.name=root.strings=strdup(".");
+	root.st.size=0;
+	root.st.mode=S_IFDIR | 0700;
+	root.entry_type=FT_DIR;
+	root.entry_count=0;
+
+
+	while (1)
+	{
+		/* The GNU version of getopt re-orders the parameters and looks
+		 * after non-options too; the BSD versions do not.
+		 * So we have to look ourselves whether there's a -- or 
+		 * end-of-arguments.
+		 * And we reorder to the front of the array, so that the various
+		 * parts can parse their data. */
+		status=getopt(argc, args, "+a:VhdvCm:F:D:qf:r:W:NRo:?");
+		if (status == -1) 
+		{
+			DEBUGP("no argument at optind=%d of %d",optind, argc);
+			/* End of array or -- found? */
+			if (optind == argc) break;
+			/* Note that this is safe - the program name is always at
+			 * front (optind starts with 1), so it's never negative */
+			if (strcmp("--", args[optind-1])==0) 
+			{
+				/* Copy the rest of the arguments and stop processing */
+				while (optind < argc) args[eo_args++] = args[optind++];
+				break;
+			}
+
+			/* Normal argument (without "-") found, put to front. */
+			args[eo_args++]=args[optind++];
+			continue;
+		}
+
+		switch (status)
+		{
+			case '?':
+			case 'h':
+			default:
+				help=1;
+				break;
+
+			case 'W':
+				STOPIF( wa__set_warn_option(optarg, PRIO_CMDLINE),
+						"Warning option '%s' is invalid", optarg);
+				break;
+			case 'C':
+				opt_checksum++;
+				break;
+			case 'o':
+				STOPIF( opt__parse( optarg, NULL, PRIO_CMDLINE), 
+						"!Cannot parse option string '%s'", optarg);
+				break;
+			case 'f':
+				STOPIF( opt__parse_option(OPT__FILTER, PRIO_CMDLINE, optarg), NULL);
+				break;
+
+				/* Maybe we should warn if -R or -N are used for commands that 
+				 * don't use them? Or, better yet, use them everywhere (where 
+				 * applicable).  */
+			case 'R':
+				opt_recursive++;
+				break;
+			case 'N':
+				opt_recursive--;
+				break;
+
+			case 'F':
+				if (opt_commitmsg) ac__Usage_this();
+				opt_commitmsgfile=optarg;
+				break;
+			case 'm':
+				if (opt_commitmsgfile) ac__Usage_this();
+				opt_commitmsg=optarg;
+				break;
+
+			case 'r':
+				/* strchrnul is GNU only - won't work on BSD */
+				cmd=strchr(optarg, ':');
+				if (cmd) *(cmd++)=0;
+
+				STOPIF( hlp__parse_rev(optarg, NULL, &opt_target_revision), NULL);
+				opt_target_revisions_given=1;
+				/* Don't parse if user said <tt>-r 21:</tt> */
+				if (cmd && *cmd)
+				{
+					STOPIF( hlp__parse_rev(cmd, NULL, &opt_target_revision2), NULL);
+					opt_target_revisions_given=2;
+				}
+				break;
+
+#if ENABLE_RELEASE
+			case 'D':
+			case 'd':
+				fprintf(stderr, "This image was compiled as a release "
+						"(without debugging support).\n"
+						"-d and -D are not available.\n\n");
+				exit(1);
+#else
+			case 'D':
+				opt_debugprefix=optarg;
+				if (!debuglevel) debuglevel++;
+				/* Yes, that could be merged with the next lines ... :*/
+				break;
+			case 'd':
+				/* On first -d we allocate some stack usage, to allow the component 
+				 * tests to work. */
+				debuglevel++;
+				break;
+#endif
+			case 'q':
+				opt_verbose--;
+				break;
+			case 'v':
+				opt_verbose++;
+				opt__set_int(OPT__FILTER, PRIO_CMDLINE, FILTER__ALL);
+
+				break;
+
+			case 'V':
+				Version(stdout);
+				exit(0);
+		}
+	}
+
+	/* Now limit the number of arguments to the ones really left */
+	argc=eo_args;
+	/* Set delimiter */
+	args[argc]=NULL;
+	/* Say we're starting with index 1, to not pass the program name. */
+	optind=1;
+
+
+
+	/* first non-argument is action */
+	if (args[optind])
+	{
+		cmd=args[optind];
+		optind++;
+
+		STOPIF( act__find_action_by_name(cmd, &action), NULL);
+		if (help) ac__Usage_this();
+	}
+	else
+	{
+		if (help) ac__Usage_dflt();
+		action=action_list+0;
+	}
+
+	DEBUGP("optind=%d per_sts=%d action=%s rec=%d", 
+			optind, 
+			(int)sizeof(root),
+			action->name[0],
+			opt_recursive);
+
+	for(eo_args=1; eo_args<argc; eo_args++)
+		DEBUGP("argument %d: %s", eo_args, args[eo_args]);
+
+
+	/* If this command is not filtered, output all entries. */
+	if (!action->only_opt_filter ||
+			opt__get_int(OPT__FILTER) == 0) 
+		opt__set_int(OPT__FILTER, PRIO_MUSTHAVE, FILTER__ALL);
+	DEBUGP("filter has mask 0x%X (%s)", 
+			opt__get_int(OPT__FILTER),
+			st__status_string_fromint(opt__get_int(OPT__FILTER)));
+
+	/* waa__init() depends on some global settings, so do here. */
+	STOPIF( waa__init(), NULL);
+
+	/* Load options from config file, whose path is specified eg. via 
+	 * environment. */
+	strcpy(conf_tmp_fn, "config");
+	STOPIF( opt__load_settings(conf_tmp_path, NULL, PRIO_ETC_FILE ), NULL);
+
+
+#ifdef ENABLE_DEBUG
+	/* A warning, which is ignored per default. Just to allow more testing 
+	 * coverage. */
+	STOPIF( wa__warn( WRN__TEST_WARNING, 0, "test warning" ), NULL );
+
+	if (debuglevel) _do_component_tests(opt_verbose);
+#endif
+
+	/* Do some initializations. Some of them won't always be needed - 
+	 * maybe we should do another flag in the action list, if that turns
+	 * out to be slow sometimes (DNS failure/misconfiguration, loading
+	 * delay, ...) */
+	STOPIF( apr_initialize(), "apr_initialize");
+	STOPIF( apr_pool_create_ex(&global_pool, NULL, NULL, NULL), 
+			"create an apr_pool");
+	STOPIF_SVNERR( svn_ra_initialize, (global_pool));
+	STOPIF_SVNERR( cb__init, (global_pool));
+	root.dir_pool=global_pool;
+
+
+	STOPIF( action->work(&root, argc-optind, args+optind), 
+			"action %s failed", action->name[0]);
+
+	/* Maybe we should try that even if we failed? 
+	 * Would make sense in that the warnings might be helpful in determining
+	 * the cause of a problem.
+	 * But the error report would scroll away, so we don't do that. */
+	STOPIF( wa__summary(), NULL);
+
+	STOPIF( url__close_sessions(), NULL);
+
+ex:
+	mem_end=sbrk(0);
+	DEBUGP("memory stats: %p to %p, %llu KB", 
+			mem_start, mem_end, (t_ull)(mem_end-mem_start)/1024);
+	if (status)
+		return 1;
+
+	_DEBUGP(NULL, 0, NULL, NULL);
+
+	return 0;
+}
+
+/* vim: set cinoptions=*200 : */

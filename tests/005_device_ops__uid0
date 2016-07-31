@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+if [[ $UID -eq 0 ]]
+then
+	mv device device-2
+	mkdir device
+	mv device-2 device/device-node
+
+	rm reclink
+	touch reclink
+
+	echo "     ci"
+	$BIN ci -m "changed dev to dir/dev and link to file"
+	echo "     st1"
+	$BIN st
+
+	$WC2_UP_ST_COMPARE
+else
+  $WARN "cannot test device creation as normal user."
+fi
+

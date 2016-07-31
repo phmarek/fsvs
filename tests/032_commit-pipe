@@ -1,0 +1,130 @@
+#!/bin/bash
+
+set -e
+$PREPARE_CLEAN WC_COUNT=4 > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+function cmpdiff
+{
+	perl -e '$f=shift; $t=shift; undef $/; $_=<>; exit 1 unless m#---\s+$f.*'"$1"'.*\n\+\+\+\s+$f.*'"$2"'.*\n\@\@ -1 \+1 \@\@\n-$t\n\+$t$t\n#;' $filename $text < $logfile
+}
+
+
+logfile=$LOGDIR/032.commit-pipe
+filename=abcdefg.ijk
+text=abcde.123
+encoder="openssl enc -e -a"
+decoder="openssl enc -d -a"
+
+export encoder
+
+
+# try with a few bytes first
+echo $text > $filename
+$BINq ps fsvs:commit-pipe "$encoder" $filename
+$BINq ps fsvs:update-pipe "$decoder" $filename
+$BINdflt ci -m1 > $logfile
+rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "`
+rev_base64=$rev
+base64=`$encoder < $filename`
+
+repos_val=`svn cat $REPURL/$filename -r $rev_base64`
+echo "Expect $base64, found $repos_val"
+
+if [[ $repos_val == $base64 ]]
+then
+	$SUCCESS "Commit-pipe works"
+else
+	$ERROR "Encoded commit failed!"
+fi
+
+
+# Try update
+$WC2_UP_ST_COMPARE
+
+# Try diff
+echo $text$text > $filename
+$BINdflt diff $filename > $logfile
+if cmpdiff "Rev. $rev_base64" "Local\s+version"
+then
+	$SUCCESS "Diff works."
+else
+	$ERROR "Error while diffing!"
+fi
+
+# use a different encoder
+$BINq ps fsvs:commit-pipe "gzip" $filename
+$BINq ps fsvs:update-pipe "gzip -d" $filename
+# compare
+$BINdflt diff $filename > $logfile
+if cmpdiff "Rev. $rev_base64" "Local\s+version"
+then
+	$SUCCESS "Diff after changing the decoder works."
+else
+	$ERROR "Error while diffing after setting another decoder!"
+fi
+
+# commit other encoder, and do repos-repos diff
+$BINdflt ci -m2 > $logfile
+rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "`
+rev_gzip=$rev
+$BINdflt diff -r $rev_base64:$rev_gzip $filename > $logfile
+if cmpdiff "Rev. $rev_base64" "Rev. $rev_gzip"
+then
+	$SUCCESS "Repos-repos-diff works."
+else
+	$ERROR "Error while doing repos-repos diff!"
+fi
+
+
+# The data should still be the same - we just committed, after all.
+if [[ `$BINdflt st -C -C $filename | wc -l` != 0 ]]
+then
+	$BINdflt info $filename
+	md5sum $filename
+  $ERROR "File seen as changed?"
+fi
+# Change data, using a temporary file to store the date,
+# and see if it's found as changed.
+tmp=x$filename
+cp -a $filename $tmp
+perl -e 'open(F, "+< " . shift) || die $!; print F $$;' $filename
+touch -r $tmp $filename
+# Should be seen when using two -C, and not without any -C.
+# With a single -C it would be checksummed if it's likely to be changed - 
+# which it is, because the ctime changed.
+if [[ `$BINdflt st $filename       | wc -l` != 0 ||
+      `$BINdflt st $filename -C -C | wc -l` == 0 ]]
+then
+	$BINdflt st $filename
+	$BINdflt st $filename -C
+	$BINdflt st $filename -C -C
+	$ERROR "File status wrong?"
+fi
+
+
+# now try with more data - to see if blocking works
+cd $WC
+seq -f%9.0f 1000000 1100000 > $filename
+$BINdflt ci -m2
+$WC2_UP_ST_COMPARE
+
+# Try export
+cd ${WCBASE}3
+
+
+# Check for error checking
+cd $WC
+echo $text$text > $filename
+$BINq ps fsvs:commit-pipe false $filename
+if $BINq ci -m2 2> /dev/null
+then
+	$ERROR "Error return of commit pipe not seen?"
+else
+	$SUCCESS "Commit pipe gets checked for return level"
+fi
+
+
+# vim: formatoptions=q
+

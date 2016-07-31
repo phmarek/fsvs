@@ -1,0 +1,40 @@
+## Test for the locale/UTF-8 conversion functions.
+
+set local_codeset="latin1"
+
+## Initialization not needed; hlp__local2utf8() and hlp__utf82local() do
+## their own init.
+#= 0
+call hlp___get_conv_handle( local_codeset, "UTF-8", voidp_array+0)
+#= 0
+call hlp___get_conv_handle( "UTF-8", local_codeset, voidp_array+1)
+print voidp_array
+
+
+set opt_debugprefix=0
+## Basic tests
+#= 0
+call hlp__local2utf8("aa", charp_array_1, -1)
+#= 0x\S+ "aa"
+print *charp_array_1
+
+#= 0
+call hlp__utf82local("ab", charp_array_1, -1)
+#= 0x\S+ "ab"
+print *charp_array_1
+
+
+## Invalid utf-8, should return 84 = EILSEQ for full buffer.
+## Should work with correct length restriction.
+set buffer[0]=67
+set buffer[1]=0xf0
+set buffer[2]=0x00
+#= 0
+call hlp__utf82local(buffer, charp_array_1, 1)
+#= 0x\S+ "C"
+print *charp_array_1
+#= 84
+call hlp__utf82local(buffer, charp_array_1, -1)
+## don't know why we get EINVAL == 22 - test for non-zero.
+#= [1-9]
+call hlp__utf82local(buffer, charp_array_1, 2)

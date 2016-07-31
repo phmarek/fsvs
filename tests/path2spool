@@ -1,0 +1,47 @@
+#!/usr/bin/perl
+
+use Digest::MD5 qw(md5_hex);
+
+$_=shift;
+# Filename. If empty, just the path to the WAA is returned; if '^', the 
+# path to the conf area is returned.
+$file=shift; 
+# The softroot - see the option "softroot".
+( $softroot=shift ) =~ s,/+$,,;
+
+unless (m#^/#)
+{
+	chomp($p=`pwd`);
+	$_ = $p . "/" . $_;
+}
+
+$conf = ($file =~ /^[A-Z]/);
+$conf=1, $file="" if ($file eq '^');
+
+1 while 
+# remove /./ and /.
+	s#/\./#/#g ||
+	s#/\.$#/#g ||
+# remove / at end
+	s#/+$##g ||
+# change // to /
+	s#//+#/#g;
+# remove the softroot
+die if $softroot && !s#^$softroot##;
+
+
+$m=md5_hex($_);
+if ($conf)
+{
+	print +($ENV{"FSVS_CONF"} || "/etc/fsvs"),
+				"/" . $m . "/" . $file . "\n";
+}
+else
+{
+	print +($ENV{"FSVS_WAA"} || "/var/spool/fsvs"),
+				"/" . substr($m,0,2), 
+				"/" . substr($m,2,2),
+				"/" . substr($m,4),
+				"/" . $file . "\n";
+}
+

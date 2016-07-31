@@ -1,0 +1,59 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+LOG=041.options
+
+# step 1: empty settings file.
+CONF=$FSVS_CONF/config
+
+touch $CONF
+if ! $BINdflt st
+then
+	$ERROR "Empty config file fails"
+fi
+
+echo '## comment' > $CONF
+echo '# comment' >> $CONF
+echo '' >> $CONF
+if ! $BINdflt st
+then
+	$ERROR "Comment-only settings file gives an error"
+fi
+
+
+touch empty-file
+echo 'path=absolute' > $CONF
+if ! $BINdflt st > $LOG
+then
+	$ERROR "Reading config-file fails"
+fi
+
+if grep "$WC1/empty-file" < $LOG > /dev/null
+then
+	$SUCCESS "Parameter read and understood."
+else
+	$ERROR "Parameter not read"
+fi
+
+
+echo 'invalid string' > $CONF
+if $BINdflt st > $LOG 2>&1
+then
+	$ERROR "Invalid string doesn't fail"
+fi
+
+echo 'invalid=option' > $CONF
+if $BINdflt st > $LOG 2>&1
+then
+	$ERROR "Invalid option doesn't fail"
+fi
+
+$SUCCESS "Config file correctly parsed."
+
+# Restore default behaviour.
+rm $CONF
+

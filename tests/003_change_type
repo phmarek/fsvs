@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+if [[ $UID -eq 0 ]]
+then
+	ONLY_ROOT=
+else
+	ONLY_ROOT=ignore_func
+	function ignore_func()
+	{
+	  true
+	}
+fi
+
+test -d typechange && rm -r typechange
+mkdir typechange
+ pushd typechange > /dev/null
+
+ for i in file device symlink dir
+ do
+	 echo file > file-$i
+	 $ONLY_ROOT cp -a /dev/zero device-$i
+	 ln -s file-$i symlink-$i
+	 mkdir dir-$i
+	 echo sub > dir-$i/sub-entry
+	 mkdir dir-$i/sub
+	 touch dir-$i/sub/sub-entry
+ done
+popd > /dev/null
+
+
+echo "     ci"
+$BIN ci -m "inserted types"
+sleep 1
+
+# now goto other wc and update
+pushd $WC2 > /dev/null
+echo "     up"
+$BIN up
+
+echo "     st"
+$BIN st
+
+$COMPARE_1_2
+popd > /dev/null
+
+rm -r typechange/*
+pushd typechange > /dev/null
+
+ for i in file device symlink dir
+ do
+	 echo file > $i-file
+	 $ONLY_ROOT cp -a /dev/zero $i-device
+	 ln -s $i-1 $i-symlink
+	 mkdir $i-dir
+	 echo sub > $i-dir/sub-entry
+	 mkdir $i-dir/sub
+	 touch $i-dir/sub/sub-entry
+ done
+popd > /dev/null
+
+echo "     ci"
+$BIN ci -m "changed types"
+sleep 1
+
+
+$WC2_UP_ST_COMPARE
+
