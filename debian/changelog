@@ -1,3 +1,19 @@
+fsvs (1.2.7-1) UNRELEASED; urgency=medium
+
+  * QA upload.
+  * New upstream release.
+  * Bump Standards-Version to 3.9.8.
+  * Refresh patches.
+  * Sort source files to enable reproducible building.
+  * Fix spelling errors found by lintian.
+  * Enable all hardening options and honour CPPFLAGS.
+  * Clean .vimrc generated during build.
+  * Add Vcs-* fields; imported packaging history to collab-maint.
+  * Convert copyright to DEP5 format.
+  * Add DEP3 patch headers to patches missing it.
+
+ -- Reiner Herrmann <reiner@reiner-h.de>  Sun, 31 Jul 2016 16:50:31 +0200
+
 fsvs (1.2.6-3) unstable; urgency=medium
 
   * QA upload.
