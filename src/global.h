@@ -788,7 +788,7 @@ __attribute__ ((format (printf, 5, 6) ));
  */
 #define STOPIF_SVNERR(func, parm) STOPIF_SVNERR_TEXT(func, parm, #func)
 /** Convert the svn_error_t into a message and a returnable integer. */
-#define STOP_HANDLE_SVNERR(svnerr) STOPIF_CODE_ERR_GOTO(svnerr, svnerr->apr_err, ex2, (const char*)svnerr->message)
+#define STOP_HANDLE_SVNERR(svnerr) STOPIF_CODE_ERR_GOTO(svnerr, svnerr->apr_err, ex2, "%s", (const char*)svnerr->message)
 
 /** The opposite to STOP_HANDLE_SVNERR(); this converts an status
  * to the svn_error_t.

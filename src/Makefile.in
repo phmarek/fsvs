@@ -11,14 +11,14 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.2.3/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 2424 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.2.5/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 2457 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
-CFLAGS	:= @CFLAGS@
-CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"' 
+CFLAGS	:= @CFLAGS@ @NEED_FNESTED_FUNCTIONS@
+CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'
 LDFLAGS	:= @LDFLAGS@
-FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm
+FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm 
 EXTRALIBS	:= @EXTRALIBS@
 WAA_CHARS?= @WAA_WC_MD5_CHARS@
 

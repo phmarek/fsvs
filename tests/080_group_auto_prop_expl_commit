@@ -1,0 +1,50 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+
+# http://fsvs.tigris.org/ds/viewMessage.do?dsForumId=3928&dsMessageId=2981798
+
+logfile=$LOGDIR/080.group_auto_prop_expl_commit
+
+grp_dir=`$PATH2SPOOL $WC ^`/groups
+mkdir $grp_dir
+
+cat <<EOT > $grp_dir/secret
+auto-prop    fsvs:commit-pipe    base64
+take
+EOT
+$BINq groups "group:secret,./**/f*"
+
+
+DATA=plain
+
+mkdir dir1
+echo $DATA > dir1/file
+cp -a dir1 dir2
+
+$BINq ci -m c1 dir1
+# explicitly committing
+$BINq ci -m c1 dir2/file
+
+
+echo $DATA | base64 > cmp
+$INFO "expect this:"
+cat cmp
+
+for d in dir1 dir2
+do
+	$INFO "$d got this:"
+	svn cat $REPURL/$d/file | tee f.$d
+	if ! diff -u f.$d cmp
+	then 
+		$ERROR "Not correctly encoded in $d"
+	fi
+done
+
+
+$SUCCESS "group-autoprops ok."
+

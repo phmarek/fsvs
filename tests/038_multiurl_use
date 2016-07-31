@@ -203,6 +203,9 @@ Verify 1 g WC_MACHINE -ulocal
 $SUCCESS "Partial update works"
 
 
+$WARN "disabled, doesn't work with current subversion"
+exit 0
+
 # TODO: Get both ways of repository numbers - local higher than base, and 
 # vice-versa.
 

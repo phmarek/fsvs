@@ -130,6 +130,7 @@ static inline int prp__prop_will_be_removed(datum data)
 	return strcmp(data.dptr, prp___to_be_removed_value) == 0;
 }
 
+int prp__sts_has_no_properties(struct estat *sts, int *result);
 
 #endif
 

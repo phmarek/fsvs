@@ -56,6 +56,7 @@ FSVS currently knows:<UL>
 <LI>\c log_output - \ref o_logoutput
 <LI>\c merge_prg, \c merge_opt - \ref o_merge
 <LI>\c mkdir_base - \ref o_mkdir_base
+<LI>\c password - \ref o_passwd
 <LI>\c path - \ref o_opt_path
 <LI>\c softroot - \ref o_softroot
 <LI>\c stat_color - \ref o_status_color
@@ -495,6 +496,22 @@ that would override the config values.
 \note Your \c sshd_config needs the \c PermitUserEnvironment setting; you can
 also take a look at the \c AcceptEnv and \c SendEnv documentation.
 
+
+\subsection o_passwd Password
+
+In some scenarios like ssl-client-key-authentication it is more comfortable to 
+use anonymous logins for checkout.
+
+In case the commit needs authentication via a password, you can use the \c 
+password option.
+
+Please note the possible risks - on the command line it's visible via \c ps, 
+and config files should at least be protected via \c chmod! There's no 
+encryption or obfuscation!
+
+\code
+  password="pa55word"
+\endcode
 
 
 \subsection o_commit_to Destination URL for commit

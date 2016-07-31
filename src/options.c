@@ -286,6 +286,9 @@ struct opt__list_t opt__list[OPT__COUNT]=
 	[OPT__AUTHOR] = {
 		.name="author", .cp_val="", .parse=opt___store_env_noempty,
 	},
+	[OPT__PASSWD] = {
+		.name="password", .cp_val="", .parse=opt___store_string,
+	},
 
 	/* I thought about using opt___normalized_path() for these two; but that 
 	 * would be a change in behaviour. */
@@ -740,7 +743,7 @@ int opt__doesnt_say_off(const char *string)
  * loop via \c getenv() over all options? */
 char *opt__variable_from_option(enum opt__settings_e which)
 {
-	static char buffer[ strlen(ENV_PREFIX) + 
+	static char buffer[ sizeof(ENV_PREFIX) + 
 		sizeof(opt__list[0].name) + 1] = ENV_PREFIX;
 	char * const target=buffer+strlen(ENV_PREFIX);
 	int i;

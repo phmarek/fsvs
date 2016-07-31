@@ -120,6 +120,10 @@ enum opt__settings_e {
 	 * See \ref o_copyfrom_exp */
 	OPT__COPYFROM_EXP,
 
+	/** Set a global password, for anonymous co/ci.
+	 * See \ref o_passwd. */
+	OPT__PASSWD,
+
 	/** The base path of the WAA.
 	 * See \ref o_waa. */
 	OPT__WAA_PATH,

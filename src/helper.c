@@ -1738,7 +1738,7 @@ char *hlp__rev_to_string(svn_revnum_t rev)
 {
 	static int last=0;
 	/* Sadly GCC doesn't statically solve sizeof(rev)*log(10)/log(2) ... */
-	static char buffers[2][(int)(sizeof(rev)*3.32)+3];
+	static char buffers[2][(int)(sizeof(rev)*4)+3];
 
 	last++;
 	if (last>= sizeof(buffers)/sizeof(buffers[0])) last=0;

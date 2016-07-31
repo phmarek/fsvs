@@ -1620,14 +1620,12 @@ int waa__input_tree(struct estat *root,
 	char *dir_mmap, *dir_end, *dir_curr;
 	off_t length;
 	t_ul header_len;
-	struct waa__entry_blocks_t *cur_block;
 	struct estat *sts_tmp;
 
 
 	waa__entry_block.first=root;
 	waa__entry_block.count=1;
 	waa__entry_block.next=waa__entry_block.prev=NULL;
-	cur_block=&waa__entry_block;
 
 	length=0;
 	dir_mmap=NULL;
@@ -1724,8 +1722,6 @@ int waa__input_tree(struct estat *root,
 			STOPIF( ops__allocate(count, &stat_mem, &sts_free), NULL );
 			/* This block has to be updated later. */
 			STOPIF( waa__insert_entry_block(stat_mem, sts_free), NULL);
-
-			cur_block=waa__entry_block.next;
 		}
 
 		sts_free--;
@@ -2593,7 +2589,7 @@ int waa__partial_update(struct estat *root,
 {
 	int status;
 	struct estat *sts;
-	int i, flags;
+	int i, flags, ign;
 	int faked_arg0;
 
 
@@ -2641,6 +2637,12 @@ int waa__partial_update(struct estat *root,
 
 		/* This entry is marked as full, parents as "look below". */
 		sts->do_userselected = sts->do_this_entry = 1;
+		/* Set auto-props as needed. See
+		 * http://fsvs.tigris.org/ds/viewMessage.do?dsForumId=3928&dsMessageId=2981798 
+		 * */
+		STOPIF(prp__sts_has_no_properties(sts, &ign), NULL);
+		if (ign)
+			STOPIF( ign__is_ignore(sts, &ign), NULL);
 		while ( 1 )
 		{
 			/* This new entry is surely updated.

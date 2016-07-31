@@ -10,7 +10,7 @@ $url="http://fsvs.tigris.org/svn/fsvs";
 $tagdir="fsvs-$version";
 $tagurl="$url/tags/$tagdir";
 
-system("svn cp -m 'Tagging $version' $url/trunk $tagurl");
+system("svn cp -m 'Tagging $version' $url/branches/fsvs-1.2.x/ $tagurl");
 warn "Fehler $? beim Taggen!" if $?;
 
 #print "Getaggt!! Warte auf Bestätigung.\n"; $_=<STDIN>;
