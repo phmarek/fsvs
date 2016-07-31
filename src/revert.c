@@ -191,7 +191,7 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	svn_error_t *status_svn;
 	svn_string_t *prop_val;
 	struct encoder_t *encoder;
-	char *relative_url, *utf8_url;
+	char *utf8_url;
 	apr_hash_t *properties;
 	char target_rev[10];
 
@@ -205,7 +205,6 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	if (strncmp(loc_url, "./", 2) == 0)
 	{
 		/* Skip ./ in front. */
-		relative_url=loc_url+2;
 	}
 	else
 	{
@@ -797,7 +796,6 @@ int rev___revert_to_base(struct estat *sts,
 {
 	int status;
 	svn_revnum_t wanted;
-	struct estat copy;
 	char *path;
 
 
@@ -864,9 +862,6 @@ int rev___revert_to_base(struct estat *sts,
 		}
 		number_reverted++;
 
-
-		/* see below */
-		copy=*sts;
 
 		DEBUGP("l_st=%s, r_st=%s, old=%p", 
 				st__status_string_fromint(sts->entry_status), 

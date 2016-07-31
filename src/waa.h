@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2009 Philipp Marek.
+ * Copyright (C) 2005-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -283,10 +283,10 @@ static inline int waa__find_common_base(int argc, char *args[],
 int waa__find_base(struct estat *root, int *argc, char ***args);
 
 /** Creates the WAA and CONF directories needed for \a wc_path. */
-int waa__create_working_copy(const char const *wc_dir);
+int waa__create_working_copy(const char * const wc_dir);
 /** Stores the path of the working copy.
  * Not needed if waa__find_common_base or similar is called. */
-int waa__set_working_copy(const char const *wc_dir);
+int waa__set_working_copy(const char * const wc_dir);
 
 
 /** \name Building paths for FSVS's datafiles.

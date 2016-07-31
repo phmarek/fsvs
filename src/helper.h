@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2009 Philipp Marek.
+ * Copyright (C) 2005-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -181,13 +181,13 @@ int hlp__rename_to_unique(char *fn, char *extension,
  * and so I'd have to use casts everywhere, which wouldn't help the 
  * type-safety anyway. */
 /** Allocates a buffer in \a *dest, and copies \a source. */
-int hlp__strnalloc(int len, char **dest, const char const *source);
+int hlp__strnalloc(int len, char **dest, const char * const source);
 /** Like \c hlp__strnalloc, but concatenates strings until a \c NULL is 
  * found. */
 int hlp__strmnalloc(int len, char **dest, 
-		const char const *source, ...) __attribute__((sentinel));
+		const char * source, ...) __attribute__((sentinel));
 /** Own implementation of \c strdup(), possibly returning \c ENOMEM. */
-inline static int hlp__strdup(char **dest, const char const *src)
+inline static int hlp__strdup(char **dest, const char * const src)
 { return hlp__strnalloc(strlen(src), dest, src); }	
 /** Error returning \c calloc(); uses \c (void**) \a output. */
 int hlp__calloc(void *output, size_t nmemb, size_t count);

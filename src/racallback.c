@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2009 Philipp Marek.
+ * Copyright (C) 2005-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -293,7 +293,8 @@ ex:
 }
 
 
-inline int cb___store_prop(struct estat *sts, 
+// inline
+int cb___store_prop(struct estat *sts, 
 		const char *utf8_name, const svn_string_t *value,
 		apr_pool_t *pool)
 {
@@ -534,7 +535,6 @@ svn_error_t *cb___add_file(const char *utf8_path,
 		void **file_baton)
 {
 	struct estat *dir=parent_baton;
-	struct estat *sts;
 	int status;
 
 	/* Unless we get the svn:special property, we can assume that it's a 
@@ -542,7 +542,6 @@ svn_error_t *cb___add_file(const char *utf8_path,
 	STOPIF( cb__add_entry(dir, utf8_path, NULL, utf8_copy_path, 
 				copy_rev, S_IFREG, NULL, 1, file_baton),
 			NULL);
-	sts=*file_baton;
 
 ex:
 	RETURN_SVNERR(status);
@@ -761,6 +760,7 @@ int cb___remover(struct estat *sts, struct url_t *to_remove,
 	int child_changes;
 
 	status=0;
+	child_changes=0;
 	DEBUGP("clean tree %s url %s", sts->name, to_remove->name);
 	if (ops__has_children(sts))
 	{
@@ -916,7 +916,6 @@ int cb__record_changes_mixed(struct estat *root,
 	svn_error_t *status_svn;
 	void *report_baton;
 	const svn_ra_reporter2_t *reporter;
-	int sent_wcroot;
 	char *cur, **op;
 
 
@@ -933,7 +932,6 @@ int cb__record_changes_mixed(struct estat *root,
 			 root,
 			 pool) );
 
-	sent_wcroot=0;
 	cur=NULL;
 	op=NULL;
 	if (other_paths)

@@ -57,6 +57,7 @@
 #include <apr_pools.h>
 #include <apr_user.h>
 #include <apr_file_io.h>
+#include <apr_version.h>
 #include <subversion-1/svn_delta.h>
 #include <subversion-1/svn_ra.h>
 #include <subversion-1/svn_error.h>
@@ -175,6 +176,7 @@ int up__parse_prop(struct estat *sts,
 		DEBUGP("got NULL property for %s: %s", sts->name, loc_name);
 		//goto ex;
 		loc_value=NULL;
+		sts->remote_status |= FS_PROPERTIES;
 	}
 	else
 	{
@@ -1004,7 +1006,9 @@ svn_error_t *up__change_file_prop(void *file_baton,
 		STOPIF( up__parse_prop(sts, utf8_name, value, NULL, pool), NULL);
 
 	/* Ah yes, the famous "late property" sketch ... */
-	BUG_ON(sts->remote_status & FS_CHANGED,
+	/* Ignore for SVN-internal things. */
+	BUG_ON((sts->remote_status & FS_CHANGED) &&
+			!hlp__is_special_property_name(utf8_name),
 			"Entry has already been fetched, properties too late!");
 ex:
 	RETURN_SVNERR(status);

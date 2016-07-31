@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2009 Philipp Marek.
+ * Copyright (C) 2005-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -241,7 +241,8 @@ void ci___unset_copyflags(struct estat *root)
 
 /* Convenience function; checks for \c FSVS_PROP_COMMIT_PIPE.
  * By putting that here we can avoid sending most of the parameters. */
-inline int send_a_prop(void *baton, int store_encoder,
+// inline
+int send_a_prop(void *baton, int store_encoder,
 		struct estat *sts, change_any_prop_t function,
 		char *key, svn_string_t *value,
 		apr_pool_t *pool)

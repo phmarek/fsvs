@@ -515,7 +515,7 @@ ex:
 int df___direct_diff(struct estat *sts)
 {
 	int status;
-	svn_revnum_t rev1, rev2;
+	svn_revnum_t rev1;
 	char *fn;
 
 
@@ -528,7 +528,6 @@ int df___direct_diff(struct estat *sts)
 
 		/* Has to be set per sts. */
 		rev1=sts->repos_rev;
-		rev2=0;
 		if ( (sts->entry_status & FS_REMOVED))
 		{
 			STOPIF_CODE_EPIPE( printf("Only in repository: %s\n", fn), NULL);

@@ -1107,7 +1107,7 @@ int url__open_session(svn_ra_session_t **session, char **missing_dirs)
 				 current_url->pool),
 				"svn_ra_open(\"%s\")", current_url->url);
 	head=SVN_INVALID_REVNUM;
-  STOPIF( url__canonical_rev( current_url, &head), NULL);
+	STOPIF( url__canonical_rev( current_url, &head), NULL);
 
 	DEBUGP("Trying url %s@%ld", buffer, head);
 	while (1)

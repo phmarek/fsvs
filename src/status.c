@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <time.h>
+#include <assert.h>
 
 #include "global.h"
 #include "actions.h"
@@ -134,29 +135,29 @@ char * st___visible_file_size(struct estat *sts)
 
 
 /** Meta-data status string. */
-inline char * st___meta_string(int status_bits, int flags)
+char * st___meta_string(int status_bits, int flags)
 {
-  static char buffer[4];
-	int prop;
+    static char buffer[4];
+    int prop;
 
-	prop=(status_bits & FS_PROPERTIES) | (flags & RF_PUSHPROPS);
+    prop=(status_bits & FS_PROPERTIES) | (flags & RF_PUSHPROPS);
 
-  if (opt__is_verbose() > 0)
-  {
-    buffer[0] = status_bits & FS_META_MTIME ?  't' : '.';
-    buffer[1] = status_bits & 
-      (FS_META_OWNER | FS_META_GROUP | FS_META_UMODE) ?  'p' : '.';
-    buffer[2] = prop ?  'P' : '.';
-    buffer[3] = 0;
-  }
-  else
-  {
-    buffer[0] = status_bits & FS_META_CHANGED ? 'm' : 
-			prop ? 'P' : '.';
-    buffer[1]=0;
-  }
+    if (opt__is_verbose() > 0)
+    {
+        buffer[0] = status_bits & FS_META_MTIME ?  't' : '.';
+        buffer[1] = status_bits & 
+            (FS_META_OWNER | FS_META_GROUP | FS_META_UMODE) ?  'p' : '.';
+        buffer[2] = prop ?  'P' : '.';
+        buffer[3] = 0;
+    }
+    else
+    {
+        buffer[0] = status_bits & FS_META_CHANGED ? 'm' : 
+            prop ? 'P' : '.';
+        buffer[1]=0;
+    }
 
-  return buffer;
+    return buffer;
 }
 
 
@@ -610,8 +611,11 @@ volatile char *_st___string_from_bits(int value,
 	STOPIF( cch__add(cache, 0, NULL, 128, &string), NULL);
 	cc=cache->entries + cache->lru;
 
+	/* To quiesce clang */
+	assert(string);
+
 	last_len=0;
-	if (string) *string=0;
+	*string=0;
 	for(i=0; i<max; i++)
 	{
 		if (value & data[i].val)

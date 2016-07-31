@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2007-2009 Philipp Marek.
+ * Copyright (C) 2007-2009,2015 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -442,11 +442,11 @@ ex:
 
 /** -.
  * Wrapper for prp__fetch(). */
-int prp__get(hash_t db, const char *keycp, datum *value)
+int prp__get(hash_t db, const char * const keycp, datum *value)
 {
   static datum key;
 
-	key.dptr=keycp;
+	key.dptr=(char*)keycp;
 	key.dsize=strlen(keycp)+1;
 	return prp__fetch(db, key, value);
 }
@@ -567,6 +567,7 @@ int prp__g_work(struct estat *root, int argc, char *argv[])
 	char **normalized;
 
 
+	db=NULL;
 	status=0;
 	output=stdout;
 	if (argc<2) ac__Usage_this();
@@ -636,6 +637,7 @@ int prp__s_work(struct estat *root, int argc, char *argv[])
 
 
 	status=0;
+	db=NULL;
 	if (argc<2) ac__Usage_this();
 
 	/* Check name for special values. */
@@ -893,6 +895,7 @@ int prp__sts_has_no_properties(struct estat *sts, int *result)
 	int status, rv;
 	datum key;
 
+	status=0;
 	rv = prp__open_byestat( sts, GDBM_READER, &db);
 	if (rv == ENOENT)
 		goto done;

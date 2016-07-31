@@ -1023,6 +1023,8 @@ int ops__free_entry(struct estat **sts_p)
 
 		prev=&free_p->next;
 		free_p2=free_p;
+		/* silence compiler warning */
+		(void) free_p2;
 
 		free_p=*prev;
 
@@ -1231,7 +1233,6 @@ int ops__traverse(struct estat *current, char *fullpath,
 	int status;
 	char *next_part;
 	struct estat *sts;
-	int quit;
 	char *copy, *path;
 
 
@@ -1239,7 +1240,6 @@ int ops__traverse(struct estat *current, char *fullpath,
 	STOPIF( hlp__strdup( &copy, fullpath), NULL);
 	path=copy;
 
-	quit=0;
 	while (path)
 	{
 		next_part=(char*)ops___split_fnpart(path);
