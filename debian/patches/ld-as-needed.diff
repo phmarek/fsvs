@@ -1,3 +1,6 @@
+Author: Matthias Klose <doko@debian.org>
+Description: Fix build with --as-needed
+
 Index: b/src/Makefile.in
 ===================================================================
 --- a/src/Makefile.in

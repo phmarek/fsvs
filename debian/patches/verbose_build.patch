@@ -1,3 +1,6 @@
+Author: Matthias Klose <doko@debian.org>
+Description: Enable verbose build
+
 Index: fsvs-1.2.6/src/Makefile.in
 ===================================================================
 --- fsvs-1.2.6.orig/src/Makefile.in
