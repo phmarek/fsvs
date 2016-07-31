@@ -4,6 +4,8 @@ Priority: optional
 Maintainer: Debian QA Group <packages@qa.debian.org>
 Build-Depends: debhelper (>= 9), libsvn-dev, libgdbm-dev, ctags, libdb-dev, libapr1-dev, libaprutil1-dev, libpcre3-dev
 Standards-Version: 3.9.8
+Vcs-Git: https://anonscm.debian.org/git/collab-maint/fsvs.git
+Vcs-Browser: https://anonscm.debian.org/git/collab-maint/fsvs.git
 Homepage: http://fsvs.tigris.org/
 
 Package: fsvs
