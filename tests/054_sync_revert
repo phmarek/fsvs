@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_DEFAULT > /dev/null
+$INCLUDE_FUNCS
+
+cd $WC
+
+$BINq up
+
+rm -rf *
+$BINq sync-repos
+
+$BINq revert -R -R .
+
+$WC2_UP_ST_COMPARE
+

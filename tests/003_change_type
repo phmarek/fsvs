@@ -18,7 +18,11 @@ else
 	}
 fi
 
-test -d typechange && rm -r typechange
+if test -d typechange
+then
+  rm -r typechange
+fi
+
 mkdir typechange
  pushd typechange > /dev/null
 
@@ -37,12 +41,13 @@ popd > /dev/null
 
 $BINq ci -m "inserted types" -o delay=yes > $logfile
 rev=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
+$INFO "initial checkin is r$rev"
 
 # now goto other wc and update
 pushd $WC2 > /dev/null
 $BINq up
 
-$BINq st
+$BINdflt st > $logfile
 
 $COMPARE_1_2
 popd > /dev/null
@@ -63,10 +68,21 @@ pushd typechange > /dev/null
 popd > /dev/null
 
 $BINq ci -m "changed types" -o delay=yes > $logfile
+if [[ `$BINdflt st -C -C | wc -l` -ne 0 ]]
+then
+	$BINdflt st -C -C
+	$ERROR "Entries left out of commit"
+fi
+$INFO "typechange done, running update"
+
+$BINdflt up $WC2 > $logfile
+$INFO "update done"
 
 $WC2_UP_ST_COMPARE
 $SUCCESS "all types changed to other types."
 exit
+
+export FSVS_WARNING="mixed-rev-wc=ignore"
 
 # Now we change WC1 back via update, and revert everything in WC2.
 $BINq up -r$rev $WC2

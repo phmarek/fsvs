@@ -9,8 +9,8 @@ rm empty-file blabla
 rm -r tree/c
 
 echo "     ci"
-$BIN ci -m "deleted file, dir and symlink"
+$BINq ci -m "deleted file, dir and symlink"
 echo "     st1"
-$BIN st
+$BINq st
 
 $WC2_UP_ST_COMPARE

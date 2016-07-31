@@ -29,7 +29,7 @@ do
 	then
 	  $INFO "$scr ok"
 	else
-		echo "$scr:1: unexpected answer"
+		echo "$base/$scr:1: unexpected answer"
 	  $ERROR "Component-test failed"
 	fi
 done

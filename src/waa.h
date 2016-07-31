@@ -38,11 +38,11 @@
 struct waa__entry_blocks_t {
 /** Pointer to packed struct \c estat array. */
   struct estat *first;
-	/** Number of entries in array */
-	int count;
 	/** Pointers for linked list. @{ */
 	struct waa__entry_blocks_t *next, *prev;
 	/** @} */
+	/** Number of entries in array */
+	int count;
 };
 
 
@@ -58,11 +58,10 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * about the system it is running on.
  *
  * Two file trees are used:
- * - \c /var/spool/fsvs (if not overridden by \ref WAA__PATH_ENV 
- *   "$FSVS_WAA").
+ * - \c /var/spool/fsvs (if not overridden by \ref o_waa "$FSVS_WAA").
  *   The WAA stores volatile data that should not be backed up; the files 
  *   have only lower-case letters.
- * - \c /etc/fsvs (or \ref CONF__PATH_ENV "$FSVS_CONF")
+ * - \c /etc/fsvs (or \ref o_conf "$FSVS_CONF")
  *   This is used to store configuration data, eg.  for the working copies.  
  *   The names of files stored here have the first letter in upper-case.
  *   Having this data backed-up (eg. along with the rest of the filesystem) 
@@ -177,19 +176,32 @@ extern struct waa__entry_blocks_t waa__entry_block;
 
 /* this should be optimized into a constant.
  * verified for gcc (debian 4.0.0-7ubuntu2) */
-#define WAA__MAX_EXT_LENGTH max(																\
-		max( max(strlen(WAA__DIR_EXT), strlen(WAA__PROP_EXT) ),			\
-			strlen(WAA__FILE_MD5s_EXT) ),															\
-		max(strlen(WAA__IGNORE_EXT), strlen(WAA__URLLIST_EXT) )			\
-	)
-
+#define WAA__MAX_EXT_LENGTH max(										 \
+		max(                                             \
+			max(strlen(WAA__CONFLICT_EXT),                 \
+				strlen(WAA__COPYFROM_EXT)),                  \
+			strlen(WAA__IGNORE_EXT) ),										 \
+		max(                                             \
+			max(max(strlen(WAA__DIR_EXT),                  \
+					strlen(WAA__FILE_MD5s_EXT)),               \
+				max(strlen(WAA__PROP_EXT),                   \
+					strlen(WAA__CONFLICT_EXT)) ),              \
+			max(                                           \
+				max(strlen(WAA__FILE_INODE_EXT),             \
+					strlen(WAA__DIR_INODE_EXT)),               \
+				max(strlen(WAA__FILE_NAME_EXT),              \
+					strlen(WAA__DIR_NAME_EXT)) ) ) )
 
 /** Store the current working directory. */
 int waa__save_cwd(char **where, int *len, int additional);
 /** Initialize WAA operations. */
 int waa__init(void);
+
 /** Create a directory; ignore \c EEXIST. */
+int waa__mkdir_mask(char *dir, int including_last, int mask);
+/** Create a directory, ignore \c EEXIST, and use a default mask. */
 int waa__mkdir(char *dir, int including_last);
+
 /* Given an \a path and an \a extension, this function returns a 
  * \a filehandle that was opened for this entry in the WAA with \a flags. */
 int waa__open(char *path,
@@ -315,6 +327,12 @@ int waa__copy_entries(struct estat *src, struct estat *dest);
  * marker, which gets set on the committed entries, to be corrected on
  * ops__save_1entry(). */
 #define SET_REVNUM (-12)
+
+
+/** Returns a distict name and filehandle. */ 
+int waa__get_tmp_name(const char *base_dir, 
+		char **output, apr_file_t **handle,
+		apr_pool_t *pool);
 
 
 /** Our current WC base. */

@@ -41,7 +41,7 @@ sparse=sparse
 if [[ -e $filename ]]
 then
   rm $filename
-	$BIN ci -m "delete the test-file"
+	$BINq ci -m "delete the test-file"
 fi
 
 sparse_md5s=`$PATH2SPOOL $sparse md5s`
@@ -56,7 +56,7 @@ test -f $sparse_md5s && rm $sparse_md5s
 seq 1 199999 > $filename
 dd if=/dev/null of=$sparse bs=1024 count=1 seek=4096 2> /dev/null
 echo "     ci1"
-$BIN ci -m "big files"
+$BINq ci -m "big files"
 ci_md5=`$PATH2SPOOL $filename md5s`
 echo $ci_md5
 CheckSyntax $filename $ci_md5
@@ -70,7 +70,7 @@ fi
 
 echo "Another line" >> $filename
 echo "     ci2"
-$BIN ci -m "big file 2"
+$BINq ci -m "big file 2"
 CheckSyntax $filename $ci_md5
 
 if [[ -e $ci_md5 ]]
@@ -90,7 +90,8 @@ then
   $SUCCESS "Update and commit give the same manber-hashes and MD5s"
 else
   $ERROR_NB "Update and commit give DIFFERENT manber-hashes and/or MD5s!!"
-	diff -uw $ci_md5 $up_md5
+	ls -la $ci_md5 $up_md5 2> /dev/null
+	diff -uw $ci_md5 $up_md5 2> /dev/null
   $ERROR "Update and commit disagree"
 fi
 
@@ -99,7 +100,7 @@ CheckSyntax $WC2/$filename $up_md5
 
 # now delete the file and test if the .../md5s is gone.
 rm $filename
-$BIN ci -m "delete the big test-file"
+$BINq ci -m "delete the big test-file"
 
 $WC2_UP_ST_COMPARE
 

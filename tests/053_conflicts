@@ -16,7 +16,7 @@ perl -pe 's/2$/2changed-repos/' < common_ancestor > repository
 # Now change line 7.
 perl -pe 's/^7$/7local/' < common_ancestor > locally_changed
 # What the merged file should look like
-merge -A -p locally_changed common_ancestor repository > merged_ok
+diff3 -m locally_changed common_ancestor repository > merged_ok
 # Another local data, with conflict
 perl -pe 's/^2$/2 is changed=conflict/' < common_ancestor > will_conflict
 # Output of the merge conflict can be done only when we know the revision 
@@ -28,16 +28,16 @@ target=myfile
 
 # Put into repository.
 cat common_ancestor > $target
-$BINq ci -m 1 $target > $logfile 
+$BINq ci -m 1 $target -o delay=yes > $logfile 
 rev_old=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
 
 cat repository > $target
-$BINq ci -m 2 $target > $logfile 
+$BINq ci -m 2 $target -o delay=yes > $logfile 
 rev_new=`grep "revision	" $logfile | tail -1 | cut -f2 -d"	" | cut -f1 -d" "` 
 
 
 # Now create the merge conflict compare file.
-if merge -A -p -L ./$target.mine -L ./$target.r$rev_old -L ./$target.r$rev_new will_conflict common_ancestor repository > merged_conflict
+if diff3 -m -L ./$target.mine -L ./$target.r$rev_old -L ./$target.r$rev_new will_conflict common_ancestor repository > merged_conflict
 then
 	$ERROR "merge doesn't gives a conflict?"
 fi
@@ -201,7 +201,9 @@ fi
 
 # Now do a conflict
 cat will_conflict > $target
-$BINq up -o conflict=merge > $logfile
+touch time_mark_file
+sleep 1
+$BINq up -o conflict=merge -o delay=yes > $logfile
 if ! cmp $target merged_conflict
 then
 	diff -u $target merged_conflict
@@ -230,7 +232,7 @@ else
   $ERROR "No conflict on mis-merge?"
 fi
 
-if $BINdflt ci $target -m 1
+if $BINdflt ci $target -m conflict
 then
 	$ERROR "shouldn't commit a conflicted file!"
 else
@@ -251,7 +253,7 @@ fi
 # After resolve only $target should be seen - not any other files.
 # With just "status" we'd get a line for ".", too - which we don't want.
 $BINdflt st * > $logfile
-if [[ `grep '^N' < $logfile | wc -l` -ne 6 ]]
+if [[ `grep '^N' < $logfile | wc -l` -ne 7 ]]
 then
 	cat $logfile
   $ERROR "resolve takes unknown files, too"
@@ -264,6 +266,16 @@ else
   $ERROR "Wrong status after resolve"
 fi
 
+
+# Look whether the merged file has a NOW timestamp - ie. newer than the 
+# marked file
+if [[ $target -ot time_mark_file ]]
+then
+	ls -la --full-time $target time_mark_file
+	$ERROR "Timestamp of merged file wrong"
+else
+  $SUCCESS "merged file has mtime NOW"
+fi
 
 
 if $BINdflt ci $target -m 1

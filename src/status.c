@@ -216,17 +216,17 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
     STOPIF( hlp__format_path(sts, path, &path), NULL);
 
 
-    status= 0>
-      printf("%s%c%s%c%c  %8s  %s%s%s%s%s\n",
-          opt__get_int(OPT__STATUS_COLOR) ? st___color(status_bits) : "",
+		STOPIF_CODE_ERR(
+				printf("%s%c%s%c%c  %8s  %s%s%s%s%s\n",
+					opt__get_int(OPT__STATUS_COLOR) ? st___color(status_bits) : "",
 
-          flags & RF_ADD ? 'n' : 
-          flags & RF_UNVERSION ? 'd' : 
-          (status_bits & FS_REPLACED) == FS_REPLACED ? 'R' : 
-          status_bits & FS_NEW ? 'N' : 
-          status_bits & FS_REMOVED ? 'D' : '.',
+					flags & RF_ADD ? 'n' : 
+					flags & RF_UNVERSION ? 'd' : 
+					(status_bits & FS_REPLACED) == FS_REPLACED ? 'R' : 
+					status_bits & FS_NEW ? 'N' : 
+					status_bits & FS_REMOVED ? 'D' : '.',
 
-          st___meta_string(status_bits, flags),
+					st___meta_string(status_bits, flags),
 
 					flags & RF_CONFLICT ? 'x' : 
 					status_bits & FS_CHANGED ? 'C' : '.',
@@ -238,17 +238,16 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
 					( ( status_bits & FS_REMOVED ) &&
 						( flags & (RF_UNVERSION | RF_ADD) ) ) ? '!' : '.',
 
-          size, path,
-          opt__get_int(OPT__STATUS_COLOR) ? ANSI__NORMAL : "",
-					
+					size, path,
+					opt__get_int(OPT__STATUS_COLOR) ? ANSI__NORMAL : "",
+
 					/* Here the comparison of opt_verbose is already included in the 
 					 * check on copyfrom above. */
 					copyfrom ? " (copied from " : "",
 					copyfrom ? copyfrom : 
 						copy_inherited ? " (inherited)" : "",
-					copyfrom ? ")" : "");
-    /* possibly a EPIPE */
-    STOPIF_CODE_ERR(status, errno, "Broken Pipe");
+					copyfrom ? ")" : "") == -1,
+				errno, "Error printing output");
   }
 
 
@@ -302,6 +301,24 @@ ex:
 
 /** -.
  * */
+int st__action(struct estat *sts)
+{
+	int status;
+
+	if (opt__get_int(OPT__STOP_ON_CHANGE) &&
+			sts->entry_status)
+		/* Status is a read-only operation, so that works. */
+		exit(1);
+
+	STOPIF( st__status(sts), NULL);
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * */
 int st__rm_status(struct estat *sts)
 {
 	int status;
@@ -341,9 +358,10 @@ int st__work(struct estat *root, int argc, char *argv[])
 	/* Maybe no URL have been defined yet */
 	if (status != ENOENT) STOPIF(status, NULL);
 
-	STOPIF(ign__load_list(NULL), NULL);
+	STOPIF( ign__load_list(NULL), NULL);
 
-	if (opt__get_int(OPT__DIR_SORT))
+	if (opt__get_int(OPT__DIR_SORT) && 
+			!opt__get_int(OPT__STOP_ON_CHANGE))
 	{
 		action->local_callback=st__progress;
 		action->local_uninit=st__progress_uninit;
@@ -519,18 +537,26 @@ struct st___bit_info
 #define BIT_INFO(v, s) { .val=v, .string=s, .str_len=strlen(s) }
 
 
-/** Constructs a string from a bitmask, where one or more bits may be set. */
+/** Constructs a string from a bitmask, where one or more bits may be set.
+ *
+ * Must not be free()d. */
 #define st___string_from_bits(v, a, t) _st___string_from_bits(v, a, sizeof(a)/sizeof(a[0]), t)
 volatile char *_st___string_from_bits(int value, 
 		const struct st___bit_info data[], int max,
 		char *text_for_none)
 {
+	int status;
+	static struct cache_t *cache=NULL;
 	static const char sep[]=", ";
-	static char *string=NULL;
-	static int len=0;
+	char *string;
 	int i;
 	int last_len, new_len;
+	struct cache_entry_t **cc;
 
+
+	STOPIF( cch__new_cache(&cache, 4), NULL);
+	STOPIF( cch__add(cache, 0, NULL, 128, &string), NULL);
+	cc=cache->entries + cache->lru;
 
 	last_len=0;
 	if (string) *string=0;
@@ -541,13 +567,9 @@ volatile char *_st___string_from_bits(int value,
 			new_len = last_len + data[i].str_len + 
 				(last_len ? strlen(sep) : 0);
 
-			while (new_len + 8 > len)
+			if (new_len + 8 > (*cc)->len)
 			{
-				if (!len) len=256;
-				len *= 2;
-				string=realloc(string, len);
-				/* Cannot use STOPIF_ENOMEM() - we want to return a char* */
-				if (!string) return NULL;
+				STOPIF( cch__entry_set(cc, 0, NULL, new_len+64, 1, &string), NULL);
 				string[last_len]=0;
 			}
 
@@ -568,6 +590,9 @@ volatile char *_st___string_from_bits(int value,
 		}
 	}
 
+ex:
+	/* Is that good? */
+  if (status) return NULL;
 	/* If no bits are set, return "empty" */
 	return string && *string ? string : text_for_none;
 }
@@ -616,9 +641,8 @@ inline volatile char* st__status_string(const struct estat * const sts)
 }
 
 
-int st__print_entry_info(struct estat *sts, int with_type)
+volatile char *st__type_string(struct estat *sts)
 {
-	int status;
 	const struct st___bit_info types[]={
 		BIT_INFO( FT_IGNORE, 	"ignored"),
 		BIT_INFO( FT_CDEV,  		"char-dev"),
@@ -629,6 +653,13 @@ int st__print_entry_info(struct estat *sts, int with_type)
 		BIT_INFO( FT_UNKNOWN,	"unknown"),
 	};
 
+	return st___string_from_bits(sts->entry_type, types, "invalid");
+}
+
+
+int st__print_entry_info(struct estat *sts, int with_type)
+{
+	int status;
 	char *path, *waa_path, *url, *copyfrom;
 	svn_revnum_t copy_rev;
 
@@ -644,72 +675,73 @@ int st__print_entry_info(struct estat *sts, int with_type)
 	}
 
 	if (with_type)
-		status=printf("\tType:\t\t%s\n", 
-				st___string_from_bits(sts->entry_type, types, "invalid") );
+		STOPIF_CODE_EPIPE( printf("\tType:\t\t%s\n", 
+					st__type_string(sts)), NULL);
 	if (sts->entry_type == FT_DIR)
-		status |= printf("\tChildCount:\t%u\n", sts->entry_count);
-	status |= printf("\tURL:\t\t%s\n", url);
-	status |= printf("\tStatus:\t\t0x%X (%s)\n", sts->entry_status,
-			st__status_string(sts));
-	status |= printf("\tFlags:\t\t0x%X (%s)\n", 
-			sts->flags & ~RF_PRINT,
-			st__flags_string_fromint(sts->flags));
+		STOPIF_CODE_EPIPE( printf( "\tChildCount:\t%u\n", 
+					sts->entry_count), NULL);
+	STOPIF_CODE_EPIPE( printf("\tURL:\t\t%s\n", url), NULL);
+	STOPIF_CODE_EPIPE( printf("\tStatus:\t\t0x%X (%s)\n", 
+				sts->entry_status, st__status_string(sts)), NULL);
+	STOPIF_CODE_EPIPE( printf("\tFlags:\t\t0x%X (%s)\n", 
+				sts->flags & ~RF_PRINT,
+				st__flags_string_fromint(sts->flags)), NULL);
 
 	if (opt_verbose && copyfrom)
 	{
-		status |= printf("\tCopyfrom:\trev. %llu of %s\n", 
-				(t_ull)copy_rev, copyfrom);
+		STOPIF_CODE_EPIPE( printf("\tCopyfrom:\trev. %llu of %s\n", 
+					(t_ull)copy_rev, copyfrom), NULL);
 	}
 
-	status |= printf("\tDev:\t\t%llu\n", (t_ull)sts->st.dev);
-	status |= printf("\tInode:\t\t%llu\n", (t_ull)sts->st.ino);
-	status |= printf("\tMode:\t\t0%4o\n", sts->st.mode);
-	status |= printf("\tUID/GID:\t%u (%s)/%u (%s)\n", 
-			sts->st.uid, hlp__get_uname(sts->st.uid, "undefined"), 
-			sts->st.gid, hlp__get_grname(sts->st.gid, "undefined") );
+	STOPIF_CODE_EPIPE( printf("\tDev:\t\t%llu\n", 
+				(t_ull)sts->st.dev), NULL);
+	STOPIF_CODE_EPIPE( printf("\tInode:\t\t%llu\n", 
+				(t_ull)sts->st.ino), NULL);
+	STOPIF_CODE_EPIPE( printf("\tMode:\t\t0%4o\n", 
+				sts->st.mode), NULL);
+	STOPIF_CODE_EPIPE( printf("\tUID/GID:\t%u (%s)/%u (%s)\n", 
+				sts->st.uid, hlp__get_uname(sts->st.uid, "undefined"), 
+				sts->st.gid, hlp__get_grname(sts->st.gid, "undefined") ), NULL);
 	/* Remove the \n at the end */
-	status |= printf("\tMTime:\t\t%.24s\n", ctime( &(sts->st.mtim.tv_sec) ));
-	status |= printf("\tCTime:\t\t%.24s\n", ctime( &(sts->st.ctim.tv_sec) ));
+	STOPIF_CODE_EPIPE( printf("\tMTime:\t\t%.24s\n", 
+				ctime( &(sts->st.mtim.tv_sec) )), NULL);
+	STOPIF_CODE_EPIPE( printf("\tCTime:\t\t%.24s\n", 
+				ctime( &(sts->st.ctim.tv_sec) )), NULL);
 
 	STOPIF( waa__get_waa_directory(path, &waa_path, NULL, NULL,
 				GWD_WAA), NULL);
-	status |= printf("\tWAA-Path:\t%s\n", waa_path);
+	STOPIF_CODE_EPIPE( printf("\tWAA-Path:\t%s\n", 
+				waa_path), NULL);
 
 	if (!sts->parent)
 	{
 		STOPIF( waa__get_waa_directory(path, &waa_path, NULL, NULL,
 					GWD_CONF), NULL);
-		status |= printf("\tConf-Path:\t%s\n", waa_path);
+		STOPIF_CODE_EPIPE( printf("\tConf-Path:\t%s\n", 
+					waa_path), NULL);
 	}
 
-	status |= printf("\tRevision:\t%li\n", sts->repos_rev);
+	STOPIF_CODE_EPIPE( printf("\tRevision:\t%li\n", 
+				sts->repos_rev), NULL);
 
 	if (sts->entry_type==FT_FILE)
-		status |= printf("\tRepos-MD5:\t%s\n", 
-				cs__md52hex(sts->md5));
+		STOPIF_CODE_EPIPE( printf("\tRepos-MD5:\t%s\n", 
+					cs__md52hex(sts->md5)), NULL);
 
 	if (sts->entry_type==FT_BDEV || sts->entry_type==FT_CDEV)
 #ifdef DEVICE_NODES_DISABLED
 		DEVICE_NODES_DISABLED();
 #else
-		status |= printf("\tDevice number:\t%llu:%llu\n", 
+	STOPIF_CODE_EPIPE( printf("\tDevice number:\t%llu:%llu\n", 
 				(t_ull)MAJOR(sts->st.rdev),
-				(t_ull)MINOR(sts->st.rdev));
+				(t_ull)MINOR(sts->st.rdev)), NULL);
 #endif
 	else
-		status |= printf("\tSize:\t\t%llu\n", (t_ull)sts->st.size);
+		STOPIF_CODE_EPIPE( printf("\tSize:\t\t%llu\n", 
+					(t_ull)sts->st.size), NULL);
 
 	/* Any last words? */
-	status |= printf("\n");
-
-	DEBUGP("status at end of info is 0x%X", status);
-
-	/* Had a printf a negative return value? */
-	if (status < 0)
-		STOPIF_CODE_ERR( 1, errno ? errno : ENOSPC,
-				"Output error on printing entry info");
-	else
-		status=0;
+	STOPIF_CODE_EPIPE( printf("\n"), NULL);
 
 ex:
 	return status;

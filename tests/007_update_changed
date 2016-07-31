@@ -11,20 +11,20 @@ echo "A testline #1" > $filename
 echo "A testline #2" >> $filename
 
 echo "     ci1"
-$BIN ci -m "new file"
+$BINq ci -m "new file"
 orig=`md5sum $filename`
 
 $WC2_UP_ST_COMPARE
 
 echo "A further line" >> $filename
 echo "     ci2"
-$BIN ci -m "new file"
+$BINq ci -m "new file"
 
 pushd $WC2 > /dev/null
 echo "A newly changed line" >> $filename
 echo "     up1"
 
-if $BIN up 2> /dev/null
+if $BINq up 2> /dev/null
 then
   $ERROR "The modified file was overwritten!"
 else
@@ -33,7 +33,7 @@ fi
 
 
 #$BINdflt -d revert $filename
-if $BIN revert $filename
+if $BINq revert $filename
 then
 	$SUCCESS "The modified file was reverted."
 else
@@ -50,10 +50,11 @@ else
  $ERROR "Revert did not work!"
 fi
 
-if [[ `$BINdflt st | grep -v "\.$"` == "" ]]
+if [[ `$BINdflt st`x == "x" ]]
 then
 	$SUCCESS "No status output after revert."
 else
+	$BINdflt st
 	$ERROR_NB "Some status change??"
 	$BINdflt st
 	exit 1

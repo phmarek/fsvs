@@ -11,12 +11,14 @@ TMP_UP=$LOGDIR/015.sync-repos-test.up.tmp
 TMP_UP0=$LOGDIR/015.sync-repos-test.up0.tmp
 TMP_SYNC=$LOGDIR/015.sync-repos-test.sync.tmp
 TMP_WC=$LOGDIR/015.sync-repos-test.wc.tmp
+logfile=$LOGDIR/015.log
 
 dir_path=`$PATH2SPOOL $WC2 dir`
 
 echo "Directory file is $dir_path"
 
 REV=HEAD
+
 
 
 # Get the dir-files.
@@ -27,10 +29,9 @@ REV=HEAD
 
 function copy_dir
 {
-# TODO - do fsvs:md5 or suchlike for encoded files!
 # Quick fix: the files $sync and $up won't be identical, as the RF_CHECK
 # flag will be set for some entries.
-	perl -e 'print scalar(<>); while (<>) { @a=split(/(\s+)/); $a[6] &= ~4; print join("",@a) unless $a[-1] eq "enc-dec\0"; }'
+	perl -e 'print scalar(<>); while (<>) { @a=split(/(\s+)/); $a[6] &= ~4; } '
 }
 
 echo "step 1: update from empty set."
@@ -60,8 +61,43 @@ wc_md5=`md5sum < $TMP_WC`
 echo "step 4: sync"
 # Do the sync at last, so that a correct list is left
 # for other tests.
-rm $dir_path
+# Test whether a copy database gets removed.
+# We need an entries file with correct revision numbers, so we do an 
+# initial sync-repos before the copy.
 $BINq sync-repos -r $REV
+# We copy on an non-existing target; if we'd create that directory, the 
+# status check below would fail.
+$BINq cp tree/a ggg
+$BINq sync-repos -r $REV
+
+$BINdflt st > $logfile
+if [[ `wc -l < $logfile ` -eq 0 ]]
+then
+	$SUCCESS "no status output - 1"
+else
+	cat $logfile
+	$ERROR "status prints something - 1"
+fi
+
+if [[ `$BINdflt cp dump | wc -l` -eq 1 ]]
+then
+  $SUCCESS "copy db gets removed on sync-repos"
+else
+  $ERROR "copy db not removed on sync-repos?"
+fi
+
+# The "cp dump" iterates through the hash itself; look for the copy 
+# markings in the status report, too.
+if $BINdflt st -v | grep -F ".....+" > $logfile
+then
+	cat $logfile
+  $ERROR "Still copy flags set"
+else
+# If grep returns an error, no lines were found.
+  $SUCCESS "No copy flags set"
+fi
+
+
 # As the RF_CHECK flag is set, we need to normalize:
 # - Header is taken unchanged
 # - Keep the whitespace separator, to get the line as identical as possible.
@@ -91,14 +127,13 @@ fi
 
 # test if status and update work
 # root modified is allowed.
-if [[ `$BINdflt st | wc -l` -le 1 ]]
+$BINdflt st > $logfile
+if [[ `grep -v ' \.$' $logfile | wc -l` -eq 0 ]]
 then
-	$SUCCESS "no status output"
+	$SUCCESS "no status output - 2"
 else
-	$BINdflt st -d > $LOGDIR/015.status
-	$ERROR_NB "status prints something:"
-	$BINdflt st 
-	exit 1
+	cat $logfile
+	$ERROR "status prints something - 2"
 fi
 
 # Update to HEAD
@@ -122,23 +157,23 @@ svn import --no-ignore --no-auto-props -m no-meta . $REPURL/no-meta > /dev/null
 # We'd like to fake some device entry; but that's not easily possible, as 
 # there's no "svn propset URL" currently.
 
-$BINq up
-if [[ `$BINdflt st | wc -l` -eq 0 ]]
+$BINq up > $logfile
+$BINdflt st > $logfile
+if [[ `wc -l < $logfile` -eq 0 ]]
 then
 	$SUCCESS "No status output after meta-data less update"
 else
-	$BINdflt st -d > $LOGDIR/015.status
+	cat $logfile
   $ERROR "Status output for meta-data-less entries unexpected"
-	$BINdflt st 
-	exit 1
 fi
 
 # Symlinks have lrwxrwxrwx, all other entries should be not writeable for 
 # group/others.
-if [[ `find no-meta -not -type l -printf "%U %m\n" | grep -v "^$UID [67]00\$"` -eq 0 ]]
+find no-meta -not -type l -printf "%U %m\n" | grep -v "^$UID [67]00\$" > $logfile || true
+if [[ `wc -l < $logfile` -eq 0 ]]
 then
 	$SUCCESS "Owner and mode correctly set."
 else
-	$ERROR "Wrong rights set"
+	$ERROR "Wrong rights set - expected go-rwx."
 fi
 

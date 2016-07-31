@@ -60,10 +60,6 @@
  * If you're currently in \c /etc , you can even drop the \c /etc/ in 
  * front, and just use the filenames.
  * 
- * This extended path handling on the commandline is not yet available for
- * every command. Most of them still expect you to be in the 
- * working copy root.
- * 
  * Please see \ref status for explanations on \c -v and \c -C .
  * For advanced backup usage see also \ref FSVS_PROP_COMMIT_PIPE. 
  * */
@@ -100,7 +96,7 @@
 
 
 
-/** Typedef needed for \a ci__set_props() and \a prp__send(). See there. */
+/** Typedef needed for \a ci___send_user_props(). See there.  */
 typedef svn_error_t *(*change_any_prop_t) (void *baton,
 		const char *name,
 		const svn_string_t *value,
@@ -176,16 +172,7 @@ int ci__action(struct estat *sts)
 
 	if (sts->entry_status ||
 			(sts->flags & (RF_ADD | RF_UNVERSION | RF_PUSHPROPS)) )
-	{
-		/* mark the entry as to-be-done.
-		 * mark the parents too, so that we don't have to search
-		 * in-depth. */
-		while (sts->parent && !(sts->parent->entry_status & FS_CHILD_CHANGED))
-		{
-			sts->parent->entry_status |= FS_CHILD_CHANGED;
-			sts=sts->parent;
-		}
-	}
+		ops__mark_parent_cc(sts, entry_status);
 
 	STOPIF( st__progress(sts), NULL);
 
@@ -227,7 +214,11 @@ void ci___unset_copyflags(struct estat *root)
 
 
 /** Send the user-defined properties.
- * See also \a ci__set_props(). */
+ *
+ * The property table is left cleaned up, ie. any deletions that were 
+ * ordered by the user have been done -- no properties with \c 
+ * prp__prop_will_be_removed() will be here.
+ * */
 int ci___send_user_props(void *baton, 
 		struct estat *sts,
 		change_any_prop_t function,
@@ -245,7 +236,7 @@ int ci___send_user_props(void *baton,
 
 	/* Do user-defined properties.
 	 * Could return ENOENT if none. */
-	status=prp__open_byestat( sts, GDBM_READER, &db);
+	status=prp__open_byestat( sts, GDBM_WRITER, &db);
 	DEBUGP("prop open: %d", status);
 	if (status == ENOENT)
 		status=0;
@@ -257,16 +248,24 @@ int ci___send_user_props(void *baton,
 		while (status==0)
 		{
 			STOPIF( prp__fetch(db, key, &value), NULL);
-			str=svn_string_ncreate(value.dptr, value.dsize-1, pool);
 
 			if (hlp__is_special_property_name(key.dptr))
 			{
 				DEBUGP("ignoring %s - should not have been taken?", key.dptr);
 			}
+			else if (prp__prop_will_be_removed(value))
+			{
+				DEBUGP("removing property %s", key.dptr);
+
+				STOPIF_SVNERR( function, (baton, key.dptr, NULL, pool) );
+				STOPIF( hsh__register_delete(db, key), NULL);
+			}
 			else
 			{
 				DEBUGP("sending property %s=(%d)%.*s", key.dptr, 
 						value.dsize, value.dsize, value.dptr);
+
+				str=svn_string_ncreate(value.dptr, value.dsize-1, pool);
 				STOPIF_SVNERR( function, (baton, key.dptr, str, pool) );
 			}
 
@@ -282,9 +281,15 @@ int ci___send_user_props(void *baton,
 	}
 
 	if (props)
+	{
+		STOPIF( hsh__collect_garbage(db, NULL), NULL);
 		*props=db;
+	}
 	else
-		STOPIF(hsh__close(db, status), NULL);
+	{
+		/* A hsh__close() does the garbage collection, too. */
+		STOPIF( hsh__close(db, status), NULL);
+	}
 
 ex:
 	return status;
@@ -468,6 +473,9 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 				if (transfer_text)
 				{
 					status= prp__get(db, propval_commitpipe, &encoder_prop);
+					/* The user-defined properties have already been sent, so the 
+					 * propval_commitpipe would already be cleared; we don't need to 
+					 * check for prp__prop_will_be_removed().  */
 
 					if (status == 0)
 					{
@@ -806,7 +814,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 		STOPIF( ops__build_path(&filename, sts), NULL);
 		STOPIF( hlp__lstat(filename, &(sts->st)), NULL);
 
-		if (!sts->url || url__current_has_precedence(sts->url))
+		if (url__current_has_precedence(sts->url))
 		{
 			DEBUGP("setting URL of %s", filename);
 			sts->url=current_url;
@@ -834,7 +842,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 			STOPIF_SVNERR( ci___set_props, 
 					(dir_baton, dir, editor->change_dir_prop, pool) ); 
 
-		if (!dir->url || url__current_has_precedence(dir->url))
+		if (url__current_has_precedence(dir->url))
 		{
 			DEBUGP("setting URL");
 			dir->url=current_url;
@@ -870,19 +878,15 @@ int ci__getmsg(char **filename)
 {
 	char *editor_cmd, *cp;
 	int l,status;
-	int fh;
+	apr_file_t *af;
 
 
 	status=0;
-	*filename=strdup("/tmp/commit-tmp.XXXXXX");
-	fh=mkstemp(*filename);
-	STOPIF_CODE_ERR(fh == -1, errno,
-			"mkstemp(%s)", *filename);
+	STOPIF( waa__get_tmp_name( NULL, filename, &af, global_pool), NULL);
 
 	/* we close the file, as an editor might delete the file and
 	 * write a new. */
-	STOPIF_CODE_ERR( close(fh) == -1,
-			errno, "close commit message file");
+	STOPIF( apr_file_close(af), "close commit message file");
 
 	editor_cmd=getenv("EDITOR");
 	if (!editor_cmd) editor_cmd=getenv("VISUAL");
@@ -983,7 +987,7 @@ int ci__work(struct estat *root, int argc, char *argv[])
 
 	/* warn/break if file is empty ?? */
 
-	STOPIF( url__open_session(&session), NULL);
+	STOPIF( url__open_session(NULL), NULL);
 
 
 	/* This is the first step that needs some wall time - descending
@@ -999,10 +1003,9 @@ int ci__work(struct estat *root, int argc, char *argv[])
 
 		if (st.st_size == 0)
 		{
+			/* We're not using some mapped memory. */
 			DEBUGP("empty file");
 			opt_commitmsg="(none)";
-			/* We're not using some mapped memory */
-			opt_commitmsgfile=NULL;
 		}
 		else
 		{
@@ -1023,7 +1026,7 @@ int ci__work(struct estat *root, int argc, char *argv[])
 	printf("Committing to %s\n", current_url->url);
 
 	STOPIF_SVNERR( svn_ra_get_commit_editor,
-			(session,
+			(current_url->session,
 			 &editor,
 			 &edit_baton,
 			 utf8_commit_msg,
@@ -1033,7 +1036,7 @@ int ci__work(struct estat *root, int argc, char *argv[])
 			 FALSE, // svn_boolean_t keep_locks,
 			 global_pool) );
 
-	if (opt_commitmsgfile)
+	if (opt_commitmsgfile && st.st_size != 0)
 		STOPIF_CODE_ERR( munmap(opt_commitmsg, st.st_size) == -1, errno,
 				"munmap()");
 	if (commitmsg_is_temp)

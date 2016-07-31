@@ -10,6 +10,7 @@
 
 #include "global.h"
 #include "log.h"
+#include "interface.h"
 #include "options.h"
 #include "helper.h"
 #include "warnings.h"
@@ -22,8 +23,8 @@
 /** A structure to associate a string with an integer. */
 struct opt___val_str_t 
 {
-  int val;
 	const char *string;
+	int val;
 };
 
 
@@ -46,7 +47,9 @@ const struct opt___val_str_t opt___log_output_strings[]= {
 	{ .string=NULL, }
 };
 
-/** Strings for auto/yes/no settings. */
+/** Strings for auto/yes/no settings.
+ *
+ * Don't change the order without changing all users! */
 const struct opt___val_str_t opt___yes_no_auto[]= {
 	{ .val=OPT__AUTO, 								.string="auto" },
 	{ .val=OPT__YES,				 					.string="yes" },
@@ -110,6 +113,7 @@ opt___parse_t opt___string2val;
 opt___parse_t opt___strings2bitmap;
 opt___parse_t opt___strings2empty_bm;
 opt___parse_t opt___store_string;
+opt___parse_t opt___store_env_noempty;
 opt___parse_t opt___normalized_path;
 opt___parse_t opt___parse_warnings;
 opt___parse_t opt___atoi;
@@ -127,13 +131,15 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.name="path", .i_val=PATH_PARMRELATIVE, 
 		.parse=opt___string2val, .parm=opt___path_strings, 
 	},
+	[OPT__LOG_MAXREV] = {
+		.name="limit", .i_val=0, .parse=opt___atoi,
+	},
 	[OPT__LOG_OUTPUT] = {
 		.name="log_output", .i_val=LOG__OPT_DEFAULT,
 		.parse=opt___strings2empty_bm, .parm=opt___log_output_strings,
 	},
 	[OPT__COLORDIFF] = {
-		.name="colordiff", .i_val=OPT__AUTO, 
-		.parse=opt___string2val, .parm=opt___yes_no_auto, 
+		.name="colordiff", .cp_val=NULL, .parse=opt___store_string,
 	},
 	[OPT__DIR_SORT] = {
 		.name="dir_sort", .i_val=OPT__NO, 
@@ -141,6 +147,10 @@ struct opt__list_t opt__list[OPT__COUNT]=
 	},
 	[OPT__STATUS_COLOR] = {
 		.name="stat_color", .i_val=OPT__NO, 
+		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+	},
+	[OPT__STOP_ON_CHANGE] = {
+		.name="stop_change", .i_val=OPT__NO, 
 		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
 	},
 	[OPT__FILTER] = {
@@ -157,10 +167,10 @@ struct opt__list_t opt__list[OPT__COUNT]=
 		.parse=opt___string2val, .parm=opt___conflict_strings,
 	},
 	[OPT__MERGE_PRG] = {
-		.name="merge_prg", .cp_val="merge", .parse=opt___store_string, 
+		.name="merge_prg", .cp_val="diff3", .parse=opt___store_string, 
 	},
 	[OPT__MERGE_OPT] = {
-		.name="merge_opt", .cp_val="-A", .parse=opt___store_string,
+		.name="merge_opt", .cp_val="-m", .parse=opt___store_string,
 	},
 	[OPT__DIFF_PRG] = {
 		.name="diff_prg", .cp_val="diff", .parse=opt___store_string, 
@@ -181,6 +191,24 @@ struct opt__list_t opt__list[OPT__COUNT]=
 
 	[OPT__COMMIT_TO] = {
 		.name="commit_to", .cp_val=NULL, .parse=opt___store_string,
+	},
+	[OPT__AUTHOR] = {
+		.name="author", .cp_val="", .parse=opt___store_env_noempty,
+	},
+
+	/* I thought about using opt___normalized_path() for these two; but that 
+	 * would be a change in behaviour. */
+	[OPT__WAA_PATH] = {
+		.name="waa", .parse=opt___store_string,
+		/* Doing that here gives a warning "initializer not constant".
+			 .cp_val=DEFAULT_WAA_PATH, .i_val=strlen(DEFAULT_WAA_PATH), */
+		.cp_val=NULL, .i_val=0,
+	},
+	[OPT__CONF_PATH] = {
+		.name="conf", .parse=opt___store_string,
+		/* Doing that here gives a warning "initializer not constant".
+			 .cp_val=DEFAULT_CONF_PATH, .i_val=strlen(DEFAULT_CONF_PATH), */
+		.cp_val=NULL, .i_val=0,
 	},
 
 	[OPT__EMPTY_COMMIT] = {
@@ -212,7 +240,8 @@ int opt___atoi(struct opt__list_t *ent, char *string,
 
 
 /** Find an integer value by comparing with predefined strings. */
-inline int opt___find_string(const struct opt___val_str_t *list, char *string, 
+inline int opt___find_string(const struct opt___val_str_t *list, 
+		const char *string, 
 		int *result)
 {
 	for(; list->string; list++)
@@ -256,6 +285,7 @@ int opt___strings2bitmap(struct opt__list_t *ent, char *string,
 	char buffer[strlen(string)+1];
 	char *cp;
 
+	status=0;
 	/* We make a local copy, so we can use strsep(). */
 	strcpy(buffer, string);
 	string=buffer;
@@ -304,6 +334,21 @@ int opt___store_string(struct opt__list_t *ent, char *string,
 	/* This initial write has to be done, so cast the const away. */
 	memcpy((char*)ent->cp_val, string, ent->i_val+1);
 	return 0;
+}
+
+
+/** Store a string, or expand a (non-empty) environment variable. */
+int opt___store_env_noempty(struct opt__list_t *ent, char *string, 
+		enum opt__prio_e prio)
+{
+	/* Not ideal - makes a copy of an environment variable, that 
+	 * wouldn't be needed. */
+	if (string[0] == '$') string=getenv(string+1);
+
+	if (!string || !*string)
+		return 0;
+
+	return opt___store_string(ent, string, prio);
 }
 
 
@@ -414,6 +459,7 @@ int opt__load_settings(char *path, char *name, enum opt__prio_e prio)
 	char *sol, *eol;
 
 
+	status=0;
 	strcpy(fn, path);
 	if (name)
 	{
@@ -539,3 +585,17 @@ int opt___normalized_path(struct opt__list_t *ent, char *string,
 	else
 		return EINVAL;
 }
+
+
+/** -.
+ * Invalid values are handled by returning \c 1, ie. they don't say \c off.
+ * */
+int opt__doesnt_say_off(const char *string)
+{
+	int i;
+
+	i=OPT__YES;
+	if (opt___find_string(opt___yes_no_auto+4, string, &i)) return 1;
+	return i;
+}
+

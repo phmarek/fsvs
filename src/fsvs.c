@@ -124,6 +124,10 @@
  *
  * \note Multi-url-operations are relatively new; there might be rough edges.
  *
+ *
+ * The <b>return code</b> is \c 0 for successfull and \c 2 for an error.
+ * \c 1 is returned if the option \ref o_stop_change is used, and 
+ * changes are found; see also \ref o_filter.
  * 
  *
  * \section glob_opt Universal options
@@ -307,14 +311,14 @@
  * simply a whitespace-separated list of option specifications.
  *
  *
- * \subsection glob_opt_urls -u URLname[@revision] -- select URLs
+ * \subsection glob_opt_urls -u URLname[@revision[:revision]] -- select URLs
  *
- * Some commands' operations can be reduced to a subset of defined URLs; 
- * the \ref update command is the best example.
+ * Some commands can be reduced to a subset of defined URLs; 
+ * the \ref update command is a example.
  * 
- * If you have more than a single URL in use for your working copy, and \c 
- * update updates \b all entries from \b all URLs. By using this parameter 
- * you can tell FSVS to update only a single URL.
+ * If you have more than a single URL in use for your working copy, \c 
+ * update normally updates \b all entries from \b all URLs. By using 
+ * this parameter you can tell FSVS to update only the specified URLs.
  *
  * The parameter can be used repeatedly; the value can have multiple URLs, 
  * separated by whitespace or one of \c ",;".
@@ -322,8 +326,12 @@
  * \code
  *   fsvs up -u base_install,boot@32 -u gcc
  * \endcode
+ *
  * This would get \c HEAD of \c base_install and \c gcc, and set the target 
  * revision of the \c boot URL at 32.
+ *
+ * \note The second revision specification will be used for eg. the \ref 
+ * diff command; but this is not yet implemented.
  *
  *
  * \subsection glob_options -o [name[=value]] -- other options
@@ -348,7 +356,6 @@ int debuglevel=0,
 		opt_verbose=0,
 		opt_checksum=0;	
 
-svn_ra_session_t *session;
 svn_revnum_t target_revision;
 svn_revnum_t opt_target_revision=SVN_INVALID_REVNUM;
 svn_revnum_t opt_target_revision2=SVN_INVALID_REVNUM;
@@ -475,7 +482,10 @@ void _DEBUGP(const char *file, int line,
  *
  * In case the first character of the \a format is a <tt>"!"</tt>, it's a 
  * user error - here we normally print only the message, without the error 
- * code line. The full details are available via \c -d and \c -v. */
+ * code line. The full details are available via \c -d and \c -v.
+ *
+ * \c -EPIPE is handled specially, in that it is passed up, but no message  
+ * is printed. */
 int _STOP(const char *file, int line, const char *function,
 		int errl, const char *format, ...)
 {
@@ -491,6 +501,7 @@ int _STOP(const char *file, int line, const char *function,
 
 
 	if (make_STOP_silent) return errl;
+	if (errl==-EPIPE) return errl;
 
 	is_usererror= format && *format == '!';
 	if (is_usererror) format++;
@@ -560,7 +571,7 @@ eol:
 /** For keyword expansion - the version string. */
 const char* Version(FILE *output)
 {
-	static const char Id[] ="$Id: fsvs.c 1578 2008-04-02 05:25:13Z pmarek $";
+	static const char Id[] ="$Id: fsvs.c 1742 2008-06-12 05:54:03Z pmarek $";
 
 	fprintf(output, "FSVS (licensed under the GPLv3), (C) by Ph. Marek;"
 			" version " FSVS_VERSION "\n");
@@ -717,9 +728,9 @@ int ac__Usage(struct estat *root UNUSED,
 				"Environment variables:\n"
 				"\n"
 				"$FSVS_CONF  defines the location of the FSVS Configuration area\n"
-				"            Default is /etc/fsvs, but any writeable directory is allowed.\n"
+				"            Default is " DEFAULT_CONF_PATH ", but any writeable directory is allowed.\n"
 				"$FSVS_WAA   defines the location of the Working copy Administrative Area\n"
-				"            Default is /var/spool/fsvs, but any writeable directory is allowed.\n"
+				"            Default is " DEFAULT_WAA_PATH ", but any writeable directory is allowed.\n"
 				);
 	}
 
@@ -819,6 +830,7 @@ void *_do_component_tests(int a)
 	static char *charp_array_2[10];
 	static char **charpp;
 	static char buffer[1024];
+	static struct estat *estat_array[10];
 
 	int_array[0]=fileno(stdin);
 	voidp_array[0]=stdin+fileno(stdout);
@@ -831,6 +843,7 @@ void *_do_component_tests(int a)
 		case 9: return voidp_array;
 		case 6: return buffer;
 		case 2: return charp_array_1;
+		case 3: return estat_array;
 		case 7: return charpp;
 		case 8: return charp_array_2;
 	}
@@ -1017,7 +1030,6 @@ int main(int argc, char *args[], char *env[])
 	STOPIF( opt__load_env(environ), NULL);
 	STOPIF( waa__save_cwd(&start_path, &start_path_len, 0), NULL);
 
-	STOPIF( wa__init(), NULL);
 
   if (!isatty(STDOUT_FILENO))
     opt__set_int( OPT__STATUS_COLOR, PRIO_PRE_CMDLINE, 0);
@@ -1198,7 +1210,9 @@ int main(int argc, char *args[], char *env[])
 		DEBUGP("argument %d: %s", eo_args, args[eo_args]);
 
 
-	/* waa__init() depends on some global settings, so do here. */
+	/* waa__init() depends on some global settings, so do here.
+	 * Must happen before loading values, as the WAA and CONF paths get 
+	 * fixed. */
 	STOPIF( waa__init(), NULL);
 
 	/* Load options from config file, whose path is specified eg. via 
@@ -1224,7 +1238,6 @@ int main(int argc, char *args[], char *env[])
 			"create an apr_pool");
 	STOPIF_SVNERR( svn_ra_initialize, (global_pool));
 	STOPIF_SVNERR( cb__init, (global_pool));
-	root.dir_pool=global_pool;
 
 
 	STOPIF( action->work(&root, argc-optind, args+optind), 
@@ -1246,8 +1259,10 @@ ex:
 	mem_end=sbrk(0);
 	DEBUGP("memory stats: %p to %p, %llu KB", 
 			mem_start, mem_end, (t_ull)(mem_end-mem_start)/1024);
-	if (status)
-		return 1;
+	if (status == -EPIPE)
+		DEBUGP("got EPIPE, ignoring.");
+	else if (status)
+		return 2;
 
 	_DEBUGP(NULL, 0, NULL, NULL);
 

@@ -20,7 +20,7 @@ fi
 
 mkdir $EXPDIR
 cd $EXPDIR
-$BIN export $REPURL
+$BINq export $REPURL
 
 if [[ -f $dir_path ]]
 then
@@ -34,8 +34,8 @@ rm -rf $EXPDIR
 
 mkdir $EXPDIR
 cd $EXPDIR
-$BIN export -r 3 $REPURL
-$BIN up -r 3 $WC
+$BINq export -r 3 $REPURL
+$BINq up -r 3 $WC
 
 $COMPAREWITH $EXPDIR
 

@@ -37,10 +37,10 @@
  * */
 struct free_estat
 {
-	/** Number of "struct estat"s that can be stored here. */
-	int count; 
 	/** Next free block(s) */
 	struct free_estat *next;
+	/** Number of "struct estat"s that can be stored here. */
+	int count; 
 };
 
 
@@ -67,21 +67,23 @@ ops__dir_info_format_s[]="%llo %lx %lx %x %n%*s %n%*s "
 		 9+1+9+1+NAME_MAX+1+1)
 
 
-/** Startstring for links in the repository.
+/** -.
  *
  * It's a bit unaesthetical that devices use a " " for the repository data,
  * but a ":" in the waa as delimiter.
  * But "link " is specified in subversion, and having the repository data
  * different would not be better.
  * So we just allow both at parsing, and use the "right" for each target. */
-static const char link_spec[]="link ";
+const char link_spec[]="link ",
+			cdev_spec[]="cdev",
+			bdev_spec[]="bdev";
 
 static struct free_estat *free_list = NULL;
 
 
 /** -.
  * Depending on \c st->mode one of the \c FT_* constants is returned. */
-int ops___filetype(struct sstat_t *st)
+inline int ops___filetype(struct sstat_t *st)
 {
 	/* in order of most probable to least */
 	if (S_ISREG(st->mode)) return FT_FILE;
@@ -103,25 +105,39 @@ int ops__string_to_dev(struct estat *sts, char *data, char **info)
 {
 	int maj, min;
 	int ft, mode;
-	char type, delimiter;
+	char delimiter;
 	int status;
 
 
 	status=0;
-	if (0 == strncmp(data, link_spec, 5))
+	if (0 == strncmp(data, link_spec, strlen(link_spec)))
 	{
-		ft=FT_SYMLINK; 
 		mode=S_IFLNK;
-		*info=data+5;
+		if (info)
+			*info=data+5;
 	}
 	else
 	{
+		if (0 == strncmp(data, cdev_spec, strlen(cdev_spec)))
+		{
+			data+=strlen(cdev_spec);
+			mode=S_IFCHR;
+		}
+		else if (0 == strncmp(data, bdev_spec, strlen(bdev_spec)))
+		{
+			data+=strlen(bdev_spec);
+			mode=S_IFBLK;
+		}
+		else mode=0;
+
 		if (info) *info=NULL;
-		ft=sscanf(data, "%cdev%c0x%X:0x%X", 
-				&type, &delimiter, &maj, &min);
-		STOPIF_CODE_ERR(ft != 4 || 
-				(delimiter != ':' && delimiter != ' ') ||
-				(type != 'c' && type != 'b'), EINVAL,
+
+		ft=sscanf(data, "%c0x%X:0x%X", &delimiter, &maj, &min);
+
+		STOPIF_CODE_ERR(mode == 0 ||
+				ft != 3 || 
+				(delimiter != ':' && delimiter != ' '),
+				EINVAL,
 				"'%s' is not parseable as a special description", data);
 
 #ifdef DEVICE_NODES_DISABLED
@@ -129,12 +145,10 @@ int ops__string_to_dev(struct estat *sts, char *data, char **info)
 #else
 		sts->st.rdev=MKDEV(maj, min);
 #endif
-		mode = type == 'c' ? S_IFCHR : S_IFBLK;
-		ft = type == 'c' ? FT_CDEV : FT_BDEV;
 	}
 
 	sts->st.mode= (sts->st.mode & ~S_IFMT) | mode;
-	sts->entry_type = ft;
+	sts->entry_type = ops___filetype(& sts->st);
 
 ex:
 	return status;
@@ -142,12 +156,18 @@ ex:
 
 
 /** -.
- * The subversion header string for special nodes is prepended. */
+ * The subversion header string for special nodes is prepended.
+ *
+ * The returned pointer in \a *erg must not be free()d. */
 int ops__link_to_string(struct estat *sts, char *filename,
 		char **erg)
 {
+	static struct cache_t *cache=NULL;
 	char *cp;
 	int l, status, hlen;
+
+
+	STOPIF( cch__new_cache(&cache, 4), NULL);
 
 
 	status=0;
@@ -158,8 +178,7 @@ int ops__link_to_string(struct estat *sts, char *filename,
 
 	hlen=strlen(link_spec);
 	l=sts->st.size + hlen + 1 + 8;
-	cp=malloc(l);
-	STOPIF_ENOMEM(!cp);
+	STOPIF( cch__add(cache, 0, NULL, l, &cp), NULL);
 
 	strcpy(cp, link_spec);
 	STOPIF_CODE_ERR( readlink(filename, cp+hlen, sts->st.size) == -1,
@@ -189,7 +208,7 @@ char *ops___dev_to_string(struct estat *sts, char delimiter)
 	DEVICE_NODES_DISABLED();
 #else
 	sprintf(buffer, "%s%c0x%x:0x%x",
-			S_ISBLK(sts->st.mode) ? "bdev" : "cdev",
+			S_ISBLK(sts->st.mode) ? bdev_spec : cdev_spec,
 			delimiter,
 			(int)MAJOR(sts->st.rdev),
 			(int)MINOR(sts->st.rdev));
@@ -273,7 +292,7 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 	{
 		case FT_CDEV:
 		case FT_BDEV:
-			DEBUGP("olu=%llu new=%llu", (t_ull)old->rdev, (t_ull)new->rdev);
+			DEBUGP("old=%llu new=%llu", (t_ull)old->rdev, (t_ull)new->rdev);
 			file_status |= 
 				(old->rdev == new->rdev) 
 				? FS_NO_CHANGE : FS_REPLACED;
@@ -713,8 +732,8 @@ int ops__new_entries(struct estat *dir,
 	dir->entry_count += count;
 	dir->by_inode[dir->entry_count]=NULL;
 
-	/* Re-sort the index */
-	status=dir__sortbyinode(dir);
+	/* Re-sort the index next time it's needed. */
+	dir->to_be_sorted=1;
 
 ex:
 	return status;
@@ -722,6 +741,9 @@ ex:
 
 
 /** -.
+ *
+ * This function doesn't return \c ENOENT, if no entry is found; \a *sts 
+ * will just be \c NULL.
  * */
 int ops__find_entry_byname(struct estat *dir, const char *name, 
 		struct estat **sts,
@@ -866,8 +888,18 @@ int ops__allocate(int needed,
 		DEBUGP("no free list, allocating");
 		/* No more free entries in free list. Allocate. */
 		returned=needed;
+		/* Allocate at least a certain block size. */
+		if (needed < 8192/sizeof(**where)) 
+			needed=8192/sizeof(**where);
 		*where=calloc(needed, sizeof(**where));
 		STOPIF_ENOMEM(!*where);
+
+		if (needed > returned)
+		{
+			free_list=(struct free_estat*)(*where+returned);
+			free_list->next=NULL;
+			free_list->count=needed-returned;
+		}
 	}
 
 	DEBUGP("giving %d blocks at %p", returned, *where);
@@ -897,6 +929,8 @@ int ops__free_entry(struct estat **sts_p)
 
 
 	status=0;
+	if (sts->old)
+		STOPIF( ops__free_entry(& sts->old), NULL);
 	if (S_ISDIR(sts->st.mode))
 	{
 		BUG_ON(sts->entry_count && !sts->by_inode);
@@ -1532,6 +1566,84 @@ a_only:
 			list_B++;
 		}
 	}
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * The specified stream gets rewound, read up to \a max bytes (sane default 
+ * for 0), and returned (zero-terminated) in \a *buffer allocated in \a 
+ * pool.
+ *
+ * The real length can be seen via \a real_len.
+ *
+ * If \a filename is given, the file is removed.
+ *
+ * If \a pool is \c NULL, the space is \c malloc()ed and must be \c free()d 
+ * by the caller.
+ * */
+/* mmap() might be a bit faster; but for securities' sake we put a \0 at 
+ * the end, which might not be possible with a readonly mapping (although 
+ * it should be, by using MAP_PRIVATE - but that isn't available with 
+ * apr_mmap_create(), at least with 1.2.12).  */
+int ops__read_special_entry(apr_file_t *a_stream,
+		char **data,
+		int max, ssize_t *real_len,
+		char *filename,
+		apr_pool_t *pool)
+{
+	int status;
+	apr_off_t special_len, bof;
+	apr_size_t len_read;
+	char *special_data;
+
+
+	status=0;
+	special_len=0;
+
+
+	/* Remove temporary file. Can be done here because we still have the 
+	 * handle open.  */
+	if (filename)
+		STOPIF_CODE_ERR( unlink(filename) == -1, errno,
+				"Cannot remove temporary file \"%s\"", filename);
+
+
+	/* Get length */
+	STOPIF( apr_file_seek(a_stream, APR_CUR, &special_len), NULL);
+
+	/* Some arbitrary limit ... */
+	if (!max) max=8192;
+	STOPIF_CODE_ERR( special_len > max, E2BIG, 
+			"!The special entry \"%s\" is too long (%llu bytes, max %llu).\n"
+			"Please contact the dev@ mailing list.",
+			filename, (t_ull)special_len, (t_ull)max);
+
+
+	/* Rewind */
+	bof=0;
+	STOPIF( apr_file_seek(a_stream, APR_SET, &bof), NULL);
+
+	special_data= pool ? 
+		apr_palloc( pool, special_len+1) : 
+		malloc(special_len+1);
+	STOPIF_ENOMEM(!special_data);
+
+
+	/* Read data. */
+	len_read=special_len;
+	STOPIF( apr_file_read( a_stream, special_data, &len_read), NULL);
+	STOPIF_CODE_ERR( len_read != special_len, ENODATA, 
+			"Reading was cut off at byte %llu of %llu",
+			(t_ull)len_read, (t_ull)special_len);
+	special_data[len_read]=0;
+
+	DEBUGP("got special value %s", special_data);
+
+	if (real_len) *real_len=special_len;
+	*data=special_data;
 
 ex:
 	return status;

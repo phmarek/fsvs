@@ -96,6 +96,8 @@ int hsh__register_delete(hash_t db, datum key);
 
 /** Close a property file. */
 int hsh__close(hash_t db, int has_failed);
+/** Collect garbage in the hash table. */
+int hsh__collect_garbage(hash_t db, int *did_remove);
 /** @} */
 
 

@@ -6,8 +6,8 @@
  * published by the Free Software Foundation.
  ************************************************************************/
 
-#ifndef __REMOTE_H__
-#define __REMOTE_H__
+#ifndef __PROPS_H__
+#define __PROPS_H__
 
 /** \file
  * Property handling header file - \ref prop-set, \ref prop-get, \ref 
@@ -40,10 +40,19 @@ inline int prp__set_svnstr(hash_t db,
 		const char *name, 
 		const svn_string_t *utf8_value);
 
+
+/** Bitmasks for prp__set_from_aprhash() operation. */
+enum prp__set_from_aprhash_e {
+	DEFAULT=0,
+	STORE_IN_FS=1,
+	ONLY_KEEP_USERDEF=2,
+};
+
 /** Writes the given set of properties of \a sts into its \ref prop file.  
  * */
 int prp__set_from_aprhash(struct estat *sts, 
 		apr_hash_t *props,
+		enum prp__set_from_aprhash_e flags,
 		apr_pool_t *pool);
 
 /** Wrapper functions, if we need to have some compatibility layer. */
@@ -108,6 +117,16 @@ work_t prp__g_work;
 work_t prp__s_work;
 /** Prop-list worker function. */
 work_t prp__l_work;
+
+
+/** Value string for to-be-removed properties. */
+extern const char prp___to_be_removed_value[];
+/** Test function for to-be-removed properties. */
+static inline int prp__prop_will_be_removed(datum data)
+{
+	return strcmp(data.dptr, prp___to_be_removed_value) == 0;
+}
+
 
 #endif
 

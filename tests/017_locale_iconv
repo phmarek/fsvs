@@ -35,7 +35,7 @@ function testfunc
 # TODO: test whether the entries are correct in the other locale.
 
 	rm *
-	$BIN ci -m "locale ci $filename cleanup"
+	$BINq ci -m "locale ci $filename cleanup"
 	$WC2_UP_ST_COMPARE
 }
 

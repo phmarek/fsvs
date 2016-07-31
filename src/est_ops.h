@@ -80,6 +80,12 @@ char *ops__dev_to_waa_string(struct estat *sts);
 /** See \c ops__dev_to_waa_string(), but uses a space character (\c \\x20 ) 
  * for subversion compatibility. */
 char *ops__dev_to_filedata(struct estat *sts);
+/** Reads a file. */
+int ops__read_special_entry(apr_file_t *a_stream,
+		char **data,
+		int max, ssize_t *real_len,
+		char *filename,
+		apr_pool_t *pool);
 
 /** Reads a symlink and returns a pointer to its destination. */
 int ops__link_to_string(struct estat *sts, char *filename,
@@ -116,6 +122,32 @@ int ops__correlate_dirs(struct estat *dir_A, struct estat *dir_B,
 		ops__correlate_fn1_t only_B,
 		ops__correlate_fn2_t for_every);
 /** @} */
+
+
+/** Startstrings for links in the repository. */
+extern const char link_spec[],
+			cdev_spec[],
+			bdev_spec[];
+
+#define ops__mark_childchanged(start, field)           \
+do {                                                    \
+	register struct estat *_s=(start);                    \
+  while (_s && !(_s->field & FS_CHILD_CHANGED))         \
+	{                                                     \
+	  _s->field |= FS_CHILD_CHANGED;                      \
+		_s=_s->parent;                                      \
+	}                                                     \
+} while (0)
+
+#define ops__mark_parent_cc(changed_entry, field)       \
+   ops__mark_childchanged(changed_entry->parent, field)
+
+#define ops__mark_changed_parentcc(changed_entry, field)     \
+do {                                                    \
+	changed_entry->field |= FS_CHANGED;                   \
+  ops__mark_parent_cc(changed_entry, field);            \
+} while (0)
+
 
 #endif
 

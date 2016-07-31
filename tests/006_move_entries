@@ -9,8 +9,8 @@ mv tree/a tree/Aa
 mv tree/b tree_b
 
 echo "     ci"
-$BIN ci -m "renamed two directories"
+$BINq ci -m "renamed two directories"
 echo "     st1"
-$BIN st
+$BINq st
 
 $WC2_UP_ST_COMPARE

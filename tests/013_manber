@@ -71,7 +71,7 @@ function TestExtensively
 
 	L
 	echo "     ci1"
-	$BIN ci -m "big file" -o delay=yes
+	$BINq ci -m "big file" -o delay=yes
 
 	# Data and mtime not changed
 	T "......" 'Ok, not seen as changed (1)' 'Seen as changed? (1)' '-v'
@@ -166,7 +166,7 @@ echo "=== Testing with a big file ==="
 TestExtensively 0
 
 rm $file1
-$BIN ci -m "del big file"
+$BINq ci -m "del big file"
 
 
 # test with empty directory
@@ -174,11 +174,11 @@ echo "=== Testing with an empty directory ==="
 mkdir $subdir2
 mkdir $file1 $file2
 
-$BIN ci -m "empty dir 1"
+$BINq ci -m "empty dir 1"
 
 TestExtensively 1
 
-$BIN ci -m "empty dir 2"
+$BINq ci -m "empty dir 2"
 
 
 # test with non-empty directory
@@ -189,11 +189,11 @@ mkdir $file1 $file2 $file2/child
 # make 2nd timestamp equal
 rsync $subdir1/ $subdir2/ -a
 
-$BIN ci -m "dir 1"
+$BINq ci -m "dir 1"
 
 TestExtensively 2
 
-$BIN ci -m "dir 2"
+$BINq ci -m "dir 2"
 
 
 $WC2_UP_ST_COMPARE

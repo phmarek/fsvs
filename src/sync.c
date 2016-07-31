@@ -29,7 +29,7 @@
  * 
  * This is normally not needed; the use cases are
  * - debugging and
- * - recovering from data loss in \c $FSVS_WAA (\c /var/spool/fsvs ).
+ * - recovering from data loss in \ref o_waa "$FSVS_WAA".
  * 
  * It is (currently) important if you want to backup two similar 
  * machines. Then you can commit one machine into a subdirectory of your 
@@ -82,6 +82,9 @@
 #include "status.h"
 #include "checksum.h"
 #include "est_ops.h"
+#include "cache.h"
+#include "revert.h"
+#include "props.h"
 #include "commit.h"
 #include "waa.h"
 #include "url.h"
@@ -91,6 +94,140 @@
 #include "helper.h"
 
 
+/** Get entries of directory, and fill tree.
+ *
+ * Most of the data should already be here; we just
+ * fill the length of the entries in.
+ * */
+int sync___recurse(struct estat *cur_dir,
+		apr_pool_t *pool)
+{	
+	int status;
+	svn_error_t *status_svn;
+	apr_pool_t *subpool;
+	apr_hash_t *dirents;
+	char *path;
+	const char *name;
+	const void *key;
+	void *kval;
+	apr_hash_index_t *hi;
+	svn_dirent_t *val;
+	char *url;
+	struct svn_string_t *decoder;
+	struct estat *sts;
+	svn_stringbuf_t *entry_text;
+
+
+	status=0;
+	subpool=NULL;
+
+	/* get a fresh pool */
+	STOPIF( apr_pool_create_ex(&subpool, pool, NULL, NULL), 
+			"no pool");
+
+	STOPIF( ops__build_path( &path, cur_dir), NULL);
+	DEBUGP("list of %s", path);
+
+	STOPIF_SVNERR( svn_ra_get_dir2,
+			(current_url->session, 
+			 &dirents, NULL, NULL,
+			 /* Use "" for the root, and cut the "./" for everything else. */
+			 (cur_dir->parent) ? path + 2 : "", 
+			 current_url->current_rev,
+			 SVN_DIRENT_HAS_PROPS | SVN_DIRENT_HAS_PROPS | 
+			 SVN_DIRENT_KIND | SVN_DIRENT_SIZE,
+			 subpool));
+
+	for( hi=apr_hash_first(subpool, dirents); hi; hi = apr_hash_next(hi))
+	{
+		apr_hash_this(hi, &key, NULL, &kval);
+		name=key;
+		val=kval;
+
+
+		STOPIF( cb__add_entry(cur_dir, name, NULL,
+					NULL, 0, 0, NULL, 0, (void**)&sts), NULL);
+
+		if (url__current_has_precedence(sts->url) &&
+				sts->entry_type != FT_DIR)
+		{
+			/* File or special entry. */
+			sts->st.size=val->size;
+
+			DEBUGP("%s is type %X %s", sts->name, sts->entry_type, 
+					st__type_string(sts));
+
+			decoder= sts->user_prop ? 
+				apr_hash_get(sts->user_prop, 
+						propval_updatepipe, APR_HASH_KEY_STRING) : 
+					NULL;
+
+			if (sts->entry_type == FT_FILE && !decoder)
+			{
+				/* Entry finished. */
+			}
+			else if (sts->entry_type == FT_FILE && val->size > 8192)
+			{
+				/* Make this size configurable? Remove altogether? After all, the 
+				 * processing time needs not be correlated to the encoded size. */
+				DEBUGP("file encoded, but too big for fetching (%llu)", 
+						val->size);
+			}
+			else
+			{
+				/* Now we're left with special devices and small, encoded files. */
+				STOPIF( url__full_url(sts, NULL, &url), NULL);
+
+				/* That's the third time we access this file ...
+				 * svn_ra needs some more flags for the directory listing functions. */
+				STOPIF( rev__get_text_into_buffer(url, sts->repos_rev,
+							decoder ? decoder->data : NULL,
+							&entry_text, NULL, sts, NULL, subpool), NULL);
+
+				sts->st.size=entry_text->len;
+				DEBUGP("parsing %s as %llu: %s", url,
+						(t_ull)sts->st.size, entry_text->data);
+
+				/* If the entry exists locally, we might have a more detailed value 
+				 * than FT_ANYSPECIAL. */
+				if (sts->entry_type != FT_FILE)
+					/* We don't need the link destination; we already got the MD5. */
+					STOPIF( ops__string_to_dev(sts, entry_text->data, NULL), NULL);
+
+				/* For devices there's no length to compare; the rdev field 
+				 * shares the space.
+				 * And for normal files the size is already correct. */
+				if (sts->entry_type == FT_SYMLINK)
+					sts->st.size-=strlen(link_spec);
+			}
+
+			/* After this entry is done we can return a bit of memory. */
+			if (sts->user_prop)
+			{
+				apr_pool_destroy(apr_hash_get(sts->user_prop, "", 0));
+				sts->user_prop=NULL;
+			}
+		}
+
+		/* We have to loop even through obstructed directories - some
+		 * child may not be overlayed. */
+		if (val->kind == svn_node_dir)
+		{
+			STOPIF( sync___recurse( sts, subpool), NULL);
+		}
+
+	}
+
+ex:
+	if (subpool) apr_pool_destroy(subpool);
+
+	return status;
+}
+
+
+/** Repository callback.
+ *
+ * Here we get most data - all properties and the tree structure. */
 int sync__progress(struct estat *sts)
 {
 	int status;
@@ -100,6 +237,10 @@ int sync__progress(struct estat *sts)
 
 	status=0;
 	STOPIF( ops__build_path(&path, sts), NULL);
+
+	STOPIF( waa__delete_byext( path, WAA__FILE_MD5s_EXT, 1), NULL);
+	STOPIF( waa__delete_byext( path, WAA__PROP_EXT, 1), NULL);
+
 
 	STOPIF( st__rm_status(sts), NULL);
 
@@ -184,7 +325,7 @@ ex:
 	return status;
 }
 
-	
+
 /** -.
  *
  * Could possibly be folded into the new update. */
@@ -193,7 +334,8 @@ int sync__work(struct estat *root, int argc, char *argv[])
 	int status;
 	svn_error_t *status_svn;
 	svn_revnum_t rev;
-	int i;
+	char *strings;
+	int string_space;
 
 
 	status=0;
@@ -204,59 +346,37 @@ int sync__work(struct estat *root, int argc, char *argv[])
 	/* We cannot easily format the paths for arguments ... first, we don't 
 	 * have any (normally) */
 
-	for(i=0; i<urllist_count; i++)
+	string_space=0;
+	strings=NULL;
+	while ( ! ( status=url__iterator(&rev) ) )
 	{
-		current_url=urllist[i];
-		STOPIF( url__open_session(&session), NULL);
+		printf("sync-repos for %s rev\t%llu.\n",
+				current_url->url, (t_ull)rev);
 
-		DEBUGP("doing URL %s", current_url->url);
-
-
-		if (opt_target_revisions_given)
-			rev=opt_target_revision;
-		else
-			rev=current_url->target_rev;
-
-		/* Giving a simple SVN_INVALID_REVNUM to ->set_path() doesn't work - we 
-		 * get an error "Bogus revision report". Get the real HEAD. */
-		/* \todo: get latest for each url, let user specify rev for each url */
-		if (rev == SVN_INVALID_REVNUM)
-		{
-			STOPIF_SVNERR( svn_ra_get_latest_revnum,
-					(session, &rev, global_pool));
-			DEBUGP("HEAD is at %ld", rev);
-		}
-		else
-			rev=opt_target_revision;
-
-		/* Say we don't have any data. */
+		/* We have nothing ... */
 		current_url->current_rev=0;
+		STOPIF( cb__record_changes(NULL, root, rev, global_pool), NULL);
 
-		STOPIF( cb__record_changes(session, root, rev, global_pool), NULL);
-		printf("%s for %s rev\t%llu.\n",
-				action->name[0], current_url->url,
-				(t_ull)rev);
-		if (!action->is_compare)
-		{
-			/* set new revision */
-			DEBUGP("setting revision to %llu", (t_ull)rev);
-			STOPIF( ci__set_revision(root, rev), NULL);
-		}
-	}
+		/* set new revision */
+		current_url->current_rev=rev;
+		STOPIF( ci__set_revision(root, rev), NULL);
 
-	if (action->is_compare)
-	{
-		/* This is for remote-status. Just nothing to be done. */
+		STOPIF( sync___recurse(root, current_url->pool), NULL);
 	}
-	else
-	{
-		/* See the comment at the end of commit.c - atomicity for writing
-		 * these files. */
-		STOPIF( waa__output_tree(root), NULL);
-		STOPIF( url__output_list(), NULL);
-		/* The copyfrom database is no longer valid. */
-		STOPIF( waa__delete_byext(wc_path, WAA__COPYFROM_EXT, 1), NULL);
-	}
+	STOPIF_CODE_ERR( status != EOF, status, NULL);
+
+	/* Take the correct values for the root. */
+	STOPIF( hlp__lstat( ".", &root->st), NULL);
+	root->flags |= RF_CHECK;
+
+
+	/* See the comment at the end of commit.c - atomicity for writing
+	 * these files. */
+	STOPIF( waa__output_tree(root), NULL);
+	/* The current revisions might have changed. */
+	STOPIF( url__output_list(), NULL);
+	/* The copyfrom database is no longer valid. */
+	STOPIF( waa__delete_byext(wc_path, WAA__COPYFROM_EXT, 1), NULL);
 
 
 ex:

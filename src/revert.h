@@ -20,18 +20,17 @@ work_t rev__work;
 /** \a Revert callback function. */
 action_t rev__action;
 
-/** Fetches a given entry from the repository. */
-int rev__get_file(struct estat *sts, 
-		svn_revnum_t revision,
-		char *url_to_use,
-		svn_revnum_t *fetched,
-		char **only_tmp,
+/** Has to fetch the decoder from the repository. */
+#define DECODER_UNKNOWN ((char*)-1)
+
+/** Gets a clean copy from the repository. */
+int rev__install_file(struct estat *sts, svn_revnum_t revision,
+		char *decoder,
 		apr_pool_t *pool);
 
 /** Go through the tree, and fetch all changed entries (estimated
  * per \c remote_status). */
-int rev__do_changed(svn_ra_session_t *session, 
-		struct estat *dir, 
+int rev__do_changed(struct estat *dir, 
 		apr_pool_t *pool);
 
 /** Gets and writes the properties of the given \a sts into its \ref prop 
@@ -41,6 +40,22 @@ int rev__get_props(struct estat *sts,
 		svn_revnum_t revision,
 		apr_pool_t *pool);
 
+/** Gets the entry into a temporary file. */
+int rev__get_text_to_tmpfile(char *loc_url, svn_revnum_t revision,
+		char *encoder,
+		char *filename_base, char **filename,
+		struct estat *sts_for_manber, 
+		struct estat *output_sts, apr_hash_t **props,
+		apr_pool_t *pool);
+
+/** Just a wrapper for rev__get_text_to_stream(). */
+int rev__get_text_into_buffer(char *loc_url, svn_revnum_t revision,
+		const char *decoder,
+		svn_stringbuf_t **output,
+		struct estat *sts_for_manber,
+		struct estat *output_sts,
+		apr_hash_t **props,
+		apr_pool_t *pool);
 
 #endif
 

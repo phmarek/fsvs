@@ -197,12 +197,12 @@ int res__work(struct estat *root, int argc, char *argv[])
 
 	STOPIF( url__load_nonempty_list(NULL, 0), NULL);
 
-/* Maybe we should add a flag saying that we don't want unknown entries, 
- * like it can easily happen with "fsvs resolve *".
- * But then we'd get an error, and this is not so user-friendly like just 
- * ignoring these entries in res__action(). */
+	/* Maybe we should add a flag saying that we don't want unknown entries, 
+	 * like it can easily happen with "fsvs resolve *".
+	 * But then we'd get an error, and this is not so user-friendly like just 
+	 * ignoring these entries in res__action(). */
 	status=waa__read_or_build_tree(root, argc, normalized, argv, NULL, 1);
-	if (status == ENOENT)
+	if (status == -ENOENT)
 		STOPIF(status, "!No data about current entries is available.");
 	STOPIF(status, NULL);
 

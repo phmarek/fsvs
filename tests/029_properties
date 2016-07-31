@@ -11,7 +11,9 @@ propname=blablubli
 propvalue=foobarbaz
 
 $BINdflt ps "$propname" "$propvalue" "$file"
-propvalread=`$BINdflt pg "$propname" "$file"`
+$BINq ci -m1
+$WC2_UP_ST_COMPARE
+propvalread=`$BINdflt pg "$propname" "$WC2/$file"`
 if [[ "$propvalread" == "$propvalue" ]]
 then
 	$SUCCESS "Property successfully read back"
@@ -28,7 +30,9 @@ fi
 
 # empty property
 $BINdflt ps "$propname" "" "$file"
-if [[ `$BINdflt pl -v $file` == "$propname=" ]]
+$BINq ci -m1
+$WC2_UP_ST_COMPARE
+if [[ `$BINdflt pl -v $WC2/$file` == "$propname=" ]]
 then
 	$SUCCESS "Property successfully emptied"
 else
@@ -37,30 +41,31 @@ fi
 
 # delete property
 $BINdflt pd "$propname" "$file"
-if [[ `$BINdflt pl $file` == "$file has no properties." ]]
+
+propvalread=`$BINdflt pg "$propname" "$file"`
+if [[ "$propvalread" == "" ]]
+then
+	$SUCCESS "Property deleted"
+else
+	$ERROR "Deleted property still there"
+fi
+
+$BINq ci -m1
+
+propvalread=`$BINdflt pg "$propname" "$file"`
+if [[ "$propvalread" == "" ]]
+then
+	$SUCCESS "Property still deleted after commit"
+else
+	$ERROR "Deleted property back after commit"
+fi
+
+$WC2_UP_ST_COMPARE
+if [[ `$BINdflt pl $WC2/$file` == "$file has no properties." ]]
 then
 	$SUCCESS "Property successfully removed"
 else
 	$ERROR "Property not removed!"
-fi
-
-
-# re-set.
-$BINdflt ps "$propname" "$propvalue" "$file"
-
-$BINq ci -m "prop"
-
-cd $WC2
-
-$BINq up
-$INFO "Updated other working copy."
-
-propvalread=`$BINdflt pg "$propname" "$file"`
-if [[ "$propvalread" == "$propvalue" ]]
-then
-	$SUCCESS "Property successfully read back"
-else
-	$ERROR "Property not read!"
 fi
 
 

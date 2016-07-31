@@ -12,6 +12,7 @@
  * */
 
 #include <errno.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <subversion-1/svn_ra.h>
@@ -27,6 +28,7 @@
 #include "update.h"
 #include "est_ops.h"
 #include "checksum.h"
+#include "cache.h"
 #include "url.h"
 #include "racallback.h"
 
@@ -50,7 +52,8 @@ svn_error_t *cb__init(apr_pool_t *pool)
 	STOPIF_SVNERR( svn_cmdline_setup_auth_baton,
 			(&cb__cb_table.auth_baton,
 			 !(isatty(STDIN_FILENO) && isatty(STDOUT_FILENO)),
-			 NULL, /* Username */
+			 opt__get_int(OPT__AUTHOR) ? 
+			 opt__get_string(OPT__AUTHOR) : NULL,
 			 NULL, /* Password */
 			 NULL, /* Config dir */
 			 1, /* no_auth_cache */
@@ -78,29 +81,10 @@ svn_error_t *cb__open_tmp (apr_file_t **fp,
 		apr_pool_t *pool)
 {
 	int status;
-	static char *buffer=NULL, *fn_pos;
-	const char *tmp;
-	int len;
-	char filename[]="fsvs.XXXXXX";
 
-	if (!buffer)
-	{
-		STOPIF( apr_temp_dir_get(&tmp, pool),
-				"Getting a temporary directory path");
 
-		len=strlen(tmp);
-		/* Directory PATH_SEPARATOR Filename '\0' (+space) */
-		buffer=malloc(len + 1 + strlen(filename) + 1 + 4);
-		STOPIF_ENOMEM(!buffer);
+	STOPIF( waa__get_tmp_name( NULL, NULL, fp, pool), NULL);
 
-		strcpy(buffer, tmp);
-		fn_pos=buffer+len;
-		*(fn_pos++) = PATH_SEPARATOR;
-	}
-
-	strcpy(fn_pos, filename);
-	STOPIF( apr_file_mktemp(fp, buffer, 0, pool),
-			"Cannot create a temporary file");
 ex:
 	RETURN_SVNERR(status);
 }
@@ -134,88 +118,145 @@ svn_error_t *cb__txdelta_discard(svn_txdelta_window_t *window UNUSED,
 }
 
 
-void cb___mark_parents(struct estat *sts)
-{
-	/* mark the entry as to-be-done.
-	 * mark the parents too, so that we don't have to search
-	 * in-depth. */
-	while (sts->parent && !(sts->parent->remote_status & FS_CHILD_CHANGED))
-	{
-		sts->parent->remote_status |= FS_CHILD_CHANGED;
-		sts=sts->parent;
-	}
-}
-	
-
-/** This function adds a new entry below dir, setting it to
- * \c FS_NEW or \c FS_REPLACED. */
-int cb___add_entry(struct estat *dir, 
-		const char *utf8_path,
+/** If \a may_create is \c 0, \c ENOENT may be returned (ie. was not 
+ * found).
+ * 
+ * If \a mode doesn't include some permission bits, like \c 0700 or \c 
+ * 0600, a default value is chosen.
+ *
+ * If it didn't exist, or if this is a higher priority URL, the parents get 
+ * FS_CHILD_CHANGED set.
+ *
+ * \a path gets set (if not \c NULL) to \a utf8_path in local encoding. */
+int cb__add_entry(struct estat *dir, 
+		const char *utf8_path, char **loc_path,
 		const char *utf8_copy_path, 
 		svn_revnum_t copy_rev,
 		int mode,
 		int *has_existed,
+		int may_create,
 		void **new)
 {
 	int status;
-	struct estat *sts;
+	struct estat *sts, *copy;
 	const char *filename;
 	char* path;
 	char* copy_path;
+	int overwrite;
 
 
+	copy=NULL;
+	overwrite=0;
 	STOPIF( hlp__utf82local(utf8_path, &path, -1), NULL );
+	if (loc_path) *loc_path=path;
 	STOPIF( hlp__utf82local(utf8_copy_path, &copy_path, -1), NULL );
 
 	STOPIF_CODE_ERR(copy_path, EINVAL,
 			"don't know how to handle copy_path %s@%ld", 
 			copy_path, copy_rev);
 
-	DEBUGP("add entry %s, mode 0%03o", path, mode);
-	/* The path should be done by open_directory descending. 
+	/* The path should be done by open_directory descending.
 	 * We need only the file name. */
 	filename = ops__get_filename(path);
 	STOPIF( ops__find_entry_byname(dir, filename, &sts, 0),
 			"cannot lookup entry %s", path);
+	DEBUGP("entry %s, mode 0%03o; %sfound, may %screate", path, mode, 
+			sts ? "" : "not ",
+			may_create ? "" : "not ");
+
 
 	if (sts)
 	{
+		if (has_existed) *has_existed=EEXIST;
+
+		if (!url__current_has_precedence(sts->url))
+			goto no_change;
+
 		/* This file already exists, or an update from another URL just
 		 * brought it in.
 		 *
 		 * The caller knows whether we should overwrite it silently. */
 		if (sts->remote_status & FS_REMOVED)
+		{
 			sts->remote_status = FS_REPLACED;
 
-		if (has_existed) *has_existed=EEXIST;
-		if (!url__current_has_precedence(sts->url))
-			goto no_change;
+			/* Then store the old values. */
+			STOPIF( ops__allocate(1, &copy, NULL), NULL);
+			/* The by_inode and by_name arrays of the parent might point to the old 
+			 * location; rather than searching and changing them, we simply copy 
+			 * the old data, and clean the references in sts. */
+			memcpy(copy, sts, sizeof(*copy));
+			overwrite=1;
+			copy->remote_status=FS_REMOVED;
+		}
 	}
 	else
 	{
+		STOPIF_CODE_ERR(!may_create, ENOENT, NULL);
+
 		STOPIF( ops__allocate(1, &sts, NULL), NULL);
+		/* To avoid the memory allocator overhead we would have to do our own 
+		 * memory management here - eg. using dir->string.
+		 * But that would have to be tuned for performance - we get here often.
+		 * TODO.
+		 * */
+		memset(sts, 0, sizeof(*sts));
 		sts->name = strdup(filename);
 		STOPIF_ENOMEM(!sts->name);
-		sts->parent = dir;
 		sts->remote_status = FS_NEW;
 
 		/* Put into tree */
 		STOPIF( ops__new_entries(dir, 1, &sts), NULL);
 		if (has_existed) *has_existed=0;
+
+		dir->remote_status |= FS_CHANGED;
+		overwrite=1;
 	}
 
-	cb___mark_parents(sts);
 
-	sts->st.mode = mode | 0700; /* until we know better */
-	sts->entry_type = ops___filetype( &(sts->st) );
+	if (overwrite)
+	{
+		sts->parent=dir;
+
+		/* This memset above implicitly clears all other references to the copy 
+		 * data - entry_count, by_inode, by_name, strings.
+		 * But we need the copy itself. */
+    sts->entry_count=0;
+    sts->by_inode=NULL;
+    sts->by_name=NULL;
+    sts->strings=NULL;
+
+    sts->decoder=NULL;
+    sts->has_orig_md5=0;
+		memset(& sts->md5, 0, sizeof(sts->md5));
+
+		memset(& sts->st, 0, sizeof(sts->st));
+
+		/* Some permission bits must be set; suid/sgid/sticky are not enough.  
+		 * Directories need an "x" bit, too.
+		 * */
+		if (!(mode & 0777))
+			mode |= S_ISDIR(mode) ? 0700 : 0600;
+		/* Until we know better */
+		sts->st.mode = mode; 
+
+/* Default is current time. */
+		time( & sts->st.mtim.tv_sec );
+
+		sts->entry_type = ops___filetype( &(sts->st) );
+
+		/* To avoid EPERM on chmod() etc. */
+		sts->st.uid=getuid(); 
+		sts->st.gid=getgid(); 
+
+		sts->old=copy;
+		if (copy)
+			copy->cache_index=0;
+	}
+
 	sts->url=current_url;
-	/* To avoid EPERM on chmod() etc. */
-	sts->st.uid=getuid(); 
-	sts->st.gid=getgid(); 
+	ops__mark_parent_cc(sts, remote_status);
 
-	sts->url=current_url;
-
-	dir->remote_status |= FS_CHANGED;
 
 no_change:	
 	/* Even if this entry has lower priority, we have to have a baton for it.
@@ -227,29 +268,62 @@ ex:
 }
 
 
-int cb___open_entry(const char *utf8_path,
-		struct estat *dir,
-		void **child_baton)
+inline int cb___store_prop(struct estat *sts, 
+		const char *utf8_name, const svn_string_t *value,
+		apr_pool_t *pool)
 {
-	struct estat *sts;
 	int status;
-	char* path;
+	int user_prop;
+	apr_pool_t *u_p_pool;
+	char *copy;
+	#ifdef DEBUG
+	static long u_p_count=0,
+							u_p_bytes=0;
+	#endif
 
-
-	STOPIF( hlp__utf82local(utf8_path, &path, -1), NULL );
 
 	status=0;
-	STOPIF( ops__find_entry_byname(dir, path, &sts, 0), 
-			"cannot find entry %s", path);
+	if (!url__current_has_precedence(sts->url)) goto ex;
 
-	if (!sts) status=ENOENT;
-	else
+
+	user_prop=0;
+	STOPIF( up__parse_prop(sts, utf8_name, value, &user_prop, pool), NULL);
+	ops__mark_parent_cc(sts, remote_status);
+	DEBUGP("have name=%s; user? %d", utf8_name, user_prop);
+
+
+	if (action->keep_user_prop && user_prop)
 	{
-		if (!sts->url || url__current_has_precedence(sts->url))
-			sts->url = current_url;
+		if (!sts->user_prop)
+		{
+			/* The root entry has no associated URL, so it has no pool.
+			 * Normally there shouldn'd be any user-properties, though. */
+			STOPIF( apr_pool_create(&u_p_pool, sts->url ? 
+						sts->url->pool : global_pool), NULL);
+
+			sts->user_prop=apr_hash_make(u_p_pool);
+			apr_hash_set(sts->user_prop, "", 0, u_p_pool);
+		}
+		else
+			u_p_pool=apr_hash_get(sts->user_prop, "", 0);
+
+
+		/* apr_hash_set() only stores an address; we have to take care to not 
+		 * loose the length and data, because the pool they're in might be 
+		 * invalid after closing this entry. */
+		copy=apr_palloc(u_p_pool, strlen(utf8_name)+1);
+		strcpy(copy, utf8_name);
+		apr_hash_set(sts->user_prop, copy, APR_HASH_KEY_STRING, 
+				svn_string_dup(value, u_p_pool) );
+
+#ifdef ENABLE_DEBUG
+		u_p_count++;
+		u_p_bytes += value->len + sizeof(char*) + sizeof(*value);
+		DEBUGP("%lu user-props stored, with %lu bytes.",
+				u_p_count, u_p_bytes);
+#endif
 	}
 
-	*child_baton = sts;
 ex:
 	return status;
 }
@@ -299,8 +373,9 @@ svn_error_t *cb___delete_entry(const char *utf8_path,
 	if (sts)
 	{
 		DEBUGP("deleting entry %s", path);
-		cb___mark_parents(sts);
-		dir->remote_status |= FS_CHANGED;
+
+		ops__mark_parent_cc(sts, remote_status);
+
 		sts->remote_status = FS_REMOVED;
 
 		if (action->repos_feedback)
@@ -334,8 +409,8 @@ svn_error_t *cb___add_directory(const char *utf8_path,
 	int status;
 	int has_existed;
 
-	STOPIF( cb___add_entry(dir, utf8_path, utf8_copy_path, 
-				copy_rev, S_IFDIR, &has_existed,
+	STOPIF( cb__add_entry(dir, utf8_path, NULL, utf8_copy_path, 
+				copy_rev, S_IFDIR, &has_existed, 1,
 				child_baton), NULL );
 	sts=*child_baton;
 
@@ -364,18 +439,9 @@ svn_error_t *cb___open_directory(const char *utf8_path,
 	struct estat *dir=parent_baton;
 	int status;
 
-	status=cb___open_entry( utf8_path, dir, child_baton);
-	if (status == ENOENT)
-	{
-		/** \todo conflict - removed locally? added */
-		STOPIF( cb___add_entry(dir, utf8_path, NULL, 0, 
-					S_IFDIR, NULL, child_baton), NULL );
-		cb___mark_parents(dir);
-	}
-	else
-	{
-		STOPIF( status, NULL);
-	}
+	/** \todo conflict - removed locally? added */
+	STOPIF( cb__add_entry(dir, utf8_path, NULL, NULL, 0, 
+				S_IFDIR, NULL, 0, child_baton), NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -387,17 +453,10 @@ svn_error_t *cb___change_dir_prop(void *dir_baton,
 		const svn_string_t *value,
 		apr_pool_t *pool)
 {
-	struct estat *sts=dir_baton;
 	int status;
 
-	status=0;
-
-/** The root entry has per definition \b no URL. */
-	if (!sts->url || url__current_has_precedence(sts->url))
-	{
-		STOPIF( up__parse_prop(sts, utf8_name, value, NULL, pool), NULL);
-		cb___mark_parents(sts);
-	}
+	/* We do this additional call to get a meaningful backtrace. */
+	STOPIF( cb___store_prop(dir_baton, utf8_name, value, pool), NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -412,7 +471,7 @@ int cb___close(struct estat *sts)
 	sts->repos_rev = cb___dest_rev;
 
 	if (action->repos_feedback)
-	  STOPIF( action->repos_feedback(sts), NULL);
+		STOPIF( action->repos_feedback(sts), NULL);
 
 ex:
 	return status;
@@ -457,8 +516,8 @@ svn_error_t *cb___add_file(const char *utf8_path,
 	struct estat *sts;
 	int status;
 
-	STOPIF( cb___add_entry(dir, utf8_path, utf8_copy_path, 
-				copy_rev, S_IFREG, NULL, file_baton),
+	STOPIF( cb__add_entry(dir, utf8_path, NULL, utf8_copy_path, 
+				copy_rev, S_IFREG, NULL, 1, file_baton),
 			NULL);
 	sts=*file_baton;
 
@@ -484,26 +543,16 @@ svn_error_t *cb___open_file(const char *utf8_path,
 	struct estat *dir=parent_baton;
 	struct estat *sts;
 	int status;
+	int was_there;
 
-	status=cb___open_entry( utf8_path, dir, file_baton);
-	if (status == ENOENT)
-	{
-		/** \todo conflict - removed locally */
-		STOPIF( cb___add_entry(dir, utf8_path, NULL, 0,
-					S_IFREG, NULL, file_baton), NULL);
-		sts=*file_baton;
-		if (url__current_has_precedence(sts->url))
-		{
-			cb___mark_parents(dir);
-		}
-	}
-	else
-	{
-		STOPIF( status, NULL);
-		STOPIF( up__fetch_decoder(*(struct estat**)file_baton), NULL);
-	}
+	STOPIF( cb__add_entry(dir, utf8_path, NULL, NULL, 0,
+				S_IFREG, &was_there, 0, file_baton), NULL);
+	sts=(struct estat*)*file_baton;
 
-	((struct estat*)*file_baton)->decoder_is_correct=1;
+	if (was_there)
+		STOPIF( up__fetch_decoder(sts), NULL);
+
+	sts->decoder_is_correct=1;
 
 ex:
 	RETURN_SVNERR(status);
@@ -521,10 +570,7 @@ svn_error_t *cb___apply_textdelta(void *file_baton,
 
 	status=0;
 	if (url__current_has_precedence(sts->url))
-	{
-		sts->remote_status |= FS_CHANGED;
-		cb___mark_parents(sts);
-	}
+		ops__mark_changed_parentcc(sts, remote_status);
 
 	*handler = cb__txdelta_discard;
 	*handler_baton=sts;
@@ -538,15 +584,10 @@ svn_error_t *cb___change_file_prop(void *file_baton,
 		const svn_string_t *value,
 		apr_pool_t *pool)
 {
-	struct estat *sts=file_baton;
 	int status;
 
-	status=0;
-	if (url__current_has_precedence(sts->url))
-	{
-		STOPIF( up__parse_prop(sts, utf8_name, value, NULL, pool), NULL);
-		cb___mark_parents(sts);
-	}
+	/* We do this additional call to get a meaningful backtrace. */
+	STOPIF( cb___store_prop(file_baton, utf8_name, value, pool), NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -563,16 +604,14 @@ svn_error_t *cb___close_file(void *file_baton,
 
 	STOPIF( cb___close(sts), NULL);
 
-
-	BUG_ON(S_ISDIR(sts->st.mode));
-	if (!S_ISDIR(sts->st.mode) && text_checksum)
-		STOPIF( cs__char2md5(text_checksum, sts->md5 ), NULL);
-
-	if (sts->has_orig_md5 || sts->decoder)
-		DEBUGP("Has an original MD5, %s not used", text_checksum);
-	else
-		if (text_checksum)
-			STOPIF( cs__char2md5(text_checksum, sts->md5 ), NULL);
+	if (!S_ISDIR(sts->st.mode))
+	{ 
+		if (sts->has_orig_md5 || sts->decoder)
+			DEBUGP("Has an original MD5, %s not used", text_checksum);
+		else
+			if (text_checksum)
+				STOPIF( cs__char2md5(text_checksum, sts->md5 ), NULL);
+	}
 
 ex:
 	RETURN_SVNERR(status);
@@ -641,6 +680,8 @@ const svn_delta_editor_t cb___change_recorder =
 	.abort_edit 					= cb___abort_edit,
 };
 
+/** @} */
+
 
 int cb___report_path_rev(struct estat *dir, 
 		const svn_ra_reporter2_t *reporter,
@@ -683,6 +724,21 @@ ex:
 }
 
 
+/** -.
+ * Just a proxy. */
+int cb__record_changes(svn_ra_session_t *session,
+		struct estat *root,
+		svn_revnum_t target,
+		apr_pool_t *pool)
+{
+	int status;
+
+	STOPIF( cb__record_changes_mixed(session, root, target, 
+				NULL, 0, pool), NULL);
+ex:
+	return status;
+}
+
 
 /** -.
  * Calls the svn libraries and records which entries would be changed
@@ -700,10 +756,20 @@ ex:
  * If a non-directory gets replaced by a directory, \c entry_count and 
  * \c by_inode are kept - we need them for up__rmdir() to remove 
  * known child entries.
- * */
-int cb__record_changes(svn_ra_session_t *session,
+ *
+ * Please note that it's not possible to run \e invisible entries (that are 
+ * not seen because some higher priority URL overlays them) to run as \c 
+ * baton==NULL (although that would save quite a bit of 
+ * url__current_has_precedence() calls), because it's possible that some 
+ * file in a directory below can be seen.
+ *
+ * \a other_paths is a \c NULL -terminated list of pathnames (which may 
+ * have the \c "./" in front, ie. the \e normalized paths) that are to be 
+ * reported at revision  \a other_revs. */
+int cb__record_changes_mixed(svn_ra_session_t *session,
 		struct estat *root,
 		svn_revnum_t target,
+		char *other_paths[], svn_revnum_t other_revs,
 		apr_pool_t *pool)
 {
 	int status;
@@ -714,6 +780,7 @@ int cb__record_changes(svn_ra_session_t *session,
 
 	status=0;
 	cb___dest_rev=target;
+	if (!session) session=current_url->session;
 	STOPIF_SVNERR( svn_ra_do_status,
 			(session,
 			 &reporter,
@@ -732,19 +799,36 @@ int cb__record_changes(svn_ra_session_t *session,
 		STOPIF_SVNERR( reporter->set_path,
 				(report_baton,
 				 "", target,
-				 TRUE, NULL, global_pool));
+				 TRUE, NULL, pool));
 	else
 		STOPIF_SVNERR( reporter->set_path,
 				(report_baton,
 				 "", current_url->current_rev,
-				 FALSE, NULL, global_pool));
+				 FALSE, NULL, pool));
+
+	if (other_paths)
+	{
+		while (*other_paths)
+		{
+			DEBUGP("reporting %s@%llu", *other_paths, (t_ull)other_revs);
+
+			/* Ignore the . path */
+			if (strcmp(*other_paths, ".") != 0)
+				STOPIF_SVNERR( reporter->set_path,
+						(report_baton,
+						 *other_paths + (strncmp(*other_paths, "./", 2) == 0 ? 2 : 0),
+						 other_revs, FALSE, NULL, pool));
+
+			other_paths++;
+		}
+	}
 
 	DEBUGP("Getting changes from %llu to %llu", 
 			(t_ull)current_url->current_rev,
 			(t_ull)target);
-			#if 0
+#if 0
 	STOPIF( cb___report_path_rev( root, reporter, report_baton, pool), NULL);
-	#endif
+#endif
 
 	STOPIF_SVNERR( reporter->finish_report, 
 			(report_baton, global_pool));
@@ -755,4 +839,3 @@ ex:
 	return status;
 }
 
-/** @} */

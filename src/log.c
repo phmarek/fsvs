@@ -23,13 +23,12 @@
  * \e path, or, if none, the highest priority URL.
  *
  * The optional \e rev1 and \e rev2 can be used to restrict the 
- * revisions that are shown; if no values are given, the logs are 
- * given starting from HEAD downwards.
+ * revisions that are shown; if no values are given, the logs are given 
+ * starting from \c HEAD downwards, and then a limit on the number of 
+ * revisions is applied (but see the \ref o_logmax "limit" option).
  *
  * If you use the \ref glob_opt_verb "-v" -option, you get the files 
  * changed in each revision printed, too.
- *
- * Currently at most 100 log messages are shown.
  *
  * There is an option controlling the output format; see \ref o_logoutput.
  *
@@ -38,7 +37,6 @@
  * - Show revision for \b all URLs associated with a working copy?
  *   In which order?
  * - A URL-parameter, to specify the log URL. (Name)
- * - Limit number of revisions shown?
  * */
 
 
@@ -131,19 +129,18 @@ svn_error_t *log__receiver(void *baton,
 	STOPIF( log___divider(output, ANSI__GREEN), NULL);
 
 	/* Taken from a svn commit message. */
-	STOPIF_CODE_ERR( -1 == fprintf(output, 
-			"r%llu | %s | %s | %d line%s\n"
-			"%s",
-			(t_ull)revision, auth, dat, lines,
-			lines == 1 ? "" : "s",
-			(opt__get_int(OPT__LOG_OUTPUT) & LOG__OPT_COLOR) ? ANSI__NORMAL : ""),
-			errno, NULL);
+	STOPIF_CODE_EPIPE( fprintf(output, 
+				"r%llu | %s | %s | %d line%s\n"
+				"%s",
+				(t_ull)revision, auth, dat, lines,
+				lines == 1 ? "" : "s",
+				(opt__get_int(OPT__LOG_OUTPUT) & LOG__OPT_COLOR) ? ANSI__NORMAL : ""),
+			NULL);
 
 	/* Print optionally the filenames */
 	if (changed_paths)
 	{
-		STOPIF_CODE_ERR( -1 == fputs("Changed paths:\n", output), 
-				errno, NULL);
+		STOPIF_CODE_EPIPE( fputs("Changed paths:\n", output), NULL);
 		hi=apr_hash_first(pool, changed_paths);
 		while (hi)
 		{
@@ -151,13 +148,12 @@ svn_error_t *log__receiver(void *baton,
 
 			STOPIF( hlp__utf82local( name, &local_name, namelen), NULL);
 
-			STOPIF_CODE_ERR( -1 == fprintf(output, "  %s\n", local_name), 
-					errno, NULL);
+			STOPIF_CODE_EPIPE( fprintf(output, "  %s\n", local_name), NULL);
 			hi = apr_hash_next(hi);
 		}
 	}
 
-	STOPIF_CODE_ERR( -1 == fputs("\n", output), errno, NULL);
+	STOPIF_CODE_EPIPE( fputs("\n", output), NULL);
 
 	/* Convert the message in parts;
 	 * - so that not too big buffers are processed at once, and
@@ -201,7 +197,7 @@ svn_error_t *log__receiver(void *baton,
 		DEBUGP("log output: %d bytes", cur);
 
 		STOPIF( hlp__utf82local(message, &mess, cur), NULL);
-		STOPIF_CODE_ERR( fputs(mess, output) == EOF, errno, NULL);
+		STOPIF_CODE_EPIPE( fputs(mess, output), NULL);
 
 		message+=cur;
 		len-=cur;
@@ -211,7 +207,7 @@ svn_error_t *log__receiver(void *baton,
 		sol= ccp!=NULL;
 	}
 
-	STOPIF_CODE_ERR( putc('\n', output) == EOF, EPIPE, NULL);
+	STOPIF_CODE_EPIPE( putc('\n', output), NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -232,7 +228,6 @@ int log__work(struct estat *root, int argc, char *argv[])
 	int limit;
 	char **normalized;
 	FILE *output=stdout;
-	svn_revnum_t head;
 
 
 	status_svn=NULL;
@@ -252,7 +247,7 @@ int log__work(struct estat *root, int argc, char *argv[])
 	if (argc)
 	{
 		STOPIF( ops__traverse(root, normalized[0], 0, 0, &sts), 
-				"This entry is unknown.");
+				"!The entry \"%s\" cannot be found.", normalized[0]);
 		if (!sts->url)
 		{
 			STOPIF_CODE_ERR(urllist_count>1, EINVAL,
@@ -270,7 +265,7 @@ int log__work(struct estat *root, int argc, char *argv[])
 	}
 
 	DEBUGP("doing URL %s", current_url->url);
-	STOPIF( url__open_session(&session), NULL);
+	STOPIF( url__open_session(NULL), NULL);
 
 
 	if (argc)
@@ -289,36 +284,37 @@ int log__work(struct estat *root, int argc, char *argv[])
 			hlp__rev_to_string(opt_target_revision2));
 
 
-	limit=100;
+	/* To take the difference (for -rX:Y) we need to know HEAD. */
+	STOPIF( url__canonical_rev(current_url, &opt_target_revision), NULL);
+	STOPIF( url__canonical_rev(current_url, &opt_target_revision2), NULL);
+
 	switch (opt_target_revisions_given)
 	{
 		case 0:
 			opt_target_revision=SVN_INVALID_REVNUM;
 			opt_target_revision2=1;
+
+			STOPIF( url__canonical_rev(current_url, &opt_target_revision), NULL);
+			opt__set_int(OPT__LOG_MAXREV, PRIO_DEFAULT, 100);
 			break;
 		case 1:
 			opt_target_revision2 = 1;
-			limit=1;
+			opt__set_int(OPT__LOG_MAXREV, PRIO_DEFAULT, 1);
 			break;
 		case 2:
+			opt__set_int(OPT__LOG_MAXREV, 
+					PRIO_DEFAULT,
+					abs(opt_target_revision-opt_target_revision2)+1);
 			break;
 		default:
 			BUG("how many");
 	}
+  limit=opt__get_int(OPT__LOG_MAXREV);
 
-  /* DAV (http:// and https://) don't like getting SVN_INVALID_REVNUM - 
-	 * they throw an 175007 "HTTP Path Not Found", and "REPORT request 
-	 * failed on '...'". Get the real number. */
-	STOPIF_SVNERR( svn_ra_get_latest_revnum,
-			(session, &head, global_pool));
-	DEBUGP("HEAD is at %ld", head);
-	if (opt_target_revision == SVN_INVALID_REVNUM)
-		opt_target_revision=head;
-	if (opt_target_revision2 == SVN_INVALID_REVNUM)
-		opt_target_revision2=head;
+	DEBUGP("log limit at %d", limit);
 
-
-	status_svn=svn_ra_get_log(session,
+	STOPIF_SVNERR( svn_ra_get_log,
+			(current_url->session,
 			 paths,
 			 opt_target_revision,
 			 opt_target_revision2,
@@ -327,20 +323,7 @@ int log__work(struct estat *root, int argc, char *argv[])
 			 0, // TODO: stop-on-copy,
 			 log__receiver,
 			 output,
-			 global_pool);
-
-	/* Quit silently on EPIPE. */
-	if (status_svn && 
-			status_svn->apr_err == EPIPE)
-	{
-		status=0;
-		status_svn=NULL;
-		goto ex;
-	}
-
-	/* A bit of a hack. */
-	STOPIF_SVNERR(status_svn, +0);
-
+			 global_pool) );
 
 	STOPIF( log___divider(output, ANSI__NORMAL), NULL);
 

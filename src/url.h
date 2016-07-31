@@ -67,9 +67,13 @@ int url__mark_todo(void);
 int url__store_url_name(char *parm);
 	 
 	 
-static inline int url__to_be_handled(const struct url_t *url)
-{
-  return (!url__parm_list_used) || url->to_be_handled;
-}
+/** Simple function setting \c current_url, and returning whether there's 
+ * something to do. */
+int url__iterator(svn_revnum_t *target_rev);
+
+
+/** Changes the revision number, if \c SVN_INVALID_REVNUM, to the real 
+ * value. */
+int url__canonical_rev( struct url_t *url, svn_revnum_t *rev);
 
 #endif

@@ -81,7 +81,7 @@ revert "1/2/3/4/5/6-changed" 2 "Single revert" changed 1 same 0 new 0
 status "1/2/3/4/5/6-changed -v" 1 "Status after revert" changed 1 same 0 new 0 "-F ....." 1
 echo $RANDOM > 1/2/3/4/5/6-changed
 revert "1/2/3/" 4 "Non-recursive revert" changed 1 same 0 new 0 ".m.?" 2 dir 2
-revert ". -R" 7 "Recursive revert" changed 2 same 0 new 0
+revert ". -R" 6 "Recursive revert" changed 2 same 0 new 0
 status "." 6 "Status after revert" new 3 changed 0 same 0
 status ". -v" 17 "Verbose status after revert" new 3 changed 3 same 3 "-F ......" 11
 

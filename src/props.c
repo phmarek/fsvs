@@ -10,6 +10,9 @@
 /** \file
  * Properties handling - \ref prop-get, \ref prop-set, \ref prop-list.
  *
+ * Deleted properties are marked locally be a special value; callers need 
+ * to check by using prp__prop_will_be_removed().
+ *
  * \todo --xml, --raw, --dump switches?
  *
  * \todo should \ref prop-get and \ref prop-list use UTF-8 or local 
@@ -33,8 +36,6 @@
 #include "update.h"
 #include "est_ops.h"
 #include "warnings.h"
-
-/* \todo prop-del ?? */
 
 
 /** \defgroup props Property handling
@@ -93,7 +94,8 @@
  *
  * This command removes property value for the given path(s).
  *
- * See also \ref prop-set
+ * See also \ref prop-set.
+ *
  *
  * */
 
@@ -315,7 +317,17 @@ char propname_mtime[]=SVN_PROP_TEXT_TIME,
 		 propval_orig_md5  []=FSVS_PROP_ORIG_MD5;
 /** @} */
 
-/* \todo check for existance of entries we'd like to store entries for */
+
+/** -.
+ * 
+ * I thought about using "constant prefix.$random" => "$propertyname" for 
+ * them - but it's more work than simply ignoring them before listing. 
+ *
+ * And as they're not widely used, it's easier this way. */
+const char prp___to_be_removed_value[]=
+	"FSVS:INTERNAL-\nto-be-removed\n-"
+	"\x8f\xc1\xa6\xe5\x86\x0a\x01\x72\x54\x89\x25\x23\x03\xc3\xfa\x75";
+
 
 
 /** -.
@@ -433,20 +445,36 @@ int prp__get(hash_t db, char *keycp, datum *value)
  * repository; its \ref estat::remote_status is set.
  * */
 int prp__set_from_aprhash(struct estat *sts, 
-		apr_hash_t *props,
+		apr_hash_t *props, 
+		enum prp__set_from_aprhash_e flags,
 		apr_pool_t *pool)
 {
 	int status;
 	apr_hash_index_t *hi;
 	char *prop_key;
+	apr_ssize_t prop_key_len;
+	
 	svn_string_t *prop_val;
 	hash_t db;
 	int to_store, count;
 	void *k, *v;
 
 
+	status=0;
 	count=0;
+
+	/* We always open the database file. If no user-specified properties are 
+	 * given, old properties are removed that way.
+	 * (Needed because we'd only know in cb__record_changes() that properties 
+	 * get removed; in revert we only have the new list.
+	 * TODO: Merge local and remote changes.) */
+	/* We remember the filename, so that empty hashes get removed on close.  
+	 * */
 	db=NULL;
+	if (flags & STORE_IN_FS)
+		STOPIF( prp__open_byestat(sts, 
+					GDBM_NEWDB | HASH_REMEMBER_FILENAME, &db), NULL);
+
 	for (hi = apr_hash_first(pool, props); hi; hi = apr_hash_next(hi)) 
 	{
 		/* As the name/key is a (char*), we don't need its length. */
@@ -455,7 +483,7 @@ int prp__set_from_aprhash(struct estat *sts,
 		 * whatever needed in subsequent calls - which isn't pretty, too. */
 		k=&prop_key;
 		v=&prop_val;
-		apr_hash_this(hi, k, NULL, v);
+		apr_hash_this(hi, k, &prop_key_len, v);
 
 		to_store=0;
 		STOPIF( up__parse_prop(sts, prop_key, prop_val, 
@@ -463,23 +491,25 @@ int prp__set_from_aprhash(struct estat *sts,
 
 		if (to_store)
 		{
-			if (!db)
-				STOPIF( prp__open_byestat(sts, GDBM_NEWDB, &db), NULL);
-
-			/** \todo - store in utf-8? local encoding?
-			 * What if it's binary???  Better do no translation, ie store as 
-			 * UTF-8. */
-			STOPIF( prp__set_svnstr(db, prop_key, prop_val), NULL);
+			if (db)
+			{
+				/** \todo - store in utf-8? local encoding?
+				 * What if it's binary???  Better do no translation, ie store as 
+				 * UTF-8. */
+				STOPIF( prp__set_svnstr(db, prop_key, prop_val), NULL);
+			}
 			count++;
+		}
+		else
+		{
+			/* If already used it's no longer needed. */
+			if (flags & ONLY_KEEP_USERDEF)
+				apr_hash_set(props, prop_key, prop_key_len, NULL);
 		}
 	}
 
-	if (db || count)
-	{
-		DEBUGP("%d properties stored", count);
-		BUG_ON(! (db && count) );
-		STOPIF( hsh__close(db, status), NULL);
-	}
+	DEBUGP("%d properties stored", count);
+	STOPIF( hsh__close(db, status), NULL);
 
 ex:
 	return status;
@@ -514,12 +544,20 @@ int prp__g_work(struct estat *root, int argc, char *argv[])
 	{
 		STOPIF( prp__open_byname( *normalized, GDBM_WRCREAT, &db), NULL);
 
-		STOPIF( hsh__fetch(db, key, &value), NULL);
-		if (value.dptr)
+		status=prp__fetch(db, key, &value);
+		if (status == ENOENT)
 		{
-			status=fputs(value.dptr, output);
-			status|=fputc('\n', output);
-			if (status <0) break;
+			DEBUGP("No such property");
+		}
+		else if (status)
+		{
+			/* Any other error means trouble. */
+			STOPIF( status, NULL);
+		}
+		else if (value.dptr && !prp__prop_will_be_removed(value))
+		{
+			STOPIF_CODE_EPIPE( fputs(value.dptr, output), NULL);
+			STOPIF_CODE_EPIPE( fputc('\n', output), NULL);
 		}
 
 		STOPIF( hsh__close(db, status), NULL);
@@ -570,8 +608,9 @@ int prp__s_work(struct estat *root, int argc, char *argv[])
 
 	if (action->i_val == FS_REMOVED)
 	{
-		value.dptr=NULL;
-		value.dsize=0;
+		value.dptr=(char*)prp___to_be_removed_value;
+		/* + \0 */
+		value.dsize=strlen(prp___to_be_removed_value)+1;
 	}
 	else
 	{
@@ -660,7 +699,7 @@ int prp__open_get_close(struct estat *sts, char *name,
 {
 	int status;
 	hash_t props;
-  datum value;
+	datum value;
 
 	props=NULL;
 
@@ -687,7 +726,7 @@ ex:
  * */
 int prp__l_work(struct estat *root, int argc, char *argv[])
 {
-	int status, i, count;
+	int status, count;
 	int many_files;
 	char indent[5]="    ";
 	hash_t db;
@@ -697,6 +736,7 @@ int prp__l_work(struct estat *root, int argc, char *argv[])
 
 
 	status=0;
+	db=NULL;
 	if (!argc) ac__Usage_this();
 
 
@@ -722,32 +762,36 @@ int prp__l_work(struct estat *root, int argc, char *argv[])
 		while (status == 0)
 		{
 			DEBUGP("got key with len=%d: %.30s", key.dsize, key.dptr);
-			count++;
 
-			if (count==1 && many_files)
-				printf("Properties of %s:\n", *normalized);
-
-			i=fputs(indent, output);
-			/* The key and value are defined to have a \0 at the end.
-			 * This should not be printed. */
-			i|=hlp__safe_print(output, key.dptr, key.dsize-1);
-
-			if (opt_verbose>0)
+			STOPIF( prp__fetch(db, key, &data), NULL);
+			if (prp__prop_will_be_removed(data))
 			{
-				STOPIF( hsh__fetch(db, key, &data), NULL);
+				/* This property will be removed on next commit. */
+			}
+			else
+			{
+				count++;
 
-				fputc('=',output);
-				i|=hlp__safe_print(output, data.dptr, data.dsize-1);
+				if (count==1 && many_files)
+					STOPIF_CODE_EPIPE( printf("Properties of %s:\n", *normalized), NULL);
 
-				free(data.dptr);
+				STOPIF_CODE_EPIPE( fputs(indent, output), NULL);
+				/* The key and value are defined to have a \0 at the end.
+				 * This should not be printed. */
+				STOPIF( hlp__safe_print(output, key.dptr, key.dsize-1), NULL);
+
+				if (opt_verbose>0)
+				{
+					STOPIF_CODE_EPIPE( fputc('=',output), NULL);
+					STOPIF( hlp__safe_print(output, data.dptr, data.dsize-1), NULL);
+
+					free(data.dptr);
+				}
+
+				STOPIF_CODE_EPIPE( fputc('\n', output), NULL);
 			}
 
-			fputc('\n', output);
-
 			status=prp__next(db, &key, &key);
-
-			/* SIGPIPE or similar? */
-			if (i<0) break;
 		}
 
 		if (count == 0)

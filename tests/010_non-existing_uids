@@ -27,16 +27,16 @@ echo "Using UID $uid and GID $gid for unknown-user-tests."
 if [[ -e $filename ]]
 then
   rm $filename
-	$BIN ci -m "delete the test-file"
+	$BINq ci -m "delete the test-file"
 fi
 
 date > $filename
 chown $uid.$gid $filename
 echo "     ci1"
-$BIN ci -m "uid-gid-test"
+$BINq ci -m "uid-gid-test"
 
 echo "Another line" >> $filename
 echo "     ci2"
-$BIN ci -m "uid-gid-expand"
+$BINq ci -m "uid-gid-expand"
 
 $WC2_UP_ST_COMPARE

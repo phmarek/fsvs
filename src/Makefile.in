@@ -11,8 +11,8 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.14/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 1496 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.1.16/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 1690 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
 CFLAGS	:= @CFLAGS@
@@ -32,6 +32,10 @@ ifeq (@ENABLE_GCOV@, 1)
 	LDFLAGS += -fprofile-arcs
 endif
 endif
+
+#	CFLAGS += -m64 -Wpadded
+#	LDFLAGS += -m64
+
 
 
 C_FILES	:= $(wildcard *.c)
@@ -69,6 +73,15 @@ version-nnl:
 
 
 ################################ Distribution ###############################
+
+bindir	= @bindir@
+exec_prefix= @exec_prefix@
+prefix	= @prefix@
+mandir	= @mandir@
+install:
+	for d in /etc/fsvs /var/spool/fsvs $(bindir) ; do test -d $d || mkdir $d ; done
+	cp -a $(DEST) $(bindir)
+#	cp -a ../doc/fsvs.1 $(mandir)
 
 # No automatic rebuild (?)
 #../doc/USAGE: $(C_FILES) $(H_FILES)
@@ -178,6 +191,9 @@ count:
 
 revcount: count
 	@last_rev=$(shell svk info | grep Revision | cut -d" " -f2) ; echo "number of edits up to revision $$last_rev:" ; for r in `seq 2 $$last_rev` ; do svk diff -r`expr $$r - 1`:$$r /svn2/trunk ; done | perl -pe 's#\ssrc/# #g;' | diffstat
+
+structs: $(DEST)
+	@for a in `perl -ne 'print $$1,"\n" if m#^\s*struct\s+(\w+)\s+{\s*$$#' $(C_FILES) $(H_FILES)` ; do printf "%-30s " "struct $$a" ; gdb --batch -ex "printf \"\t%6d\", sizeof(struct $$a)" $(DEST) | cut -f2 -d= ; done 2>&1 | sort -k3 -n
 
 .PHONY:	revcount count diffstat
 

@@ -17,9 +17,6 @@
 
 /** Diff command main function. */
 work_t df__work;
-/** Diff per-sts function. */
-action_t df__action;
-
 
 #endif
 

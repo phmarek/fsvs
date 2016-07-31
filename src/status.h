@@ -16,6 +16,8 @@
 
 /** A function to show the local status of an entry. */
 action_t st__status;
+/** Status action. */
+action_t st__action;
 /** A function to show the remote status of an entry. */
 action_t st__rm_status;
 /** The \ref status worker function. */
@@ -37,6 +39,8 @@ volatile char* st__status_string(const struct estat * const sts);
 volatile char* st__status_string_fromint(int mask);
 /** Return the string interpretation of the flags like \ref RF_CHECK. */
 volatile char* st__flags_string_fromint(int mask);
+/** Return the type string - cdev, bdev, whatever. */
+volatile char *st__type_string(struct estat *sts);
 
 #endif
 

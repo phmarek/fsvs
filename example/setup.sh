@@ -12,7 +12,7 @@ cd /etc
 
 
 # Ignore if group already exists
-addgroup fsvs || true
+addgroup $group || true
 
 if fsvs info > /dev/null 2>&1
 then
@@ -41,28 +41,29 @@ else
 # Create local filelist, to make "fsvs ps" work.
 	fsvs checkout file://$location/trunk/etc 
 
-  fsvs ignore './**.dpkg-old' './**.bak' './**.old' './**~'
+  fsvs ignore '/etc/**.dpkg-old' '/etc/**.dpkg-bak'
+  fsvs ignore '/etc/**.bak' '/etc/**.old' '/etc/**~' '/**.swp'
 # easy to remake, no big deal (?)
-  fsvs ignore './ssh/ssh_host_*key'
+  fsvs ignore '/etc/ssh/ssh_host_*key'
 
 # Not used?
-	fsvs ignore ./apt/secring.gpg
+	fsvs ignore /etc/apt/secring.gpg
 
-	fsvs ignore ./mtab
-	fsvs ignore ./ld.so.cache ./adjtime
+	fsvs ignore /etc/mtab
+	fsvs ignore /etc/ld.so.cache /etc/adjtime
 
 # Just compiled data?
-  fsvs ignore './selinux/*.pp'
+  fsvs ignore '/etc/selinux/*.pp'
 
 # unknown whether that should be backuped.
-  fsvs ignore './identd.key'
-  fsvs ignore './ppp/*-secrets'
+  fsvs ignore '/etc/identd.key'
+  fsvs ignore '/etc/ppp/*-secrets'
   
-  fsvs ps fsvs:commit-pipe /var/lib/fsvs-versioning/scripts/remove-password-line.pl ddclient.conf
+  fsvs ps fsvs:commit-pipe /var/lib/fsvs-versioning/scripts/remove-password-line.pl ddclient.conf || true
 
 # Are there non-shadow systems?
 #  fsvs ignore './shadow' './gshadow'
-  fsvs ps fsvs:commit-pipe /var/lib/fsvs-versioning/scripts/shadow-clean.pl shadow gshadow
+  fsvs ps fsvs:commit-pipe /var/lib/fsvs-versioning/scripts/shadow-clean.pl shadow gshadow 
 
 # Lock-files are not needed, are they?
   fsvs ignore './**.lock' './**.LOCK'

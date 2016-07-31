@@ -205,6 +205,13 @@ int url__parm_list_len=0,
 
 
 
+/** Returns whether \a url should be handled. */
+static inline int url___to_be_handled(const struct url_t *url)
+{
+  return (!url__parm_list_used) || url->to_be_handled;
+}
+
+
 /** -.
  *
  * Because this may be called below input_tree, returning \c ENOENT could 
@@ -336,6 +343,8 @@ int url__parse(char *input, struct url_t *storage, int *def_parms)
 	eurl.internal_number=INVALID_INTERNAL_NUMBER;
 	eurl.current_rev=0;
 	eurl.target_rev=SVN_INVALID_REVNUM;
+	eurl.current_target_override=0;
+	eurl.head_rev=SVN_INVALID_REVNUM;
 	cur=input;
 
 	DEBUGP("input: %s", input);
@@ -924,10 +933,13 @@ int url__close_sessions(void)
 
 
 /** -.
- * */
+ * If an entry has \b no URL yet (is new), \a to_compare is \c NULL, and 
+ * the \ref current_url has higher priority; this is common, and so done 
+ * here too.  */
 int url__current_has_precedence(struct url_t *to_compare)
 {
-	return (current_url->priority <= to_compare->priority);
+	return to_compare==NULL ||
+		(current_url->priority <= to_compare->priority);
 }
 
 
@@ -960,25 +972,25 @@ int url___dump(char *format)
 					switch (cp[1])
 					{
 						case '\\':
-							status= EOF == fputc('\\', output);
+							STOPIF_CODE_EPIPE( fputc('\\', output), NULL);
 							break;
 						case 'n':
-							status= EOF == fputc('\n', output);
+							STOPIF_CODE_EPIPE( fputc('\n', output), NULL);
 							break;
 						case 'r':
-							status= EOF == fputc('\r', output);
+							STOPIF_CODE_EPIPE( fputc('\r', output), NULL);
 							break;
 						case 't':
-							status= EOF == fputc('\t', output);
+							STOPIF_CODE_EPIPE( fputc('\t', output), NULL);
 							break;
 						case 'f':
-							status= EOF == fputc('\f', output);
+							STOPIF_CODE_EPIPE( fputc('\f', output), NULL);
 							break;
 						case 'x':
 							status= cp[2] && cp[3] ? cs__two_ch2bin(cp+2) : -1;
 							STOPIF_CODE_ERR(status <0, EINVAL, 
 									"A \"\\x\" sequence must have 2 hex digits.");
-							status= EOF == fputc(status, output);
+							STOPIF_CODE_EPIPE( fputc(status, output), NULL);
 							/* There's a +2 below. */
 							cp+=2;
 							break;
@@ -996,24 +1008,27 @@ int url___dump(char *format)
 					{
 						/* Allow internal number, too? */
 						case 'n':
-							status= EOF == fputs(url->name ?: "", output);
+							STOPIF_CODE_EPIPE( fputs(url->name ?: "", output), NULL);
 							break;
 						case 't':
-							status= EOF == fputs(hlp__rev_to_string(url->target_rev), 
-									output);
+							STOPIF_CODE_EPIPE( fputs(
+										hlp__rev_to_string(url->target_rev), 
+										output), NULL);
 							break;
 						case 'r':
-							status= EOF == fputs( hlp__rev_to_string(url->current_rev), 
-									output);
+							STOPIF_CODE_EPIPE( fputs(
+										hlp__rev_to_string(url->current_rev), 
+										output), NULL);
 							break;
 						case 'p':
-							status= 0 > fprintf(output, "%u", url->priority);
+							STOPIF_CODE_EPIPE( fprintf(output, "%u", 
+										url->priority), NULL);
 							break;
 						case 'u':
-							status= EOF == fputs(url->url, output);
+							STOPIF_CODE_EPIPE( fputs(url->url, output), NULL);
 							break;
 						case '%':
-							status= EOF == fputc('%', output);
+							STOPIF_CODE_EPIPE( fputc('%', output), NULL);
 							break;
 						default:
 							STOPIF_CODE_ERR(1, EINVAL, 
@@ -1025,26 +1040,15 @@ int url___dump(char *format)
 					break;
 
 				default:
-					status= EOF == fputc(*cp, output);
+					STOPIF_CODE_EPIPE( fputc(*cp, output), NULL);
 					cp++;
-			}
-
-			if (status)
-			{
-				status=errno;
-
-				/* Quit silently. */
-				if (status == EPIPE) 
-					status=0;
-
-				goto ex;
-
 			}
 		}
 	}
 
-ex:
+	status=0;
 
+ex:
 	return status;
 }
 
@@ -1246,10 +1250,12 @@ int url__mark_todo(void)
 				DEBUGP("URL %s mentioned multiple times", url->url);
 			url->to_be_handled=1;
 
-			/* TODO: That should be better; -r should override given URLs without 
-			 * explicit revision. */
 			if (rev_str) 
-				STOPIF( hlp__parse_rev(rev_str, NULL, & url->target_rev), NULL);
+			{
+				STOPIF( hlp__parse_rev(rev_str, NULL, 
+							& url->current_target_rev), NULL);
+				url->current_target_override=1;
+			}
 
 			url_string=strtok(NULL, delim);
 		}	
@@ -1284,3 +1290,101 @@ int url__store_url_name(char *parm)
 ex:
 	return status;
 }
+
+
+/** -.
+ *
+ * DAV (<tt>http://</tt> and <tt>https://</tt>) don't like getting \c 
+ * SVN_INVALID_REVNUM on some operations; they throw an 175007 <i>"HTTP 
+ * Path Not Found"</i>, and <i>"REPORT request failed on '...'"</i>.
+ *
+ * So we need the real \c HEAD.
+ *
+ * We try to be fast, and only fetch the value if we really need it. */
+int url__canonical_rev( struct url_t *url, svn_revnum_t *rev)
+{
+	int status;
+	svn_error_t *status_svn;
+
+
+	status=0;
+	status_svn=NULL;
+	if (*rev == SVN_INVALID_REVNUM)
+	{
+		if (url->head_rev == SVN_INVALID_REVNUM)
+		{
+			BUG_ON( !url->session );
+			/* As we ask at most once we just use the connection's pool - that 
+			 * has to exist if there's a session. */
+			STOPIF_SVNERR( svn_ra_get_latest_revnum,
+					(url->session, & url->head_rev, url->pool));
+
+			DEBUGP("HEAD of %s is at %ld", url->url, url->head_rev);
+		}
+
+		*rev=url->head_rev;
+	}
+
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * Returns 0 as long as there's an URL to process; \c current_url is set, 
+ * and opened. In \a target_rev the target revision (as per default of this 
+ * URL, or as given by the user) is returned.
+ *
+ * If called with \a target_rev \c NULL, the internal index is reset, and 
+ * no URL initialization is done.
+ *
+ * At the end of the list \c EOF is given.
+ * */
+int url__iterator(svn_revnum_t *target_rev)
+{
+	int status;
+	static int last_index=-1;
+	svn_revnum_t rev;
+
+
+	status=0;
+	if (!target_rev) 
+	{
+		last_index=-1;
+		goto ex;
+	}
+
+	while (1)
+	{
+		last_index++;
+		if (last_index >= urllist_count) 
+		{
+			DEBUGP("no more URLs.");
+			/* No more data. */
+			status=EOF;
+			goto ex;
+		}
+
+		current_url=urllist[last_index];
+		if (url___to_be_handled(current_url)) break;
+	}
+
+	STOPIF( url__open_session(NULL), NULL);
+
+
+	if (current_url->current_target_override)
+		rev=current_url->current_target_rev;
+	else if (opt_target_revisions_given)
+		rev=opt_target_revision;
+	else
+		rev=current_url->target_rev;
+	DEBUGP("doing URL %s @ %llu", current_url->url, (t_ull)rev);
+
+	STOPIF( url__canonical_rev(current_url, &rev), NULL);
+	*target_rev = rev;
+
+ex:
+	return status;
+}
+

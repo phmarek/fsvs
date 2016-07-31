@@ -34,6 +34,8 @@ NUM_WC=6
 
 # PS: is there an easier way for variable indirection?
 
+logfile=$LOGDIR/038.multi-url
+
 set -e
 $PREPARE_CLEAN WC_COUNT=$NUM_WC > /dev/null
 $INCLUDE_FUNCS
@@ -72,8 +74,13 @@ function makeLocal
   cd "${!_loc}"
 # We have to load, as the (wrong) /trunk was already set by prepare
 	echo "$_rep" | $BINq urls load
+# An empty revision 2 is needed. (1 is the mkdir above)
+	$BINq ci -m empty	> /dev/null
 	echo "Set URL $_rep for ${!_loc}"
+	echo "$which here" > is_$which
+	$BINq ci -m here	> /dev/null
 	echo "is $which" > is_$which
+	$BINq ci -m is	> /dev/null
 # Make some empty revisions, so that the revision numbers surely disagree
   for a in a `seq 1 $(($RANDOM % 14))`
 	do
@@ -211,6 +218,37 @@ else
 	$ERROR "New dirs not found!"
 fi
 
+
+# Try to specify a single URL; go to the empty revision.
+$BINq up -u local@2
+# TODO: This currently fails, because the /bin is completely removed-
+# although from master there are still files.
+# $COMPARE $WC_MACHINE1/ $WC_MASTER/
+# Now the is_1 file should appear.
+$BINdflt up -u local@3 > $logfile
+# The "." modified is allowed, and there's the "Updated ..." line.
+if [[ `wc -l < $logfile` == [23] ]] &&
+	grep -E "^N\.\.\. .* 7 .* is_1$" $logfile 
+then
+  $SUCCESS "Single-URL update ok"
+else
+	cat $logfile
+  $ERROR "Single-URL update wrong?"
+fi
+# There's at least an empty revision afterwards.
+if [[ `$BINdflt diff -u local@3 -r4` != "" ]]
+then
+  $ERROR "Empty single-URL diff wrong?"
+fi
+$BINdflt diff -u local -r4 > $logfile
+if [[ `wc -l < $logfile` == 6 &&
+	`grep -c is_1 $logfile` == 3 ]]
+then
+	$SUCCESS "Single-URL diff ok"
+else
+	cat $logfile
+	$ERROR "Single-URL diff wrong"
+fi
 
 $SUCCESS "Master/Local-URL usage works."
 

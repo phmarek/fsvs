@@ -33,14 +33,6 @@ else
 fi
 
 
-if FSVS_WARNINGS="meta-user=ignore unknown-warning=ignore" $BINdflt st > $logfile 2>&1
-then
-	$ERROR "FSVS_WARNINGS not used?"
-else
-	$SUCCESS "FSVS_WARNINGS seems to be used"
-fi
-
-
 if [[ 1$opt_DEBUG == 11 ]]
 then
 	# We need a sub-shell, as we expect an error returned and have to remove
@@ -81,15 +73,6 @@ then
 		$SUCCESS "FSVS_WARNING used"
 	else
 		$ERROR "FSVS_WARNING not parsed?"
-	fi
-
-	FSVS_WARNINGS=_test-warning=once $BINdflt st > $logfile 2>&1
-	el=$?
-	if [[ $el -eq 0 && `grep test-warning $logfile` ]]
-	then
-		$SUCCESS "FSVS_WARNINGS used"
-	else
-		$ERROR "FSVS_WARNINGS not parsed?"
 	fi
 
 	# Check whether the config file is respected

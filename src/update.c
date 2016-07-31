@@ -22,7 +22,7 @@
  * \section update
  *
  * \code
- * ## invalid ## fsvs update [-r rev] [working copy base]
+ * fsvs update [-r rev] [working copy base]
  * fsvs update [-u url@rev ...] [working copy base]
  * \endcode
  *
@@ -58,6 +58,7 @@
 #include "helper.h"
 #include "url.h"
 #include "status.h"
+#include "racallback.h"
 #include "props.h"
 #include "checksum.h"
 #include "revert.h"
@@ -72,7 +73,6 @@
 static char *filename,
 						*filename_tmp=NULL;
 static unsigned tmp_len=0;
-
 
 
 /** Prefetch update-pipe property.
@@ -154,14 +154,16 @@ int up__parse_prop(struct estat *sts,
 	status=0;
 	if (!utf8_value)
 	{
-		DEBUGP("got NULL property for %s: %s",
-				sts->name, loc_name);
-		goto ex;
+		DEBUGP("got NULL property for %s: %s", sts->name, loc_name);
+		//goto ex;
+		loc_value=NULL;
 	}
-
-	STOPIF( hlp__utf82local(utf8_value->data, &loc_value, -1), NULL);
-	DEBUGP("got property for %s: %s=%s",
-			sts->name, loc_name, loc_value);
+	else
+	{
+		STOPIF( hlp__utf82local(utf8_value->data, &loc_value, -1), NULL);
+		DEBUGP("got property for %s: %s=%s",
+				sts->name, loc_name, loc_value);
+	}
 
 
 	/* if an invalid utf8_value is detected, we'd better ignore it.
@@ -293,6 +295,8 @@ int up__parse_prop(struct estat *sts,
 		else
 		{
 			sts->entry_type = FT_ANYSPECIAL;
+			/* Remove any S_IFDIR and similar bits. */
+			sts->st.mode &= 07777;
 			DEBUGP("this is a special node");
 		}
 	}
@@ -305,19 +309,23 @@ int up__parse_prop(struct estat *sts,
 	}
 	else
 	{
-		if (action->needs_decoder && strcmp(utf8_name, propval_updatepipe) == 0)
+		if (strcmp(utf8_name, propval_updatepipe) == 0)
 		{
-			/* \todo utf8->local?? */
-			sts->decoder=strdup(utf8_value->data);
-			STOPIF_ENOMEM( !sts->decoder );
-			DEBUGP("got a decoder: %s", sts->decoder);
-			sts->decoder_is_correct=1;
+			if (action->needs_decoder)
+			{
+				/* Currently we assume that programs (update- and commit-pipe) are 
+				 * valid regardless of codeset; that wouldn't work as soon as the 
+				 * programs' names includes UTF-8.
+				 *
+				 * \todo utf8->local??  */
+				sts->decoder=strdup(utf8_value->data);
+				STOPIF_ENOMEM( !sts->decoder );
+				sts->decoder_is_correct=1;
+				DEBUGP("got a decoder: %s", sts->decoder);
+			}
 		}
 
-		/* for a status-editor (sync) we ignore completely, for an update we 
-		 * store them?? */
-		/* ignore svn:entry:* properties */
-		/* check for is_import_export */
+		/* Ignore svn:entry:* properties, but store the updatepipe, too. */
 		if (!hlp__is_special_property_name(utf8_name))
 		{
 			sts->remote_status |= FS_PROPERTIES;
@@ -327,7 +335,6 @@ int up__parse_prop(struct estat *sts,
 					loc_name, loc_value);
 			if (not_handled) *not_handled=1;
 		}
-		goto ex;
 	}
 
 
@@ -390,46 +397,60 @@ ex:
  * remove changed data.
  *
  * If an entry does not exist (ENOENT), it is ignored.
+ *
+ * Only entries that are registered from \a url are removed.
+ *
+ * If children that belong to other URLs are found we don't remove the 
+ * directory.
+ *
  * \todo conflict */
-int up__rmdir(struct estat *sts)
+int up__rmdir(struct estat *sts, struct url_t *url)
 {
-	int status, i;
+	int status, i, has_others;
 	struct estat *cur;
 	char *path;
 
 
 	status=0;
-
+	has_others=0;
 
 	/* Remove children */
 	for(i=0; i<sts->entry_count; i++)
 	{
 		cur=sts->by_inode[i];
-		/* Checking the contents of sts here is not allowed any more -
-		 * it may (eg. on update) already contain newer data, and that can be
-		 * anything -- a file, a link, ... */
-		/* Just trying the unlink is a single system call, like getting the 
-		 * type of the entry with \c lstat(). */
-		status=up__unlink(cur, NULL);
-		if (status == EISDIR)
-			status=up__rmdir(cur);
 
-		STOPIF( status, "unlink of %s failed", cur->name);
+		if (url && cur->url != url)
+			has_others++;
+		else
+		{
+			/* TODO: is that true any more? */
+			/* Checking the contents of sts here is not allowed any more -
+			 * it may (eg. on update) already contain newer data, and that can be
+			 * anything -- a file, a link, ... */
+			/* Just trying the unlink is a single system call, like getting the 
+			 * type of the entry with \c lstat(). */
+			status=up__unlink(cur, NULL);
+			if (status == EISDIR)
+				status=up__rmdir(cur, url);
+
+			STOPIF( status, "unlink of %s failed", cur->name);
+		}
 	}
 
-	STOPIF( ops__build_path(&path, sts), NULL );
-	status = rmdir(path) == -1 ? errno : 0;
+	if (!has_others)
+	{
+		STOPIF( ops__build_path(&path, sts), NULL );
+		status = rmdir(path) == -1 ? errno : 0;
 
-	DEBUGP("removing %s: %d", path, status);
-	if (status == ENOENT) status=0;
-	STOPIF( status, "Cannot remove directory %s", path);
-
-	/** \todo remove the WAA data */
-	//	STOPIF( waa__delete_byext(fn, NULL, 1), NULL);
+		DEBUGP("removing %s: %d", path, status);
+		if (status == ENOENT) status=0;
+		STOPIF( status, "Cannot remove directory %s", path);
+	}
 
 ex:
 	return status;
 }
+
 
 /* The file has current properties, which we'd like
  * to replace with the saved.
@@ -578,77 +599,6 @@ ex:
 }
 
 
-int up__add_entry(struct estat *dir, 
-		const char *path,
-		const char *copy_path, svn_revnum_t copy_rev,
-		struct estat **new)
-{
-	int status;
-	struct estat *sts;
-	const char *filename;
-
-
-	STOPIF_CODE_ERR(copy_path, EINVAL,
-			"don't know how to handle copy_path %s@%ld", 
-			copy_path, copy_rev);
-
-	DEBUGP("add entry %s", path);
-	/* The path should be done by open_directory descending. 
-	 * We need only the file name. */
-	filename=ops__get_filename(path);
-	STOPIF( ops__find_entry_byname(dir, filename, &sts, 0),
-			"cannot lookup entry %s", path);
-
-	/* This file already exists. Should we overwrite it silently? 
-	 * Possibly with a --force parameter. 
-	 *
-	 * No problem if the entry has just been removed (or replaced). */
-	if (sts)
-	{
-		/* To say it in another way: We have a problem IF
-		 * - the entry is not ignored AND
-		 * - it is not removed (ie. it exists now) */
-		STOPIF_CODE_ERR( sts->entry_type != FT_IGNORE &&
-				(sts->entry_status & FS_REMOVED) != FS_REMOVED, 
-				EEXIST, "file %s already exists", path);
-
-		/* Check for sts->url == NULL? */
-		if (!url__current_has_precedence(sts->url)) goto no_prec;
-
-		sts->remote_status=FS_REPLACED;
-	}
-	else
-	{
-		/* maybe a calloc is faster??? */
-		sts=malloc(sizeof(*sts));
-		STOPIF_ENOMEM(!sts);
-		memset(sts, 0, sizeof(*sts));
-		STOPIF( ops__new_entries(dir, 1, &sts), NULL);
-		sts->name=strdup(filename);
-		STOPIF_ENOMEM(!sts->name);
-
-		sts->parent=dir;
-		sts->remote_status=FS_NEW;
-	}
-
-	dir->to_be_sorted=1;
-
-	sts->url=current_url;
-	sts->entry_type=FT_UNKNOWN;
-	/* Until we know better: */
-	sts->st.mode=0700; 
-	/* To avoid EPERM on chmod() etc. */
-	sts->st.uid=getuid(); 
-	sts->st.gid=getgid(); 
-
-no_prec:
-	*new=sts;
-
-ex:
-	return status;
-}
-
-
 /* we know it's a special file */
 int up__handle_special(struct estat *sts, 
 		char *path,
@@ -662,7 +612,6 @@ int up__handle_special(struct estat *sts,
 	STOPIF( hlp__utf82local(cp, &cp, -1), NULL);
 
 	sts->stringbuf_tgt=NULL;
-	sts->stringbuf_src=NULL;
 
 	/* process */
 	switch (sts->entry_type)
@@ -722,76 +671,24 @@ svn_error_t *up__open_root(void *edit_baton,
 }
 
 
-svn_error_t *up__delete_entry(const char *utf8_path,
-		svn_revnum_t revision UNUSED,
-		void *parent_baton,
-		apr_pool_t *pool)
-{
-	int status, change;
-	struct estat *dir=parent_baton;
-	struct estat *sts;
-	char* path;
-
-	STOPIF( hlp__utf82local(utf8_path, &path, -1), NULL );
-
-	DEBUGP("deleting entry %s", path);
-	STOPIF( ops__find_entry_byname(dir, path, &sts, 0), NULL);
-
-	BUG_ON(!sts, "entry %s not found", path);
-
-	STOPIF( ops__build_path(&filename, sts), NULL);
-
-	change=sts->entry_status;
-	sts->remote_status=FS_REMOVED;
-	STOPIF( st__rm_status(sts), NULL);
-
-	if (!action->is_compare)
-	{
-		/* If the entry was not already removed, we have to do that */
-		if ((change & FS_REPLACED) != FS_REMOVED)
-		{
-			if (S_ISDIR(sts->st.mode))
-				STOPIF( up__rmdir(sts), NULL);
-			else
-			{
-				STOPIF( up__unlink(sts, filename), NULL);
-				STOPIF( waa__delete_byext(filename, WAA__FILE_MD5s_EXT, 1), NULL);
-				STOPIF( waa__delete_byext(filename, WAA__PROP_EXT, 1), NULL);
-			}
-		}
-
-		if (sts) 
-			STOPIF( ops__delete_entry(dir, sts, 
-						UNKNOWN_INDEX, UNKNOWN_INDEX), NULL);
-	}
-
-
-ex:
-	RETURN_SVNERR(status);
-}
-
-
 svn_error_t *up__add_directory(const char *utf8_path,
 		void *parent_baton,
 		const char *utf8_copy_path,
 		svn_revnum_t copy_rev,
-		apr_pool_t *dir_pool,
+		apr_pool_t *dir_pool UNUSED,
 		void **child_baton)
 {
 	struct estat *dir=parent_baton;
 	struct estat *sts;
 	int status;
 	char* path;
-	char* copy_path;
 
-	STOPIF( hlp__utf82local(utf8_path, &path, -1), NULL );
-	STOPIF( hlp__utf82local(utf8_copy_path, &copy_path, -1), NULL );
 
-	STOPIF( up__add_entry(dir, path, copy_path, copy_rev, &sts), NULL );
+	STOPIF( cb__add_entry(dir, utf8_path, &path, utf8_copy_path, 
+				copy_rev, S_IFDIR, NULL, 1,
+				child_baton), NULL );
+	sts=(struct estat*)*child_baton;
 
-	sts->entry_type |= FT_DIR;
-	*child_baton = sts;
-	sts->dir_pool=dir_pool;
 	if (!action->is_compare)
 	{
 		/* this must be done immediately, because subsequent accesses may
@@ -811,34 +708,6 @@ ex:
 	RETURN_SVNERR(status);
 }
 
-
-
-svn_error_t *up__open_directory(const char *utf8_path,
-		void *parent_baton,
-		svn_revnum_t base_revision UNUSED,
-		apr_pool_t *dir_pool,
-		void **child_baton)
-{
-	struct estat *dir=parent_baton;
-	struct estat *sts;
-	int status;
-	char* path;
-
-	STOPIF( hlp__utf82local(utf8_path, &path, -1), NULL );
-
-	status=0;
-	STOPIF( ops__find_entry_byname(dir, path, &sts, 0), 
-			"cannot find entry %s", path);
-
-
-	if (!dir) status=ENOENT;
-
-	*child_baton = sts;
-	sts->dir_pool=dir_pool;
-
-ex:
-	RETURN_SVNERR(status);
-}
 
 
 svn_error_t *up__change_dir_prop(void *dir_baton,
@@ -904,50 +773,10 @@ svn_error_t *up__add_file(const char *utf8_path,
 		void **file_baton)
 {
 	struct estat *dir=parent_baton;
-	struct estat *sts;
 	int status;
-	char* path;
-	char* copy_path;
 
-	STOPIF( hlp__utf82local(utf8_path, &path, -1), NULL );
-	STOPIF( hlp__utf82local(utf8_copy_path, &copy_path, -1), NULL );
-
-	STOPIF( up__add_entry(dir, path, copy_path, copy_rev, &sts),
-			NULL);
-
-	sts->entry_type = FT_FILE;
-	*file_baton = sts;
-
-ex:
-	RETURN_SVNERR(status);
-}
-
-
-svn_error_t *up__open_file(const char *utf8_path,
-		void *parent_baton,
-		svn_revnum_t base_revision,
-		apr_pool_t *file_pool,
-		void **file_baton)
-{
-	int status;
-	struct estat *dir UNUSED=parent_baton;
-	struct estat *sts;
-	char* path;
-
-	STOPIF( hlp__utf82local(utf8_path, &path, -1), NULL );
-
-	STOPIF( ops__find_entry_byname(dir, path, &sts, 0), NULL);
-
-
-	if (!sts) 
-		status=ENOENT;
-	else 
-		/* In this call-chain we get the text-base directly, so we have to look 
-		 * on *opening* the file. */
-		STOPIF( up__fetch_decoder(sts), NULL);
-
-
-	*file_baton = sts;
+	STOPIF( cb__add_entry(dir, utf8_path, NULL, utf8_copy_path, copy_rev,
+				S_IFREG, NULL, 1, file_baton), NULL);
 
 ex:
 	RETURN_SVNERR(status);
@@ -967,10 +796,12 @@ svn_error_t *up__apply_textdelta(void *file_baton,
 	char* fn_utf8;
 	apr_file_t *source, *target;
 	struct encoder_t *encoder;
+	svn_stringbuf_t *stringbuf_src;
 
 
-	STOPIF( ops__build_path(&filename, sts), NULL);
+	stringbuf_src=NULL;
 	encoder=NULL;
+	STOPIF( ops__build_path(&filename, sts), NULL);
 
 	if (action->is_compare) 
 	{
@@ -1020,10 +851,10 @@ svn_error_t *up__apply_textdelta(void *file_baton,
 			cp=ops__dev_to_filedata(sts);
 
 into_stringbufs:
-		sts->stringbuf_src=svn_stringbuf_create(cp, pool);
+		stringbuf_src=svn_stringbuf_create(cp, pool);
 		sts->stringbuf_tgt=svn_stringbuf_create("", pool);
 
-		svn_s_src=svn_stream_from_stringbuf(sts->stringbuf_src, pool);
+		svn_s_src=svn_stream_from_stringbuf(stringbuf_src, pool);
 		svn_s_tgt=svn_stream_from_stringbuf(sts->stringbuf_tgt, pool);
 		status=0;
 	}
@@ -1056,7 +887,9 @@ into_stringbufs:
 		 * be used, as this is already destroyed by the time we get to
 		 * up__close_file, and an apr_pool_clear() then results in a segfault.
 		 * So we have to take the directories' pool. */
-		STOPIF( apr_pool_create(&(sts->filehandle_pool), sts->parent->dir_pool),
+		/* We take a subpool of the global pool; that takes (tested) nearly  
+		 * resources, as it's destroyed in close_file(). */
+		STOPIF( apr_pool_create(&(sts->filehandle_pool), global_pool),
 				"Creating the filehandle pool");
 
 		/* If the file is new, has changed or is removed, 
@@ -1153,7 +986,7 @@ svn_error_t *up__close_file(void *file_baton,
 		if (sts->entry_type == FT_FILE)
 		{
 			status=0;
-			/* See the comment in up__open_file, mark FHP. */
+			/* See the comment mark FHP. */
 			/* This may be NULL if we got only property-changes, no file
 			 * data changes. */
 			if (sts->filehandle_pool)
@@ -1222,31 +1055,6 @@ svn_error_t *up__abort_edit(void *edit_baton,
 	return SVN_NO_ERROR; 
 }
 
-
-
-const svn_delta_editor_t up__update_editor = 
-{
-	.set_target_revision 	= up__set_target_revision,
-
-	.open_root 						= up__open_root,
-
-	.delete_entry				 	= up__delete_entry,
-	.add_directory 				= up__add_directory,
-	.open_directory 			= up__open_directory,
-	.change_dir_prop 			= up__change_dir_prop,
-	.close_directory 			= up__close_directory,
-	.absent_directory 		= up__absent_directory,
-
-	.add_file 						= up__add_file,
-	.open_file 						= up__open_file,
-	.apply_textdelta 			= up__apply_textdelta,
-	.change_file_prop 		= up__change_file_prop,
-	.close_file 					= up__close_file,
-	.absent_file 					= up__absent_file,
-
-	.close_edit 					= up__close_edit,
-	.abort_edit 					= up__abort_edit,
-};
 /* ---CUT--- end of delta-editor */
 
 
@@ -1297,7 +1105,6 @@ int up__work(struct estat *root, int argc, char *argv[])
 	int status;
 	svn_error_t *status_svn;
 	svn_revnum_t rev;
-	int i;
 	time_t delay_start;
 
 
@@ -1323,32 +1130,10 @@ int up__work(struct estat *root, int argc, char *argv[])
 	STOPIF( waa__read_or_build_tree(root, argc, argv, argv, NULL, 0), NULL);
 	only_check_status=0;
 
-	for(i=0; i<urllist_count; i++)
+	while ( ! ( status=url__iterator(&rev) ) )
 	{
-		current_url=urllist[i];
-		if (!url__to_be_handled(current_url)) continue;
 
-		DEBUGP("doing URL %s", current_url->url);
-
-		STOPIF( url__open_session(&session), NULL);
-
-		if (opt_target_revisions_given)
-			rev=opt_target_revision;
-		else
-			rev=current_url->target_rev;
-
-		/* Giving a simple SVN_INVALID_REVNUM to ->set_path() doesn't work - 
-		 * we get an error "Bogus revision report". Get the real HEAD. */
-		/* \todo: get latest for each url, let user specify rev for each url */
-		if (rev == SVN_INVALID_REVNUM)
-		{
-			STOPIF_SVNERR( svn_ra_get_latest_revnum,
-					(session, &rev, global_pool));
-			DEBUGP("HEAD is at %ld", rev);
-		}
-
-
-		STOPIF( cb__record_changes(session, root, rev, global_pool), NULL);
+		STOPIF( cb__record_changes(NULL, root, rev, global_pool), NULL);
 
 		if (action->is_compare)
 		{
@@ -1361,10 +1146,12 @@ int up__work(struct estat *root, int argc, char *argv[])
 			DEBUGP("setting revision to %llu", (t_ull)rev);
 			STOPIF( ci__set_revision(root, rev), NULL);
 
-			printf("Updated %s to revision\t%ld.\n", 
+			printf("Updating %s to revision\t%ld.\n", 
 					current_url->url, rev);
 		}
 	}
+	STOPIF_CODE_ERR( status != EOF, status, NULL);
+	status=0;
 
 	if (action->is_compare)
 	{
@@ -1372,7 +1159,7 @@ int up__work(struct estat *root, int argc, char *argv[])
 	else
 	{
 		DEBUGP("fetching from repository");
-		STOPIF( rev__do_changed(session, root, global_pool), NULL);
+		STOPIF( rev__do_changed(root, global_pool), NULL);
 
 		/* See the comment at the end of commit.c - atomicity for writing
 		 * these files. */

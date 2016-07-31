@@ -179,7 +179,7 @@ Either this error is expected (like ENOENT for some operations) and handled,
 or it must be returned to the caller.
 Most of this is already defined in macros.
 
-Typical function layout is like this (taken from waa.c):
+Typical function layout is like this (taken from <tt>waa.c</tt>):
 \code
   int waa__make_info_link(char *directory, char *name, char *dest)
   {
@@ -236,6 +236,12 @@ ex:
 The various \c STOPIF() -macros automatically print an error message and,
 depending on the debug- and verbosity-flags given on the command line,
 a back trace too.
+
+Another special case is output to \c STDOUT; if we get an error \c EPIPE 
+here, we pass it up to main() as \c -EPIPE (to avoid confusion with writing 
+some other data), where it gets ignored. To avoid printing an error message 
+this is hardcoded in the \c STOPIF() macros.
+
 
 Assertions should be checked by \c BUG_ON(condition, format_string, ...).
 This will cause a segmentation violation, which (for debug builds) will 

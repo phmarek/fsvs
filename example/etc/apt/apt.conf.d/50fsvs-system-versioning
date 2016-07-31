@@ -1,2 +1,2 @@
 DPkg::Post-Invoke "";
-DPkg::Post-Invoke:: "/var/lib/fsvs-versioning/scripts/commit.sh"
+DPkg::Post-Invoke:: "/var/lib/fsvs-versioning/scripts/commit.sh";

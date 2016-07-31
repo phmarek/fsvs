@@ -1,5 +1,5 @@
 /* This file is generated, do not edit!
- * Last done on Tue Apr  1 13:06:50 2008
+ * Last done on Fri Jun 13 14:39:44 2008
  * */
 
 
@@ -71,10 +71,6 @@ const char hlp_commit[]=" fsvs commit [-m \"message\"|-F filename] [-v] [-C [-C]
   "\n"
   "   If you're currently in /etc , you can even drop the /etc/ in front, and\n"
   "   just use the filenames.\n"
-  "\n"
-  "   This extended path handling on the commandline is not yet available for\n"
-  "   every command. Most of them still expect you to be in the working copy\n"
-  "   root.\n"
   "\n"
   "   Please see status for explanations on -v and -C . For advanced backup\n"
   "   usage see also FSVS_PROP_COMMIT_PIPE.\n"
@@ -247,6 +243,12 @@ const char hlp_diff[]=" fsvs diff [-v] [-r rev[:rev2]] [-R] PATH [PATH...]\n"
   "\n"
   "   Please see also Options relating to the \"diff\" action and Using\n"
   "   colordiff.\n"
+  "\n"
+  "   Todo:\n"
+  "          Two revisions diff is buggy in that it (currently) always\n"
+  "          fetches the full tree from the repository; this is not only a\n"
+  "          performance degradation, but you'll see more changed entries\n"
+  "          than you want. This will be fixed.\n"
   "\n";
 
 const char hlp_export[]=" fsvs export REPOS_URL [-r rev]\n"
@@ -356,12 +358,11 @@ const char hlp_log[]=" fsvs log [-v] [-r rev1[:rev2]] [path]\n"
   "\n"
   "   The optional rev1 and rev2 can be used to restrict the revisions that\n"
   "   are shown; if no values are given, the logs are given starting from\n"
-  "   HEAD downwards.\n"
+  "   HEAD downwards, and then a limit on the number of revisions is applied\n"
+  "   (but see the limit option).\n"
   "\n"
   "   If you use the -v -option, you get the files changed in each revision\n"
   "   printed, too.\n"
-  "\n"
-  "   Currently at most 100 log messages are shown.\n"
   "\n"
   "   There is an option controlling the output format; see \"fsvs log\" output\n"
   "   format.\n"
@@ -371,7 +372,6 @@ const char hlp_log[]=" fsvs log [-v] [-r rev1[:rev2]] [path]\n"
   "     * Show revision for all URLs associated with a working copy? In which\n"
   "       order?\n"
   "     * A URL-parameter, to specify the log URL. (Name)\n"
-  "     * Limit number of revisions shown?\n"
   "\n";
 
 const char hlp_prop_g[]=" fsvs prop-get PROPERTY-NAME PATH...\n"
@@ -400,7 +400,7 @@ const char hlp_prop_d[]=" fsvs prop-del PROPERTY-NAME PATH...\n"
   "\n"
   "   This command removes property value for the given path(s).\n"
   "\n"
-  "   See also prop-set\n"
+  "   See also prop-set.\n"
   "\n";
 
 const char hlp_prop_l[]=" fsvs prop-list [-v] PATH...\n"
@@ -529,7 +529,7 @@ const char hlp_sync_r[]=" fsvs sync-repos [-r rev] [working copy base]\n"
   "\n"
   "   This is normally not needed; the use cases are\n"
   "     * debugging and\n"
-  "     * recovering from data loss in $FSVS_WAA (/var/spool/fsvs ).\n"
+  "     * recovering from data loss in $FSVS_WAA.\n"
   "\n"
   "   It is (currently) important if you want to backup two similar machines.\n"
   "   Then you can commit one machine into a subdirectory of your repository,\n"
@@ -560,7 +560,7 @@ const char hlp_sync_r[]=" fsvs sync-repos [-r rev] [working copy base]\n"
   "          needed.\n"
   "\n";
 
-const char hlp_update[]=" ## invalid ## fsvs update [-r rev] [working copy base]\n"
+const char hlp_update[]=" fsvs update [-r rev] [working copy base]\n"
   " fsvs update [-u url@rev ...] [working copy base]\n"
   "\n"
   "   This command does an update on all specified URLs for the current\n"

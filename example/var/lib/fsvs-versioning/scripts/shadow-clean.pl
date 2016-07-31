@@ -5,7 +5,7 @@
 
 while (<>)
 {
-	@f=split(/:/);
-	$f[1]='-' if length($f[1]) > 1;
-	print;
+	@f=split(/(:)/);
+	$f[2]='-' if length($f[2]) > 1;
+	print join("", @f);
 }

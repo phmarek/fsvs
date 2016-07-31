@@ -24,6 +24,7 @@
 #include "direnum.h"
 #include "options.h"
 #include "add_unvers.h"
+#include "cache.h"
 #include "checksum.h"
 #include "helper.h"
 #include "global.h"
@@ -51,19 +52,12 @@
 /** The extension temporary files in the WAA get. */
 static const char ext_tmp[]=".tmp";
 
-/** The base path of the WAA. */
-static char const *waa_path;
-/** The length of \ref waa_path. */
-static int waa_len;
-/** The base path of the configuration area. */
-static char const *conf_path;
-/** The length of \ref conf_path. */
-static int conf_len;
 
 /** -.
- * They are long enough to hold \ref waa_path plus the 3-level deep
- * subdirectory structure for cache and data files.
- * The \ref conf_path plus additional data gets it own buffers.
+ * They are long enough to hold the \ref OPT__WAA_PATH "waa path" plus the 
+ * 3-level deep subdirectory structure for cache and data files.
+ * The \ref OPT__CONF_PATH "conf path" plus additional data gets it own 
+ * buffers.
  * @{ */
 char *waa_tmp_path, *waa_tmp_fn,
 						*conf_tmp_path, *conf_tmp_fn;
@@ -126,15 +120,16 @@ waa__header_line[]="%u %lu %u %u %u %u";
 
 
 /** Convenience function for creating two paths. */
-inline void waa___init_path(char *dest, const char *const src, 
-		int *len, char **eos)
+inline void waa___init_path(enum opt__settings_e which,
+		char *dest, char **eos)
 {
 	int l;
 
 
 	l=0;
 	if (strncmp(opt__get_string(OPT__SOFTROOT), 
-				src, opt__get_int(OPT__SOFTROOT)) != 0 )
+				opt__get_string(which),
+				opt__get_int(OPT__SOFTROOT)) != 0 )
 	{
 		strcpy(dest, opt__get_string(OPT__SOFTROOT));
 		l=opt__get_int(OPT__SOFTROOT);
@@ -143,7 +138,7 @@ inline void waa___init_path(char *dest, const char *const src,
 	  dest[l++]=PATH_SEPARATOR;
 	}
 
-	l+= strlen( strcpy(dest+l, src) );
+	l+= strlen( strcpy(dest+l, opt__get_string(which) ) );
 
 	/* ensure a delimiter */
 	if (dest[l-1] != PATH_SEPARATOR)
@@ -153,8 +148,9 @@ inline void waa___init_path(char *dest, const char *const src,
 	}
 
 	*eos=dest + l;
-	*len=l;
+	opt__set_int(which, PRIO_MUSTHAVE, l);
 }
+
 
 /** -.
  * If not a WAA-less operation, find the WAA and define an ignore
@@ -168,36 +164,49 @@ int waa__init(void)
 	/* If we're doing an import/export operation, we must not use the waa
 	 * area. We may be running off a KNOPPIX CD, or whatever.
 	 *
-	 * What we *need* is the conf directory ... it might have options for us.
-	 *
-	 * So waa_path is NULL, and serves as a validation point - every access 
-	 * tried will get a SEGV and can be debugged. */
-	conf_path=getenv(CONF__PATH_ENV);
-	if (!conf_path ) conf_path="/etc/fsvs";
+	 * What we *need* is the conf directory ... it might have options for us.  
+	 * */
+
+	/** \todo remove when gcc doesn't warn about \c strlen("const") 
+	 * initializers. See debian bug #60xxxx.
+	 * And see below for WAA_PATH, too. */
+	if (opt__get_int(OPT__CONF_PATH)==0)
+	{
+		opt__set_string(OPT__CONF_PATH, PRIO_MUSTHAVE, DEFAULT_CONF_PATH);
+		opt__set_int(OPT__CONF_PATH, PRIO_MUSTHAVE, strlen(DEFAULT_CONF_PATH));
+	}
+
 
 	/* at least /w or some such */
-	conf_len=strlen(conf_path);
-	STOPIF_CODE_ERR( conf_len<3, EINVAL, 
-			"environment variable " CONF__PATH_ENV " should be set to a directory");
+	STOPIF_CODE_ERR( opt__get_int(OPT__CONF_PATH)<3, EINVAL, 
+			"The CONF path is invalid; a (non-root) path is expected.");
 
 
-	if (!action->is_import_export)
+	if (action->is_import_export)
 	{
-		waa_path=getenv(WAA__PATH_ENV);
-		if (!waa_path ) waa_path="/var/spool/fsvs";
-
-		waa_len=strlen(waa_path);
-		STOPIF_CODE_ERR( waa_len<3, EINVAL, 
-				"environment variable " WAA__PATH_ENV " should be set to a directory");
-
-		/* validate existence and save dev/inode for later checking */
-		STOPIF_CODE_ERR( hlp__lstat(waa_path, &waa_stat) == -1, errno,
-				"stat() of waa-path '%s' failed. "
-				"Does your local storage area exist? ", waa_path);
-		DEBUGP("got the WAA as inode %llu", (t_ull)waa_stat.ino);
+		/* So the WAA path is NULL, and serves as a validation point - every 
+		 * access tried will get a SEGV and can be debugged. */
+		opt__set_string(OPT__WAA_PATH, PRIO_MUSTHAVE, NULL);
+		opt__set_int(OPT__WAA_PATH, PRIO_MUSTHAVE, 0);
 	}
 	else
-		waa_len=0;
+	{
+		if (opt__get_int(OPT__WAA_PATH)==0)
+		{
+			opt__set_string(OPT__WAA_PATH, PRIO_MUSTHAVE, DEFAULT_WAA_PATH);
+			opt__set_int(OPT__WAA_PATH, PRIO_MUSTHAVE, strlen(DEFAULT_WAA_PATH));
+		}
+
+		STOPIF_CODE_ERR( opt__get_int(OPT__WAA_PATH)<3, EINVAL, 
+				"The WAA path should be set to a directory below \"/\".");
+
+		/* validate existence and save dev/inode for later checking */
+		STOPIF( hlp__lstat(opt__get_string(OPT__WAA_PATH), &waa_stat),
+				"stat() of waa-path '%s' failed. "
+				"Does your local storage area exist? ", 
+				opt__get_string(OPT__WAA_PATH));
+		DEBUGP("got the WAA as inode %llu", (t_ull)waa_stat.ino);
+	}
 
 
 	/* This memory has lifetime of the process.
@@ -205,21 +214,24 @@ int waa__init(void)
 	 * The memory allocated is enough for the longest possible path. */
 	waa_tmp_path_len=
 		opt__get_int(OPT__SOFTROOT) + 1 +
-		(waa_len > conf_len ? waa_len : conf_len) + 1 + 
+		( max(opt__get_int(OPT__WAA_PATH), 
+					opt__get_int(OPT__CONF_PATH)) ) + 1 + 
 		APR_MD5_DIGESTSIZE*2 + 3 + 
 		WAA__MAX_EXT_LENGTH + strlen(ext_tmp) + 1 +4;
 	DEBUGP("using %d bytes for temporary WAA+conf paths", waa_tmp_path_len);
 
+	/* Here the paths are set at highest priority, so they can't get changed 
+	 * afterwards. */
 	conf_tmp_path=malloc(waa_tmp_path_len);
 	STOPIF_ENOMEM(!conf_tmp_path);
-	waa___init_path(conf_tmp_path, conf_path, &conf_len, &conf_tmp_fn);
+	waa___init_path(OPT__CONF_PATH, conf_tmp_path, &conf_tmp_fn);
 
 	if (!action->is_import_export)
 	{
 		waa_tmp_path=malloc(waa_tmp_path_len);
 		STOPIF_ENOMEM(!waa_tmp_path);
 
-		waa___init_path(waa_tmp_path, waa_path, &waa_len, &waa_tmp_fn);
+		waa___init_path(OPT__WAA_PATH, waa_tmp_path, &waa_tmp_fn);
 	}
 
 ex:
@@ -279,15 +291,29 @@ ex:
 
 
 /** -.
+*
+ * \note The mask used is \c 0777 - so mind your umask! */
+int waa__mkdir(char *dir, int including_last)
+{
+	int status;
+	STOPIF( waa__mkdir_mask(dir, including_last, 0777), NULL);
+ex:
+	return status;
+}
+
+
+/** -.
+ *
  * If it already exists, no error is returned.
  *
  * If needed, the structure is generated recursively.
- * With \a including_last being \c 0 you can give a filename, and make sure 
- * that the directories up to there are created.
- * 
  *
- * \note The mask used is \c 0777 - so mind your umask! */
-int waa__mkdir(char *dir, int including_last)
+ * With \a including_last being \c 0 you can give a filename, and make sure 
+ * that the directories up to there are created. Because of this we can't 
+ * use \c apr_dir_make_recursive() - We'd have to cut the filename away, 
+ * and this is done here anyway.
+ * */
+int waa__mkdir_mask(char *dir, int including_last, int mask)
 {
 	int status;
 	char *last_ps;
@@ -314,11 +340,16 @@ int waa__mkdir(char *dir, int including_last)
 			DEBUGP("%s: last is %d", dir, including_last);
 			/* Now the parent was done ... so we should not get ENOENT again. */
 			if (including_last)
-				STOPIF_CODE_ERR( mkdir(dir, 0777) == -1, errno, 
+				STOPIF_CODE_ERR( mkdir(dir, mask & 07777) == -1, errno, 
 						"cannot mkdir(%s)", dir);
 		}
 		else
 			STOPIF(status, "cannot lstat(%s)", dir);
+	}
+	else
+	{
+		STOPIF_CODE_ERR( including_last && !S_ISDIR(buf.st_mode), ENOTDIR, 
+				"\"%s\" is not a directory", dir);
 	}
 
 ex:
@@ -709,11 +740,14 @@ ex:
 
 /** -.
  *
- * If the \c unlink()-call succeeds, the directory levels above are removed,
- * if possible.
+ * If the \c unlink()-call succeeds, the (max. 2) directory levels above 
+ * are removed, if possible.
  *
  * Via the parameter \a ignore_not_exist the caller can say whether a
  * \c ENOENT should be returned silently.
+ *
+ * If \a extension is \c NULL, the given path already specifies a file, and 
+ * is not converted into a WAA path.
  * 
  * \see waa_files. */
 int waa__delete_byext(char *path, 
@@ -724,9 +758,18 @@ int waa__delete_byext(char *path,
 	char *cp, *eos;
 
 	status=0;
-	STOPIF( waa__get_waa_directory(path, &cp, &eos, NULL,
-				waa__get_gwd_flag(extension)), NULL);
-	strcpy(eos, extension);
+	if (extension)
+	{
+		STOPIF( waa__get_waa_directory(path, &cp, &eos, NULL,
+					waa__get_gwd_flag(extension)), NULL);
+		strcpy(eos, extension);
+	}
+	else
+	{
+		cp=path;
+		eos=strrchr(cp, PATH_SEPARATOR);
+		BUG_ON(!eos);
+	}
 
 	if (unlink(cp) == -1)
 	{
@@ -804,7 +847,7 @@ int waa__open_dir(char *wc_base,
 /** -.
  *
  * All entries are defined as new. */
-int waa__build_tree(struct estat *root)
+int waa__build_tree(struct estat *dir)
 {
 	int status;
 	struct estat *sts;
@@ -812,15 +855,15 @@ int waa__build_tree(struct estat *root)
 
 	status=0;
 	/* no stat info on first iteration */
-	STOPIF( waa__dir_enum( root, 0, 0), NULL);
+	STOPIF( waa__dir_enum( dir, 0, 0), NULL);
 
 
-	DEBUGP("found %d entries ...", root->entry_count);
+	DEBUGP("found %d entries ...", dir->entry_count);
 	have_ignored=0;
 	have_found=0;
-	for(i=0; i<root->entry_count; i++)
+	for(i=0; i<dir->entry_count; i++)
 	{
-		sts=root->by_inode[i];
+		sts=dir->by_inode[i];
 
 		STOPIF( ign__is_ignore(sts, &ignore), NULL);
 		if (ignore>0)
@@ -864,10 +907,10 @@ int waa__build_tree(struct estat *root)
 
 	if (have_ignored)
 		/* Delete per index faster */
-		STOPIF( ops__free_marked(root, 0), NULL);
+		STOPIF( ops__free_marked(dir, 0), NULL);
 
 	if (have_found)
-		root->entry_status |= FS_CHANGED | FS_CHILD_CHANGED;
+		ops__mark_changed_parentcc(dir, entry_status);
 
 ex:
 	return status;
@@ -1443,9 +1486,12 @@ ex:
 	 * we're sure that this directory has changed. */
 	old->entry_status &= ~FS_LIKELY;
 
-	/* If we find a new entry, we know that this directory has changed. */
+
+	/* If we find a new entry, we know that this directory has changed.
+	 * We cannot use the ops__mark_parent_* functions, as old can have no 
+	 * children that we could give. */
 	if (nr_new)
-		old->entry_status |= FS_CHANGED | FS_CHILD_CHANGED;
+		ops__mark_changed_parentcc(old, entry_status);
 
 
 	if (dir_hdl!=-1) 
@@ -1828,10 +1874,17 @@ int waa__update_tree(struct estat *root,
 		if (sts->do_this_entry)
 			STOPIF( ops__update_single_entry(sts, fullpath), NULL);
 
+		if (sts->entry_status) 
+			ops__mark_parent_cc(sts, entry_status);
+
 		/* If this entry is removed, the parent has changed. */
-		if ( (sts->entry_status & FS_REMOVED) && sts->parent)
-			sts->parent->entry_status = FS_CHANGED | 
-				( sts->parent->entry_status & (~FS_LIKELY) );
+		if ( (sts->entry_status & FS_REMOVED) && (sts->parent) )
+		{
+				sts->parent->entry_status &= (~FS_LIKELY);
+				sts->parent->entry_status |= FS_CHANGED;
+				/* The FS_CHILD_CHANGED markings are already here. */
+		}
+
 
 		/* If a directory is removed, we don't allocate the by_inode
 		 * and by_name arrays, and it is set to no child-entries. */
@@ -1900,7 +1953,10 @@ next:
 				STOPIF( waa___check_dir_for_update(sts->parent), NULL);
 			}
 			else
-				DEBUGP("deferring parent %s/%s", sts->parent->name, sts->name);
+				DEBUGP("deferring parent %s/%s%s: %d of %d", 
+				sts->parent->name, sts->name,
+				sts->parent->do_this_entry ? "" : " (no do_this)",
+				sts->parent->child_index, sts->parent->entry_count);
 		}
 
 
@@ -2368,7 +2424,6 @@ int waa__partial_update(struct estat *root,
 		while (sts)
 		{
 			sts->do_a_child = 1;
-			sts->entry_status |= FS_CHILD_CHANGED;
 			if (sts->flags & RF_ADD)
 			{
 				/* If this entry was created by the O_CREAT flag, get some data. */
@@ -2563,7 +2618,7 @@ int waa__copy_entries(struct estat *src, struct estat *dest)
 	 * entries are left and must be allocated.  */
 	/* We re-use the name string. */
 	space=0;
-	for( tmp=to_append, left=append_count; left>0; left--, tmp++)
+	for( tmp=to_append, left=append_count; left>0; left--, tmp++, space--)
 	{
 		if (space)
 			newdata++;
@@ -2588,4 +2643,82 @@ ex:
 	return status;
 }
 
+
+/** -.
+ * 
+ * If \a base_dir is \c NULL, a default path is taken; else the string is 
+ * copied and gets an arbitrary postfix. If \a base_dir ends in \c 
+ * PATH_SEPARATOR, \c "fsvs" is inserted before the generated postfix.
+ *
+ * \a *output gets set to the generated filename, and must not be \c 
+ * free()d. */
+int waa__get_tmp_name(const char *base_dir, 
+		char **output, apr_file_t **handle,
+		apr_pool_t *pool)
+{
+	int status;
+	static struct cache_t *cache;
+	static struct cache_entry_t *tmp_cache=NULL;
+	static const char to_append[]=".XXXXXX";
+	static const char to_prepend[]="fsvs";
+	char *filename;
+	int len;
+
+
+	STOPIF( cch__new_cache(&cache, 12), NULL);
+
+	len= base_dir ? strlen(base_dir) : 0;
+	if (!len)
+	{
+		if (!tmp_cache)
+		{
+			/* This function caches the value itself, but we'd have to store the 
+			 * length ourselves; furthermore, we get a copy every time - which 
+			 * fills the pool, whereas we could just use our cache.  */
+			STOPIF( apr_temp_dir_get(&base_dir, pool),
+					"Getting a temporary directory path");
+
+			len=strlen(base_dir);
+			/* We need an extra byte for the PATH_SEPARATOR, and a \0. */
+			STOPIF( cch__entry_set( &tmp_cache, 0, base_dir, 
+						len +1 +1, 0, NULL), NULL);
+
+			tmp_cache->data[len++]=PATH_SEPARATOR;
+			tmp_cache->data[len]=0;
+
+			/* We set tmp_cache->len, which would be inclusive the alignment space 
+			 * at end, to the *actual* length, because we need that on every 
+			 * invocation.
+			 * That works because tmp_cache is never changed again.  */
+			tmp_cache->len=len;
+		}
+
+		len=tmp_cache->len;
+		base_dir=tmp_cache->data;
+		BUG_ON(base_dir[len] != 0);
+	}
+
+	STOPIF( cch__add(cache, 0, base_dir, 
+				/* Directory PATH_SEPARATOR pre post '\0' */
+				len + 1 + strlen(to_prepend) + strlen(to_append) + 1 + 3,
+				&filename), NULL);
+
+	if (base_dir[len-1] == PATH_SEPARATOR)
+	{
+		strcpy( filename + len, to_prepend);
+	  len+=strlen(to_prepend);
+	}
+
+	strcpy( filename + len, to_append);
+	/* The default values include APR_DELONCLOSE, which we don't want. */
+	STOPIF( apr_file_mktemp(handle, filename, 
+				APR_CREATE | APR_READ | APR_WRITE | APR_EXCL,
+				pool),
+			"Cannot create a temporary file for \"%s\"", filename);
+
+	if (output) *output=filename;
+
+ex:
+	return status;
+}
 

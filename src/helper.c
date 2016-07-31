@@ -815,7 +815,7 @@ int hlp__safe_print(FILE *output, char *string, int maxlen)
 
 		if (cur == 0x7f)
 		{
-			status=fputs("\\x7f", output);
+			STOPIF_CODE_EPIPE( fputs("\\x7f", output), NULL);
 			continue;
 		}
 
@@ -823,22 +823,15 @@ int hlp__safe_print(FILE *output, char *string, int maxlen)
 		 * The things above 0x80 are needed. */ 
 		if (cur<sizeof(to_encode) || !isprint(cur))
 		{
-			status=
-				to_encode[cur] ? fprintf(output, "\\%c", to_encode[cur]) :
-				fprintf(output, "\\x%02x", cur);
+			STOPIF_CODE_EPIPE( 
+					to_encode[cur] ? 
+					fprintf(output, "\\%c", to_encode[cur]) :
+					fprintf(output, "\\x%02x", cur), NULL);
 			continue;
 		}
 
 		/* Normal (or at least unfiltered) character. */
-		status=fputc(cur, output);
-	}
-
-	if (status<0)
-	{
-		status=errno;
-		if (status != EPIPE)
-			STOPIF(status, "Cannot write data");
-		goto ex;
+		STOPIF_CODE_EPIPE( fputc(cur, output), NULL);
 	}
 
 	status=0;
@@ -1149,7 +1142,8 @@ svn_error_t *hlp___encode_close(void *baton)
 	status=0;
 
 	apr_md5_final(md5, &encoder->md5_ctx);
-	memcpy(encoder->output_md5, md5, sizeof(*encoder->output_md5));
+	if (encoder->output_md5)
+		memcpy(encoder->output_md5, md5, sizeof(*encoder->output_md5));
 	DEBUGP("encode end gives MD5 of %s", cs__md52hex(md5));
 
 	STOPIF_CODE_ERR(retval != 0, ECHILD, 
@@ -1532,8 +1526,8 @@ int hlp__format_path(struct estat *sts, char *wc_relative_path,
 				parent_with_arg=parent_with_arg->parent;
 			}
 
-			/* If we got out of the loop, but there's no ->arg, we must be at the root 
-			 * (because ! ->parent is the other condition).
+			/* If we got out of the loop, but there's no ->arg, we must be at the 
+			 * root (because ! ->parent is the other condition).
 			 * The root is always the wc_path, so set it as default ... */
 			/** \todo We should set it beginning from a command line parameter, 
 			 * if we have one. Preferably the nearest one ... */
