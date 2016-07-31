@@ -25,6 +25,8 @@
 
 /** Build action. */
 work_t bld__work;
+/** Delay action. */
+work_t delay__work;
 
 
 #endif

@@ -50,7 +50,7 @@
  *   the copy source data.
  * - An unmodified direct copy destination entry, and other uncommitted 
  *   entries with special flags (manually added, or defined as copied), are 
- *   changed back to "<i>N</i>"ew -- the copy definition and the special 
+ *   changed back to <i>"N"</i>ew -- the copy definition and the special 
  *   status is removed. \n
  *   Please note that on implicitly copied entries (entries that are marked 
  *   as copied because some parent directory is the base of a copy) \b 
@@ -117,15 +117,20 @@
  *
  * \subsection rev_copied Working with copied entries
  * If an entry is marked as copied from another entry (and not committed!), 
- * a \c revert will undo the copy setting - which will make the entry 
- * unknown again, and reported as new on the next invocations.
+ * a \c revert will fetch the original copyfrom source. To undo the copy 
+ * setting use the \ref uncp command.
  *
- * If a directory structure was copied, and the current entry is just a 
- * implicitly copied entry, \c revert would take the copy source as 
- * reference, and <b>get the file data</b> from there.
- *
- * Summary: <i>Only the base of a copy can be un-copied.</i> 
  * */
+
+
+/** List of (bit-)flags for rev___undo_change().
+ * These have an order, ie. SET_CURRENT overrides REVERT_MTIME. */
+enum rev___dir_change_flag_e {
+	NOT_CHANGED=0,
+	REVERT_MTIME=1,
+	SET_CURRENT=2,
+	GET_TSTAMP=0x1000,
+};
 
  
 /** A count of files reverted in \b this run. */
@@ -138,9 +143,9 @@ static svn_revnum_t last_rev;
 
 /** -.
  *
- * This function fetches an non-directory entry \a utf8_url from the 
- * current repository in \a session, and writes it to \a output - which 
- * gets closed via \c svn_stream_close(). 
+ * This function fetches an non-directory entry \a loc_url from the 
+ * repository in \c current_url, and writes it to \a output - which gets 
+ * closed via \c svn_stream_close(). 
  *
  * \a decoder should be set correctly.
  * \todo if it's \c NULL, but an update-pipe is set on the entry, the data 
@@ -173,12 +178,13 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	struct encoder_t *encoder;
 	char *relative_url, *utf8_url;
 	apr_hash_t *properties;
+	char target_rev[10];
 
 
 	encoder=NULL;
 	status=0;
-	DEBUGP("getting file %s@%llu from %s",
-			loc_url, (t_ull)revision, current_url->url);
+	DEBUGP("getting file %s@%s from %s", loc_url, 
+			hlp__rev_to_string(revision), current_url->url);
 
 
 	if (strncmp(loc_url, "./", 2) == 0)
@@ -251,12 +257,15 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	/* Fetch decoder from repository. */
 	if (decoder == DECODER_UNKNOWN)
 	{
-		STOPIF_SVNERR( svn_ra_get_file,
+		STOPIF_SVNERR_TEXT( svn_ra_get_file,
 				(current_url->session,
 				 loc_url, revision,
 				 NULL,
 				 &revision, &properties,
-				 pool) );
+				 pool),
+			 "Fetching entry \"%s/%s\"@%s",	
+			 current_url->url,
+			 loc_url, hlp__rev_to_string(revision));
 
 		prop_val=apr_hash_get(properties, propval_updatepipe, APR_HASH_KEY_STRING);
 		decoder=prop_val ? prop_val->data : NULL;
@@ -267,19 +276,26 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	 * have to do that after the manber-filter. */
 	if (decoder)
 	{
+		snprintf(target_rev, sizeof(target_rev), 
+				"%llu", (t_ull)revision);
+		setenv(FSVS_EXP_TARGET_REVISION, target_rev, 1);
+
 		STOPIF( hlp__encode_filter(output, decoder, 1, 
-					&output, &encoder, pool), NULL);
+					loc_url, &output, &encoder, pool), NULL);
 		if (output_sts)
 			encoder->output_md5= &(output_sts->md5);
 	}
 
 
-	STOPIF_SVNERR( svn_ra_get_file,
+	STOPIF_SVNERR_TEXT( svn_ra_get_file,
 			(current_url->session,
 			 loc_url, revision,
 			 output,
 			 &revision, &properties,
-			 pool) );
+			 pool),
+			"Fetching entry %s/%s@%s",	
+			current_url->url,
+			loc_url, hlp__rev_to_string(revision));
 	DEBUGP("got revision %llu", (t_ull)revision);
 
 	/* svn_ra_get_file doesn't close the stream. */
@@ -288,7 +304,7 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 
 	if (output_sts)
 	{
-	  output_sts->repos_rev = revision;
+		output_sts->repos_rev = revision;
 		STOPIF( prp__set_from_aprhash( output_sts, properties, 
 					ONLY_KEEP_USERDEF, pool), NULL);
 	}
@@ -378,7 +394,7 @@ ex:
  *
  * If \a revision is 0, the \c BASE revision is and \a decoder is used; 
  * this is the copy base for copied entries.
-  */
+ */
 int rev__install_file(struct estat *sts, svn_revnum_t revision,
 		char *decoder,
 		apr_pool_t *pool)
@@ -575,6 +591,9 @@ int rev__merge(struct estat *sts,
 		/* No need to close hdl -- it's opened only for that process, and will 
 		 * be closed when it exec()s. */
 
+		/* Remove the ./ at the front */
+		setenv(FSVS_EXP_CURR_ENTRY, output+2, 1);
+
 		STOPIF_CODE_ERR( execlp( opt__get_string(OPT__MERGE_PRG), 
 					opt__get_string(OPT__MERGE_PRG),
 					opt__get_string(OPT__MERGE_OPT),
@@ -669,6 +688,64 @@ ex:
 }
 
 
+/** Set, reset or fetch the mtime of a directory.
+ * */
+int rev___handle_dir_mtime(struct estat *dir,
+		enum rev___dir_change_flag_e dir_flag)
+{
+	int status;
+	char *path;
+
+
+	/* Now, after all has been said and done for the children, set and re-get 
+	 * the actual meta-data - the mtime has been changed in the meantime 
+	 * (because of child node creation), and maybe this filesystem's 
+	 * granularity is worse than on commit; then the timestamps would be 
+	 * wrong. */
+	status=0;
+	DEBUGP("dir_flag says %X", dir_flag);
+
+
+	if (dir_flag & SET_CURRENT) goto a;
+	if (dir_flag & REVERT_MTIME) goto b;
+	if (dir->remote_status & FS_META_CHANGED) goto c;
+	if (dir_flag & GET_TSTAMP) goto d;
+	/* Is there some better syntax? Some kind of switch with 
+	 * case-expressions?
+	 *
+	 * I had a lot of if () { } with partially-overlapping conditions:
+	 *   if (dir->flag &  x) A();
+	 *   if (dir->flag & (x|y)) B();
+	 * but gcc wouldn't simply emit a "jmp" to B() after the A() - and I 
+	 * couldn't easily see that the statements were accumulative.
+	 * */
+	goto x;
+
+a: 
+	/* If there's an intentional change (like merging), the current time is 
+	 * taken. */
+	time( & dir->st.mtim.tv_sec );
+b:
+	/* Make sure that the value is written back to the filesystem.*/
+	dir->remote_status |= FS_META_MTIME;
+c:
+	STOPIF( up__set_meta_data(dir, NULL), NULL);
+d:
+	/* ops__update_single_entry() would trash the entry_status field! */
+  STOPIF( ops__build_path(&path, dir), NULL);
+	STOPIF( hlp__lstat(path, &dir->st), NULL);
+
+	/* If it had changes, we'll have to check next time. */
+	if (dir->entry_status & FS_CHANGED)
+		dir->flags |= RF_CHECK;
+
+x:
+
+ex:
+	return status;
+}
+
+
 /** Revert action, called for every wanted entry.
  * Please note that contacting the repository is allowed, as we're only 
  * looping through the local entries. 
@@ -681,14 +758,19 @@ ex:
  * finishing the report, and may not perform any RA operations using
  * @a session from within the editing operations of @a update_editor.
  * \endcode
+ *
+ * We may not change \c sts->entry_status - the caller still needs it; and 
+ * as this is a revert to \c BASE, we must not modify the entry list 
+ * either.
  * */
-int rev__action(struct estat *sts)
+int rev___revert_to_base(struct estat *sts,
+		enum rev___dir_change_flag_e *dir_change_flag,
+		apr_pool_t *pool)
 {
 	int status;
 	svn_revnum_t wanted;
 	struct estat copy;
 	char *path;
-	struct sstat_t st;
 
 
 	status=0;
@@ -704,21 +786,10 @@ int rev__action(struct estat *sts)
 		sts->flags &= ~RF_UNVERSION;
 		DEBUGP("removing unversion on %s", path);
 	}
-	else if ( (sts->flags & RF_COPY_BASE) &&
-			!(sts->entry_status & (FS_META_CHANGED | FS_CHANGED) ) )
-	{
-		/* Directly copied, unchanged entry.
-		 * Make it unknown - remove copy relation (ie. mark hash value for 
-		 * deletion), and remove entry from local list. */
-		STOPIF( cm__get_source(sts, path, NULL, NULL, 1), NULL);
-		sts->flags &= ~RF_COPY_BASE;
-		sts->entry_type = FT_IGNORE;
-		DEBUGP("unchanged copy, reverting %s", path);
-	}
 	else if ( sts->flags & RF_ADD )
 	{
 		/* Added entry just gets un-added ... ie. unknown. */
-		sts->entry_type = FT_IGNORE;
+		sts->to_be_ignored=1;
 		DEBUGP("removing add-flag on %s", path);
 	}
 	else if (!( (sts->flags & (RF_COPY_BASE | RF_COPY_SUB)) || sts->url ) )
@@ -737,7 +808,10 @@ int rev__action(struct estat *sts)
 		DEBUGP("have an URL for %s", path);
 
 		if ( sts->flags & RF_CONFLICT )
+		{
+			*dir_change_flag |= REVERT_MTIME;
 			STOPIF( res__remove_aux_files(sts), NULL);
+		}
 
 		/* If not seen as changed, but target is BASE, we don't need to do 
 		 * anything. */
@@ -766,7 +840,7 @@ int rev__action(struct estat *sts)
 		copy=*sts;
 
 		/* Parent directories might just have been created. */
-		if (sts->entry_type & FT_NONDIR)
+		if (!S_ISDIR(sts->st.mode))
 		{
 			DEBUGP("file was changed, reverting");
 
@@ -777,8 +851,9 @@ int rev__action(struct estat *sts)
 			 * data, reset rights.
 			 * */
 			/* TODO - opt_target_revision ? */
-			STOPIF( rev__install_file(sts, wanted, sts->decoder, global_pool),
+			STOPIF( rev__install_file(sts, wanted, sts->decoder, pool),
 					"Unable to revert entry '%s'", path);
+			*dir_change_flag |= REVERT_MTIME;
 		}
 		else
 		{
@@ -787,96 +862,137 @@ int rev__action(struct estat *sts)
 				status = (mkdir(path, sts->st.mode & 07777) == -1) ? errno : 0;
 				DEBUGP("mkdir(%s) says %d", path, status);
 				STOPIF(status, "Cannot create directory '%s'", path);
+				*dir_change_flag |= REVERT_MTIME;
+
+				/* As we just created the directory, we need *all* meta-data reset.  
+				 * */
+				sts->remote_status |= FS_META_CHANGED;
+			}
+			else
+			{
+				/* Code for directories.
+				 * As the children are handled by the recursive options and by \a 
+				 * ops__set_to_handle_bits(), we only have to restore the directories' 
+				 * meta-data here. */
+				/* up__set_meta_data() checks remote_status, while we here have 
+				 * entry_status set. */
+				sts->remote_status=sts->entry_status;
 			}
 
-			/* Code for directories.
-			 * As the children are handled by the recursive options and by \a 
-			 * ops__set_to_handle_bits(), we only have to restore the directories' 
-			 * meta-data here. */
-			/* up__set_meta_data() checks remote_status, while we here have 
-			 * entry_status set. */
-			sts->remote_status=sts->entry_status;
 			STOPIF( up__set_meta_data(sts, NULL), NULL);
 			if (sts->entry_status)
 				sts->flags |= RF_CHECK;
 		}
-
-
-		/* We do not allow mixed revision working copies - we'd have to store an 
-		 * arbitrary number of revision/URL pairs for directories.
-		 * See cb__record_changes(). 
-		 *
-		 * What we *do* allow is to switch entries' *data* to other revisions; but 
-		 * for that we store the old values of BASE, so that the file is displayed 
-		 * as modified.
-		 * An revert without "-r" will restore BASE, and a commit will send the 
-		 * current (old :-) data.
-		 *
-		 * But we show that it's modified. */
-		if (opt_target_revisions_given)
-		{
-			copy.entry_status = ops__stat_to_action(&copy, & sts->st);
-			if (sts->entry_type != FT_DIR && copy.entry_type != FT_DIR)
-				/* Same MD5? => Same file. Not fully true, though. */
-				if (memcmp(sts->md5, copy.md5, sizeof(copy.md5)) == 0)
-					copy.entry_status &= ~FS_LIKELY;
-			*sts=copy;
-		}
-		else
-		{
-			/* There's no change anymore, we're at BASE.
-			 * But just printing "...." makes no sense ... show the old status. */
-		}
-
-
-		/* If we change data, we may have changed the parents mtime.
-		 * Changing it back might hide other local modifications, so we just 
-		 * record the new value (as it is a modification NOW), and set the 
-		 * CHECK flag.
-		 *
-		 * Note that we don't know whether that directory is otherwise 
-		 * unchanged - neither it nor the other children might be updated. */
-		/* TODO: Maybe we should query the parent first, and restore the mtime 
-		 * if it wasn't changed before; but then we should remember that we 
-		 * queried the parent, to avoid doing that for every child. */
-		if (sts->parent)
-		{
-			STOPIF( ops__build_path( &path, sts->parent), NULL);
-			STOPIF( hlp__lstat(path, &st), NULL);
-
-			sts->parent->st.mtim=st.mtim;
-			sts->parent->flags |= RF_CHECK;
-		}
 	}
 
-	/* And if it was chosen directly, it should be printed, even if we have 
-	 * the "old" revision.  */
+	/* There's no change anymore, we're at BASE.
+	 * But just printing "...." makes no sense ... show the old status. */
 	sts->flags |= RF_PRINT;
 
-	STOPIF( st__status(sts), NULL);
+ex:
+	return status;
+}
 
 
-	/* Entries that are now ignored don't matter for the parent directory; 
-	 * but if we really changed something in the filesystem, we have to 
-	 * update the parent status. */
-	if (sts->entry_type != FT_IGNORE)
+/** Reset local changes. */
+int rev___no_local_change(struct estat *sts)
+{
+  sts->entry_status=0;
+	return st__progress(sts);
+}
+
+
+/** -.
+ * Recurses for rev___revert_to_base.
+ *
+ * There's a bit of uglyness here, regarding deleted directories ...
+ *
+ * 1) If we do the tree depth-first, we have to build multiple levels of 
+ * directories at once - and store which have to have their meta-data 
+ * reset.
+ *
+ * 2) If we do level after level, we might end up with either
+ * a) re-creating a directory, doing its children, then have to re-set the 
+ * meta-data of this directory, or
+ * b) just store that the meta-data has to be done for later.
+ *
+ * Currently we do 2a - that seems the simplest, and has no big performance 
+ * penalty. */
+int rev___local_revert(struct estat *dir, 
+		apr_pool_t *pool)
+{
+	int status;
+	int i, do_undo;
+	struct estat *sts;
+	apr_pool_t *subpool;
+	enum rev___dir_change_flag_e dir_flag;
+
+
+	status=0;
+	subpool=NULL;
+	dir_flag= NOT_CHANGED;
+
+	for(i=0; i<dir->entry_count; i++)
 	{
-		/* For files we have no changes anymore.
-		 * Removing the FS_REMOVED flag for directories means that the children 
-		 * will be loaded, and we get called again after they're done :-)
-		 * See also actionlist_t::local_callback. */
-		sts->entry_status=0;
+		sts=dir->by_inode[i];
+		STOPIF( apr_pool_create(&subpool, pool), "Cannot get a subpool");
 
-		/* For directories we set that we still have meta-data to do - children 
-		 * might change our mtime. */
-		if (S_ISDIR(sts->st.mode))
-			sts->entry_status=FS_META_MTIME;
+		do_undo = sts->do_this_entry && 
+			(sts->entry_status & FS__CHANGE_MASK) &&
+			ops__allowed_by_filter(sts);
 
-		/* Furthermore the parent should be re-stat()ed after the children have 
-		 * finished. */
-		if (sts->parent)
-			sts->parent->entry_status |= FS_META_MTIME;
+		DEBUGP("on %s: do_undo=%d, st=%s", sts->name, do_undo,
+				st__status_string_fromint(sts->entry_status));
+
+		if (do_undo)
+			STOPIF( rev___revert_to_base(sts, &dir_flag, subpool), NULL);
+
+		if (S_ISDIR(sts->st.mode) && 
+				(sts->entry_status & FS_CHILD_CHANGED))
+			STOPIF( rev___local_revert(sts, subpool), NULL);
+	
+		if (do_undo)
+			STOPIF( st__status(sts), NULL);
+
+
+		apr_pool_destroy(subpool);
+		subpool=NULL;
 	}
+
+	/* We cannot free the memory earlier - the data is needed for the status 
+	 * output and recursion. */
+	STOPIF( ops__free_marked(dir, 0), NULL);
+
+	/* The root entry would not be printed; do that here. */
+	if (!dir->parent)
+		STOPIF( st__status(dir), NULL);
+
+
+	STOPIF( rev___handle_dir_mtime(dir, dir_flag), NULL);
+
+ex:
+	return status;
+}
+
+
+/** Copy local changeflags estat::entry_status to estat::remote_status.
+ *
+ * This makes rev__do_changed() undo the local changes.
+ *
+ * Directories above need the FS_CHILD_CHANGED flag; if we'd change the 
+ * filter to run through all entries we'd do too many (ignoring the list 
+ * given on the command line).
+ * At least we'd be in the right order - because every sub-entry gets done 
+ * before the parents. */
+int rev___copy_changeflags(struct estat *sts)
+{
+	int status;
+
+	sts->remote_status=sts->entry_status;
+	sts->entry_status=0;
+	ops__mark_parent_cc(sts, remote_status);
+
+	STOPIF( st__progress(sts), NULL);
 
 ex:
 	return status;
@@ -891,6 +1007,7 @@ int rev__work(struct estat *root, int argc, char *argv[])
 	int status;
 	char **normalized;
 	time_t delay_start;
+	svn_revnum_t rev;
 
 
 	status=0;
@@ -901,15 +1018,23 @@ int rev__work(struct estat *root, int argc, char *argv[])
 
 	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
 
-
 	STOPIF( url__load_nonempty_list(NULL, 0), NULL);
 
-
 	if (opt_target_revisions_given)
+	{
 		STOPIF( wa__warn( WRN__MIXED_REV_WC, EINVAL,
 					"Sorry, fsvs currently doesn't allow mixed revision working copies.\n"
 					"Entries will still be compared against the BASE revision.\n"),
 				NULL);
+
+		// TODO: necessary?
+		action->local_callback=rev___no_local_change;
+	}
+	else
+	{
+		/* No revision given - just go back to BASE. */
+		action->local_callback=st__progress;
+	}
 
 
 	/* This message can be seen because waa__find_common_base() looks for
@@ -929,10 +1054,52 @@ int rev__work(struct estat *root, int argc, char *argv[])
 	else
 		STOPIF(status, NULL);
 
+	STOPIF( st__progress_uninit(), NULL);
+
+	if (opt_target_revisions_given)
+	{
+		while ( ! ( status=url__iterator(&rev) ) )
+		{
+			STOPIF( cb__record_changes(root, rev, current_url->pool), NULL);
+		}
+		STOPIF_CODE_ERR( status != EOF, status, NULL);
+
+		STOPIF( rev__do_changed(root, global_pool), NULL);
+	}
+	else
+	{
+		/* The local changes are taken as to be undone.
+		 *
+		 * We cannot go by estat::entry_status - things like RF_ADD have to be 
+		 * undone, too.
+		 *
+		 * waa__do_sorted_tree() can't be used, either, because it does the 
+		 * directory *before* the children - which makes the directories' mtime 
+		 * wrong if children get created or deleted. */
+		STOPIF( rev___local_revert(root, global_pool), NULL);
+	}
+
 	only_check_status=0;
-	delay_start=time(NULL);
-	STOPIF( waa__output_tree(root), NULL);
-	STOPIF( hlp__delay(delay_start, DELAY_REVERT), NULL);
+	
+	/* If this was a revert with destination revision, we might have changed 
+	 * the entire hierarchy - replaced directories with files, etc.
+	 * This changed tree must not be written, because it's not the state of 
+	 * BASE.
+	 *   [ And if we had to write the original (BASE) list for some cause,
+	 *     we'd have to read the list afresh, and change what we have to.
+	 *     Or, the other way: when getting the changes for the given revision 
+	 *     from the repository we'd have to put them in the estat::old shadow 
+	 *     tree, to keep the entry list correct. ]
+	 *
+	 * If this was a revert to BASE, we have to write the list, because the 
+	 * ctime of the inodes will be changed - and would mark the entries as 
+	 * "maybe changed". */
+	if (!opt_target_revisions_given)
+	{
+		delay_start=time(NULL);
+		STOPIF( waa__output_tree(root), NULL);
+		STOPIF( hlp__delay(delay_start, DELAY_REVERT), NULL);
+	}
 
 ex:
 	return status;
@@ -940,7 +1107,9 @@ ex:
 
 
 /** Convenience function to reduce indenting. */
-int rev___undo_change(struct estat *sts, apr_pool_t *pool)
+int rev___undo_change(struct estat *sts, 
+		enum rev___dir_change_flag_e *dir_change_flag,
+		apr_pool_t *pool)
 {
 	int status;
 	char *fn;
@@ -966,7 +1135,7 @@ int rev___undo_change(struct estat *sts, apr_pool_t *pool)
 	unique_name_mine=NULL;
 
 	/* Conflict handling; depends whether it has changed locally. */
-	if (sts->entry_status & (FS_CHANGED | FS_CHILD_CHANGED))
+	if (sts->entry_status & FS_CHANGED)
 		switch (opt__get_int(OPT__CONFLICT))
 		{
 			case CONFLICT_STOP:
@@ -1023,6 +1192,8 @@ int rev___undo_change(struct estat *sts, apr_pool_t *pool)
 			else
 				STOPIF( up__unlink(removed, fn), NULL);
 		}
+
+		*dir_change_flag|=REVERT_MTIME;
 	}
 
 
@@ -1032,13 +1203,14 @@ int rev___undo_change(struct estat *sts, apr_pool_t *pool)
 
 	if ((sts->remote_status & FS_REPLACED) == FS_REMOVED)
 	{
-		sts->entry_type=FT_IGNORE;
+		sts->to_be_ignored=1;
 		goto ex;
 	}
 	current_url=sts->url;
 
 	if (S_ISDIR(sts->st.mode))
 	{
+		*dir_change_flag|=REVERT_MTIME;
 		STOPIF( waa__mkdir_mask(fn, 1, sts->st.mode), NULL);
 
 		/* Meta-data is done later. */
@@ -1050,11 +1222,14 @@ int rev___undo_change(struct estat *sts, apr_pool_t *pool)
 		/* Not a directory */
 	{
 		STOPIF( rev__install_file(sts, 0, sts->decoder, pool), NULL);
+		*dir_change_flag|=REVERT_MTIME;
 
 		/* We had a conflict; rename the file fetched from the 
 		 * repository to a unique name. */
 		if (unique_name_mine)
 		{
+			*dir_change_flag|=SET_CURRENT;
+
 			/* If that revision number overflows, we've got bigger problems.  
 			 * */
 			snprintf(revnum, sizeof(revnum)-1, 
@@ -1133,7 +1308,6 @@ int rev___undo_change(struct estat *sts, apr_pool_t *pool)
 	}
 
 
-
 ex:
 	return status;
 }
@@ -1148,10 +1322,13 @@ int rev__do_changed(struct estat *dir,
 	int i;
 	struct estat *sts;
 	apr_pool_t *subpool;
+	enum rev___dir_change_flag_e dir_flag;
 
 
 	status=0;
 	subpool=NULL;
+	dir_flag= (dir->entry_status & FS_NEW) || 
+		(dir->remote_status & FS_NEW) ? REVERT_MTIME : NOT_CHANGED;
 
 	/* If some children have changed, do a full run.
 	 * Else just repair meta-data. */
@@ -1164,16 +1341,13 @@ int rev__do_changed(struct estat *dir,
 		STOPIF( apr_pool_create(&subpool, pool), "Cannot get a subpool");
 
 		if (sts->remote_status & FS__CHANGE_MASK)
-			STOPIF( rev___undo_change(sts, subpool), NULL);
+			STOPIF( rev___undo_change(sts, &dir_flag, subpool), NULL);
 
 		/* We always recurse now, even if the directory has no children.
 		 * Else we'd have to check for children in a few places above, which would
 		 * make the code unreadable. */
-		if (S_ISDIR(sts->st.mode)
-				/* && 
-					 (sts->remote_status & FS_CHILD_CHANGED)  */
-				&& (sts->remote_status & FS_REPLACED) != FS_REMOVED
-			 )
+		if (S_ISDIR(sts->st.mode) &&
+				(sts->remote_status & FS_REPLACED) != FS_REMOVED)
 		{
 			apr_pool_destroy(subpool);
 			subpool=NULL;
@@ -1204,17 +1378,12 @@ int rev__do_changed(struct estat *dir,
 	if (dir->entry_status & FS__CHANGE_MASK)
 		dir->flags |= RF_CHECK;
 
-	/* Now, after all has been said and done for the children, set and re-get 
-	 * the actual meta-data - the mtime has been changed in the meantime 
-	 * (because of child node creation), and maybe this filesystem's 
-	 * granularity is worse than on commit; then the timestamps would be 
-	 * wrong. */
-	/* TODO: should the newer of both timestamps be taken (or current time), 
-	 * if the directory has changed against the directory version? */
-	STOPIF( up__set_meta_data(dir, NULL), NULL);
-	STOPIF( ops__update_single_entry(dir, NULL), NULL);
+	STOPIF( rev___handle_dir_mtime(dir, dir_flag), NULL);
+
 
 ex:
 	return status;
 }
+
+
 

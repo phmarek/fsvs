@@ -15,7 +15,9 @@ fi
 
 for path in `pwd`/empty-file tree/a/1/file-z tree/../tree/b/2/./file-y ././/tree/././c/3/.././//2/.././../../dir-with-perms/../tree/c/./3/file-x 
 do
-	p=`$BINdflt -d -D hlp__pathcopy st $path | tee $log | grep finished | cut -f6 -d" "`
+	$BINdflt -d -D hlp__pathcopy st $path > $log 
+	# There might be many paths build; take only the last (via tail).
+	p=`grep finished < $log | tail -1 | cut -f6 -d" "`
 	rl=`readlink -f $path`
 	if [[ "$rl" != "$p" ]]
 	then

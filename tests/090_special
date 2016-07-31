@@ -68,9 +68,24 @@ $INFO "Difference $diff"
 # At least two seconds difference should be here.
 if [[ $(expr $with_delay - $normal) -ge 2 ]]
 then
-  $SUCCESS "delay seems to work."
+  $SUCCESS "The delay option seems to work."
 else
-  $ERROR "delay too fast"
+  $ERROR "The delay option is too fast"
+fi
+
+
+$INFO "Testing delay command."
+dirfile=`$PATH2SPOOL . dir`
+touch -d "now + 2 seconds" $dirfile
+a=`date +%s`
+$BINdflt delay
+b=`date +%s`
+diff=`echo $b - $a | bc`
+if [ $diff -ge 1 ]
+then
+	$SUCCESS "Delay command works."
+else
+	$ERROR "Delay command took only diff=$diff"
 fi
 
 
@@ -121,7 +136,7 @@ fi
 # another commit.
 G=40/32/file
 touch $G
-if [[ `$BINdflt st` == ".m.?"*" 0 "*"$G" ]]
+if [[ `$BINdflt st` == ".m.."*" 0 "*"$G" ]]
 then
 	$SUCCESS "Entry list seems to be correct"
 else

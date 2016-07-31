@@ -261,7 +261,7 @@ int dir___f_sort_by_inode(struct estat **a, struct estat **b)
  * \return +2, +1, 0, -1, -2, suitable for \a qsort(). */
 inline int dir___f_sort_by_nameCC(const void *a, const void *b)
 {
-	return strcmp(a,b);
+	return strcoll(a,b);
 }
 
 
@@ -295,7 +295,7 @@ int dir__sortbyname(struct estat *sts)
 	int count, status;
 
 
-	BUG_ON(!S_ISDIR(sts->st.mode));
+//	BUG_ON(!S_ISDIR(sts->updated_mode));
 	count=sts->entry_count+1;
 	/* After copying we can release some space, as 64bit inodes
 	 * are smaller than 32bit pointers.
@@ -322,7 +322,7 @@ ex:
  * */
 int dir__sortbyinode(struct estat *sts)
 {
-	BUG_ON(!S_ISDIR(sts->st.mode));
+//	BUG_ON(!S_ISDIR(sts->updated_mode));
 	if (sts->entry_count)
 	{
 		BUG_ON(!sts->by_inode);
@@ -558,7 +558,7 @@ int dir__enumerator(struct estat *this,
 
 		/* The names-array has only the offsets stored.
 		 * So put correct values there. */
-		sts->name=names[i] + this->strings;
+		sts->name=this->strings + names[i];
 		sts->st.ino=inode_numbers[i];
 
 		/* now the data is copied, we store the pointer. */
@@ -588,11 +588,14 @@ int dir__enumerator(struct estat *this,
 		if (status == ENOENT)
 		{
 			STOPIF( wa__warn(WRN__LOCAL_VANISHED, status,
-				"Eintrag %s nicht mehr gefunden!", sts->name), NULL);
-			sts->entry_type=FT_IGNORE;
+				"Entry \"%s\" not found anymore!", sts->name), NULL);
+			sts->to_be_ignored=1;
 		}
 		else
 			STOPIF( status, "lstat(%s)", sts->name);
+
+		/* New entries get that set, because they're "updated". */
+		sts->updated_mode=sts->st.mode;
 	}
 
 

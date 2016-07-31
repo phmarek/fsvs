@@ -56,7 +56,7 @@ endif
 
 # options from configure
 opt_DEBUG	= @ENABLE_DEBUG@
-export opt_DEBUG
+export opt_DEBUG BASH_VERBOSE TEST_LIST
 
 
 ifdef TEST_LIST
@@ -198,5 +198,5 @@ endif
 run_tests:
 	@echo Running tests...
 	@echo '' > $(FSVS_CONF)/config
-	@set -e ; for test in $(TEST_LIST) ; do echo "" ; tput setaf 4 || true ; echo "_______________________________________________________" ; echo "  \"$$test\":1: ("`date`")"`tput op` ; xx=`pwd`/$$test ; ( cd $(TESTBASE) && CURRENT_TEST=$$test bash $(BASH_VERBOSE) $$xx 2>&1 ) || { echo "----++---- $$xx failed ----++----" ; exit 1 ; } ; done
+	@$(TEST_PROG_DIR)/run-tests
 

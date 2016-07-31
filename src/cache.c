@@ -209,7 +209,8 @@ void cch__set_active(struct cache_t *cache, int i)
 
 /** A simple hash.
  * Copies the significant bits ' ' .. 'Z' (or, really, \\x20 ..  \\x60) of 
- * at most 6 bytes into a packed bitfield, so that 30bits are used. */
+ * at most 6 bytes of \a stg into a packed bitfield, so that 30bits are 
+ * used.  */
 inline cache_value_t cch___string_to_cv(const char *stg)
 {
   union {

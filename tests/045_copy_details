@@ -90,3 +90,70 @@ $BINq ci -m "inodes"
 Test
 
 ls -i | sort -n
+
+
+# Test uncopy.
+mkdir d1
+date > d1/date
+$BINq ci -m "T" -o delay=yes
+targ=target-$$
+
+echo $targ $$ > "$targ"
+mkdir d2
+echo $$ > d2/date
+echo $$ > d2/new
+
+$BINdflt cp "$file1" "$targ"
+$BINdflt cp d1 d2
+
+if [[ `$BINdflt st "$targ"` != ".mC+ "*" $targ" ]]
+then
+	$BINdflt st "$targ"
+	$ERROR "Unexpected status output after cp."
+fi
+$BINdflt st d2 > $logfile
+if [[ `sort < $logfile` != ".mC+ "*" d2/date"*".mC+ "*" dir  d2"*"N... "*" d2/new" ]]
+then
+	cat $logfile
+	$ERROR "Unexpected status output after cp."
+fi
+
+$BINdflt uncopy "$targ"
+if [[ `$BINdflt st "$targ"` == "N... "*" $targ" ]]
+then
+	$SUCCESS "'uncopy file' works"
+else
+	$BINdflt st "$targ"
+	$ERROR "Unexpected status output after 'uncopy file'."
+fi
+$BINdflt uncopy d2
+$BINdflt st > $logfile
+if [[ `grep "^N\.\.\." < $logfile | wc -l` -eq 4 ]]
+then
+	$SUCCESS "'uncopy dir' works"
+else
+	$BINdflt st
+	$ERROR "Unexpected status output after 'uncopy dir'."
+fi
+
+
+# Now test uncopy of added and property-set entries
+$BINq cp d1 d2
+echo 12345 > d2/added
+echo 54321 > d2/prop
+$BINq ps a b d2/prop
+$BINq add d2/added
+
+
+$BINdflt uncopy d2
+$BINdflt ignore './**'
+$BINdflt st d2 > $logfile
+if [[ `sort < $logfile` == ".m.. "*" dir  d2"*"n... "*" 6  d2/added"*"nP.. "*" 6  d2/prop" ]]
+then
+	$SUCCESS "'uncopy dir' with added works"
+else
+	$BINdflt st
+	$ERROR "Unexpected status output after 'uncopy dir' for added entries."
+fi
+
+

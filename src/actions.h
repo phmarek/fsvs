@@ -25,16 +25,17 @@
  * entries (but the parent \c struct \ref estat "estats" exist, of course), 
  * so that the list of children is correct.
  *
- * As in the entry list file (\ref dir) there is a callback \ref 
- * actionlist_t::early_entry that's done \b before the child entries;
- * Clearing \ref estat::do_this_entry and \ref estat::do_tree in this 
- * callback will skip calling \ref actionlist_t::local_callback for this and 
- * the child entries (see \ref ops__set_to_handle_bits()).
  *
  * See also \ref waa__update_tree.
  *
  * The full (wc-based) path can be built as required by \ref 
  * ops__build_path().*/
+/* unused, wrong doc
+ * As in the entry list file (\ref dir) there is a callback \ref 
+ * actionlist_t::early_entry that's done \b before the child entries;
+ * Clearing \ref estat::do_this_entry and \ref estat::do_tree in this 
+ * callback will skip calling \ref actionlist_t::local_callback for this and 
+ * the child entries (see \ref ops__set_to_handle_bits()). */
 typedef int (action_t)(struct estat *sts);
 /** Callback for initializing the action. */
 typedef int (work_t)(struct estat *root, int argc, char *argv[]);

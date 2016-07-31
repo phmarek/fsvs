@@ -12,6 +12,7 @@
 #include <ctype.h>
 #include <sys/select.h>
 
+
 #include "url.h"
 #include "waa.h"
 #include "cache.h"
@@ -156,8 +157,8 @@
  * Using the target revision you can tell fsvs that it should use the given 
  * revision number as destination revision - so update would go there, but 
  * not further.
- * Please note that the given revision number overrides the \c -r parameter 
- * - which sets the destination for all URLs.
+ * Please note that the given revision number overrides the \c -r 
+ * parameter; this sets the destination for all URLs.
  *
  * The default target is \c HEAD.
  *
@@ -190,8 +191,7 @@
  * Currently we use about 92 bytes per entry. So we'd (unnecessarily) 
  * increase the size by about 10%.
  *
- * That's why there's an internal_number. 
- * */
+ * That's why there's an url_t::internal_number.  */
 
 
 /** -.
@@ -868,6 +868,8 @@ int url__open_session(svn_ra_session_t **session)
 {
 	int status;
 	svn_error_t *status_svn;
+	apr_hash_t *cfg;
+
 
 	status=0;
 	if (!current_url->pool)
@@ -877,15 +879,17 @@ int url__open_session(svn_ra_session_t **session)
 				"no pool");
 	}
 
+	STOPIF( hlp__get_svn_config(&cfg), NULL);
+
 	/** Try svn_ra_reparent() */
 	if (!current_url->session)
 	{
-		STOPIF_SVNERR_EXTRA( svn_ra_open,
+		STOPIF_SVNERR_TEXT( svn_ra_open,
 				(& current_url->session, current_url->url,
 				 &cb__cb_table, NULL,  /* cbtable, cbbaton, */
-				 NULL,	/* config hash */
+				 cfg,	/* config hash */
 				 current_url->pool),
-				"Opening URL '%s' brought an error:", current_url->url);
+				"svn_ra_open(\"%s\")", current_url->url);
 
 		if (session) 
 			*session = current_url->session;
@@ -1341,7 +1345,7 @@ ex:
  *
  * At the end of the list \c EOF is given.
  * */
-int url__iterator(svn_revnum_t *target_rev)
+int url__iterator(svn_revnum_t *target_rev) // , svn_revnum_t *cur_rev)
 {
 	int status;
 	static int last_index=-1;

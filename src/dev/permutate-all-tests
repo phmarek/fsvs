@@ -16,6 +16,7 @@
 # published by the Free Software Foundation.
 ##########################################################################
 
+use Fcntl qw(FD_CLOEXEC F_SETFD F_GETFD);
 #
 
 #############################################################################
@@ -85,9 +86,10 @@
   for $release ("", "--enable-release", "--enable-debug")
   {
 # make sure that the binary gets recompiled
-    $conf_cmd="( cd .. && ./configure $release ) && touch config.h && make";
-		system("( $conf_cmd ) > /tmp/fsvs-conf.txt 2>&1") && 
-			die "configure problem: $?";
+    $conf_cmd="( cd .. && ./configure $release ) && ".
+      "touch config.h && make -j$parallel";
+    system("( $conf_cmd ) > /tmp/fsvs-conf.txt 2>&1") &&
+         die "configure problem: $?";
 
 # Start the slow, uncommon tasks first.
 		for $prot ("svn+ssh", "file://")
@@ -170,7 +172,20 @@ sub StartTest
 #	$x=(0.5 < rand())+0; print "$$: exit with $x\n"; exit($x);
 
 # this is the child ...
-	$parms="LC_ALL=$lang TESTBASEx=$PTESTBASE2 PROTOCOL=$prot RANDOM_ORDER=1";
+  pipe(FAILREAD, FAILWRITE) || die "pipe: $!";
+
+# sudo closes the filehandles above 2, and I found no way to get it to 
+# keep them open.
+# So we have to give a path name to the children.
+  $tl=$ENV{"TEST_LIST"};
+	$parms="LC_ALL=$lang" .
+    " 'TESTBASEx=$PTESTBASE2'" .
+    " 'PROTOCOL=$prot'" .
+    " RANDOM_ORDER=1" .
+    ($tl ? " 'TEST_LIST=$tl'" : "") .
+    " TEST_FAIL_WRITE_HDL=/proc/$$/fd/".fileno(FAILWRITE) .
+# And it can have our STDERR.
+    " TEST_TTY_HDL=/proc/$$/fd/2";
 
 # To avoid getting N*N running tasks for a "-j N", we explicitly say 1.
 # Parallel execution within the tests is not done yet, but better safe 
@@ -194,17 +209,33 @@ sub StartTest
 	die $! unless defined($pid);
 	if (!$pid)
 	{
+    close FAILREAD;
+
 		$ENV{"MAKEFLAGS"}="";
+
 		open(STDIN, "< /dev/null") || die $!;
 		open(STDOUT, ">&LOG") || die $!;
 		open(STDERR, ">&LOG") || die $!;
+
+    $x=fcntl(FAILWRITE, F_GETFD, 0);
+    fcntl(FAILWRITE, F_SETFD, $x & ~FD_CLOEXEC);
+
 # sudo removes some environment variables, so set all options via make.
 		exec $cmd;
 		die;
 	}
 
+  # Give the child some time to take the write side.
+  # If we ever get more than 4/64 kB of failed tests this will hang.
 	die $! if waitpid($pid, 0) == -1;
 	$error=$?;
+
+  # We have to close the write side of the pipe, so that on reading we'll 
+  # see an EOF.
+  close FAILWRITE;
+  @failed=map { chomp; $_; } <FAILREAD>;
+  close FAILREAD;
+
 
 	$end=time();
 	$t=EndText($start, $end);
@@ -226,12 +257,15 @@ sub StartTest
 	print LOG "\n",
 				"$t\n",
 				"$status $error: $user $parms\n",
+				"got failed as (", join(" ", @failed), ")\n",
 				"\n",
 				"$conf_cmd && $cmd\n";
 	close LOG;
 
 	$u = $user || "user";
-	print CSV "$sum,'$prot','$lang','$u','$release','$status'\n";
+  print CSV join(",", $sum, map { "'$_'"; } 
+    ($prot, $lang, $u, $release, $status, sort(@failed))),
+  "\n";
 	close CSV;
 
 # We cannot return $error directly ... only the low 8bit would 
@@ -270,5 +304,5 @@ sub EndText
 {
 	my($start, $end)=@_;
 	return "Finished after ". ($end - $start) . " seconds (" . 
-		localtime($end) . ").\n";
+		localtime($end) . ").";
 }

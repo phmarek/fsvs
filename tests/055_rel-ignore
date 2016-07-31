@@ -1,0 +1,72 @@
+#!/bin/bash
+
+set -e 
+$PREPARE_CLEAN > /dev/null
+$INCLUDE_FUNCS
+cd $WC
+
+# General ignore patterns are tested somewhere else.
+# Here just the special rel-ignore function is tested.
+
+logfile=$LOGDIR/055.log
+
+
+mkdir -p a/b
+$BINq ci -m1 -o delay=yes
+
+touch a/b/f1 a/b/fI
+touch g1 gI
+
+function exp
+{
+  dumped="$1"
+  cnt=$2
+  cnt_I="$3"
+	shift 3
+	# Rest is patterns to load
+
+  while [[ "$1" != "" ]]
+	do
+	  pat="$1"
+		shift
+
+		true | $BINdflt ignore load
+		$INFO "Testing $pat"
+		$BINdflt rel-ignore "$pat"
+
+		$BINdflt st > $logfile
+		if [[ `grep I $logfile | wc -l` -ne $cnt_I ]]
+		then
+			cat $logfile
+			$ERROR "$cnt_I *I can be ignored, but found "`grep -c I < $logfile`
+		fi
+
+		if [[ `wc -l < $logfile` -ne $cnt ]]
+		then
+			cat $logfile
+			$ERROR "$cnt lines expected, "`wc -l < $logfile`" got"
+		fi
+
+		$BINdflt ignore dump > $logfile
+		if [[ `cat $logfile` == "$dumped" ]]
+		then
+			$SUCCESS "$dumped matched"
+		else
+			cat $logfile
+			$ERROR "$dumped not matched"
+		fi
+	done
+}
+
+exp "./**/*I" 4 0 "**/*I" "**/../**/*I"
+exp "./**I" 4 0 "**I" "./**I" "$WC/**I"
+# Ignore only on top level
+exp "./*I" 5 1 "**/../*I" 
+# From here on only level 2 below is ignored, so the single ./gI entry
+# gets found.
+exp "./*/*/*I" 5 1 "*/*/*I" "*/../*/X/../*/*I" "$WC/*/*/227/../*I" 
+exp "./a/**I" 5 1 "./a/**I" 
+# All can be found
+exp "./a/**p" 6 2 "a/**p" 
+exp "./*/*I" 6 2 "*/*I" "./*/*I" "$WC/*/*I"
+

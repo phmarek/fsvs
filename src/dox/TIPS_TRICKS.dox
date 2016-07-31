@@ -1,0 +1,45 @@
+/**
+	\defgroup tips Tips and tricks
+	\ingroup userdoc
+
+	This is a list of tips and tricks that you might find useful.
+
+	
+	\section tip_verbose Seeing the verbose status, but only changed entries
+
+	Sometimes the status \ref status_meta_changed "meta-data changed" 
+	is not enough - the differentiation between \c mtime and the permission
+	attributes is needed.
+
+	For that the command line option \ref glob_opt_verb "-v" is used; but 
+	this \e verbose mode also prints all entries, not only the changed.
+
+	To solve that the \ref glob_opt_filter "filter option" gets set; with the 
+	value \c none (to reset the mask), and then with the wanted mask - to 
+	restore the default the string \c "text,meta" could be set.
+
+	Example:
+	\code
+	  $ fsvs status -v -f none,text,meta
+	  $ fsvs status -v -f none,text,meta /etc
+	  $ fsvs status -v -f none,text,meta some/dir another_dir and_a_file
+	\endcode
+
+
+	\section tip_perf Performance points
+
+  Some effort has been taken to get \c fsvs as fast as possible.
+ 
+  With 1.1.17 the default for checking for changes on files was altered, 
+  to do a MD5-check of files with a changed modification time but the same 
+  size (to avoid printing a \c "?" \ref status_possibly "as status"); 
+  if that affects your use-case badly you can use the \ref o_chcheck 
+  "option" to get the old (fast) behavior.
+ 
+  Please note that not the whole file has to be read - the first changed 
+  manber block (with averaged 128kB) terminates the check.
+
+*/
+ 
+// vi: filetype=doxygen spell spelllang=en_us
+

@@ -1,0 +1,120 @@
+#!/bin/bash
+
+set -e
+$INCLUDE_FUNCS
+$PREPARE_DEFAULT > /dev/null
+cd $WC
+
+logfile=$LOGDIR/036.status_non-recursive
+
+
+# Check for -N on deleted hierarchies
+# Set some known timestamp
+touch -d "2008-02-01 12:13" .
+$BINq ci -m1 -o delay=yes
+
+function ExpLines
+{
+  parms="$1"
+	exp_cnt="$2"
+	$BINdflt st $parms > $logfile
+	if [[ `wc -l < $logfile` -eq $exp_cnt ]]
+	then
+		$SUCCESS "found $exp_cnt for '$parms'"
+	else
+		$ERROR_NB "Got for $BINdflt st $parms:"
+		cat $logfile
+		$ERROR "expected $exp_cnt lines."
+	fi
+}
+
+
+ExpLines "-C" 0
+rm -r tree
+touch -d "2008-02-01 12:13" .
+
+# With -N -N, no children are looked at.
+ExpLines "-N -N -C" 0
+# If we don't pass -C, the timestamp is looked at, and if it's still the 
+# same no check is done.
+ExpLines "-N -N" 0
+# We have to touch the directory; even with -C no children are seen.
+touch .
+#strace $BINdflt -N -N -C big_file > $logfile
+#false
+ExpLines "-N -N -C" 1
+ExpLines "-N -N" 1
+ExpLines "-N" 2
+ExpLines "" 41
+
+if $BINdflt -o stop_change=true status
+then
+  $ERROR "Expected an error code - 1"
+fi
+
+$BINq ci -m 1
+if $BINdflt -o stop_change=true status
+then
+  $SUCCESS "No error code without change."
+else
+  $ERROR "Expected no error code - 1"
+fi
+
+touch empty-file
+if $BINdflt -o stop_change=true status
+then
+  $ERROR "Expected an error code - 2"
+fi
+if $BINdflt -o stop_change=true -f text status
+then
+  $SUCCESS "Filtering for changes, stopping ok"
+else
+  $ERROR "Expected no error code - 2"
+fi
+
+
+# Check change detection options; use a known timestamp, and create them 
+# simultaneously because of the ctime.
+touch -d "2008-07-03 1:3" . big_file big_2 big_3
+$BINq ci -m 1 big_file
+
+
+$INFO "1) change file, same mtime, incl. size."
+echo bla > big_2
+touch -d "2008-07-03 1:3" big_2
+mv big_2 big_file
+ExpLines "big_file" 1
+ExpLines "-o change_check=file_mtime big_file" 1
+ExpLines "-o change_check=allfiles big_file" 1
+ExpLines "-o change_check=dir big_file" 1
+ExpLines "-C big_file" 1
+
+# Delay so that the ctime is different.
+$BINq ci -m 1 -o delay=yes
+
+
+$INFO "2) change file, same mtime, same size, different ctime."
+echo blu > big_3
+touch -d "2008-07-03 1:3" big_3
+mv big_3 big_file
+ExpLines "-o change_check=allfiles big_file" 1
+ExpLines "-o change_check=file_mtime big_file" 1
+ExpLines "-C -C big_file" 1
+# Another test for -C is in 013_manber, where (because the directory gets
+# renamed) even the ctime is the same.
+
+$BINq ci -m 1 -o change_check=full
+
+
+$INFO "3) new entry"
+# . is shown as changed, as the check flag is set.
+echo blu > new-file-now
+touch -d "2008-07-03 1:3" .
+ExpLines "-N -N" 1
+ExpLines "-o change_check=file_mtime" 2
+ExpLines "-o change_check=allfiles" 2
+ExpLines "-o change_check=dir" 2
+ExpLines "-C" 2
+ExpLines "-C -C" 2
+
+

@@ -30,7 +30,7 @@ action_t st__progress;
 action_uninit_t st__progress_uninit;
 
 /** Shows detailed information about the entry. */
-int st__print_entry_info(struct estat *sts, int with_type);
+int st__print_entry_info(struct estat *sts);
 
 /** Returns a string describing the \a entry_status bits of struct \a 
  * estat. */
@@ -40,7 +40,7 @@ volatile char* st__status_string_fromint(int mask);
 /** Return the string interpretation of the flags like \ref RF_CHECK. */
 volatile char* st__flags_string_fromint(int mask);
 /** Return the type string - cdev, bdev, whatever. */
-volatile char *st__type_string(struct estat *sts);
+char *st__type_string(mode_t mode);
 
 #endif
 

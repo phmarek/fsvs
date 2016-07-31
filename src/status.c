@@ -65,12 +65,14 @@
  *   entry makes no sense.
  * - A changed type (character device to symlink, file to directory etc.)
  *   is given as \c 'R' (replaced), ie. as removed and newly added.
- * - If the entry has been modified, the change is shown as \c 'C'. \n
+ * - \anchor status_possibly
+ *   If the entry has been modified, the change is shown as \c 'C'.  \n
  *   If the modification or status change timestamps (mtime, ctime) are 
  *   changed, but the size is still the same, the entry is marked as 
- *   possibly changed (a question mark \c '?' is printed). See \ref 
- *   opt_checksum.
- * - The meta-data flag \c 'm' shows meta-data changes like properties, 
+ *   possibly changed (a question mark \c '?' is printed) - but see \ref 
+ *   o_chcheck "change detection" for details.
+ * - \anchor status_meta_changed
+ *   The meta-data flag \c 'm' shows meta-data changes like properties, 
  *   modification timestamp and/or the rights (owner, group, mode); 
  *   depending on the \ref glob_opt_verb "-v/-q" command line parameters, 
  *   it may be splitted into \c 'P' (properties), \c 't' (time) and \c 'p' 
@@ -108,18 +110,18 @@ char * st___visible_file_size(struct estat *sts)
 {
   static char buffer[20];
 
-  switch (sts->entry_type)
+  switch ( (sts->updated_mode ? sts->updated_mode : sts->st.mode) & S_IFMT)
   {
-    case FT_CDEV:
-    case FT_BDEV:
+		case S_IFBLK:
+    case S_IFCHR:
       return "dev";
-    case FT_DIR:
+    case S_IFDIR:
       return "dir";
     default:
       /* When in doubt, believe it's a normal file.
        * We have that case for sync-repos - could be fixed some time. */
-    case FT_FILE:
-    case FT_SYMLINK:
+    case S_IFREG:
+    case S_IFLNK:
       sprintf(buffer, "%llu", (t_ull) sts->st.size);
       break;
   }
@@ -181,9 +183,10 @@ int st__print_status(char *path, int status_bits, int flags, char* size,
   if (opt_verbose <0) goto ex;
 
 
-  /* If the entry is new, got added or will be unversioned, we know that 
-   * all meta-data has changed; we show only the essential information. */
-  if ((status_bits & FS_NEW) ||
+	/* If the entry is new or deleted, got added or will be unversioned, we 
+	 * know that all meta-data has changed; we show only the essential 
+	 * information. */
+  if ((status_bits & (FS_NEW | FS_REMOVED)) ||
       (flags & (RF_ADD | RF_UNVERSION)))
     status_bits &= ~(FS_META_CHANGED | FS_LIKELY | FS_CHANGED);
 
@@ -260,21 +263,17 @@ ex:
  * */
 int st__status(struct estat *sts)
 {
-  int status;
+	int status;
 	int e_stat, flags;
 	char *path;
 
 
-  status=0;
-  STOPIF( ops__build_path(&path, sts), NULL);
+	status=0;
+	STOPIF( ops__build_path(&path, sts), NULL);
 
-  /* Is this entry already done? */
-  if (sts->was_output) 
-  {
-    DEBUGP("%s was already output ...", path);
-    goto ex;
-  }
-  sts->was_output=1;
+	/* Is this entry already done? */
+	BUG_ON(sts->was_output, "%s was already output ...", path);
+	sts->was_output=1;
 
 
 	e_stat=sts->entry_status;
@@ -372,7 +371,10 @@ int st__work(struct estat *root, int argc, char *argv[])
 
 
 	if (opt__get_int(OPT__DIR_SORT))
-		STOPIF( waa__do_sorted_tree(root, st__status), NULL);
+	{
+		action->local_callback=st__status;
+		STOPIF( waa__do_sorted_tree(root, ac__dispatch), NULL);
+	}
 
 ex:
 	return status;
@@ -635,29 +637,28 @@ inline volatile char* st__status_string_fromint(int mask)
 }
 
 
+char *st__type_string(mode_t mode)
+{
+	switch (mode & S_IFMT)
+	{
+		case S_IFDIR: return "directory";
+		case S_IFBLK: return "block-dev";
+		case S_IFCHR: return "char-dev";
+		case S_IFREG: return "file";
+		case S_IFLNK: return "symlink";
+	}
+
+	return "invalid";
+}
+
+
 inline volatile char* st__status_string(const struct estat * const sts)
 {
 	return st__status_string_fromint(sts->entry_status);
 }
 
 
-volatile char *st__type_string(struct estat *sts)
-{
-	const struct st___bit_info types[]={
-		BIT_INFO( FT_IGNORE, 	"ignored"),
-		BIT_INFO( FT_CDEV,  		"char-dev"),
-		BIT_INFO( FT_BDEV,  		"block-dev"),
-		BIT_INFO( FT_DIR,  		"directory"),
-		BIT_INFO( FT_SYMLINK,	"symlink"),
-		BIT_INFO( FT_FILE,  		"file"),
-		BIT_INFO( FT_UNKNOWN,	"unknown"),
-	};
-
-	return st___string_from_bits(sts->entry_type, types, "invalid");
-}
-
-
-int st__print_entry_info(struct estat *sts, int with_type)
+int st__print_entry_info(struct estat *sts)
 {
 	int status;
 	char *path, *waa_path, *url, *copyfrom;
@@ -674,10 +675,9 @@ int st__print_entry_info(struct estat *sts, int with_type)
 		STOPIF( cm__get_source(sts, path, &copyfrom, &copy_rev, 0), NULL);
 	}
 
-	if (with_type)
-		STOPIF_CODE_EPIPE( printf("\tType:\t\t%s\n", 
-					st__type_string(sts)), NULL);
-	if (sts->entry_type == FT_DIR)
+	STOPIF_CODE_EPIPE( printf("\tType:\t\t%s\n", 
+				st__type_string(sts->st.mode)), NULL);
+	if (S_ISDIR(sts->st.mode))
 		STOPIF_CODE_EPIPE( printf( "\tChildCount:\t%u\n", 
 					sts->entry_count), NULL);
 	STOPIF_CODE_EPIPE( printf("\tURL:\t\t%s\n", url), NULL);
@@ -721,20 +721,24 @@ int st__print_entry_info(struct estat *sts, int with_type)
 					waa_path), NULL);
 	}
 
+	/* The root entry has no URL associated, and so no revision number.
+	 * Print the current revision of the highest priority URL. */
 	STOPIF_CODE_EPIPE( printf("\tRevision:\t%li\n", 
-				sts->repos_rev), NULL);
+				sts->parent ? sts->repos_rev : urllist[0]->current_rev), NULL);
 
-	if (sts->entry_type==FT_FILE)
+	if (S_ISREG(sts->st.mode))
 		STOPIF_CODE_EPIPE( printf("\tRepos-MD5:\t%s\n", 
 					cs__md52hex(sts->md5)), NULL);
 
-	if (sts->entry_type==FT_BDEV || sts->entry_type==FT_CDEV)
+	if (S_ISBLK(sts->st.mode) || S_ISCHR(sts->st.mode))
+	{
 #ifdef DEVICE_NODES_DISABLED
 		DEVICE_NODES_DISABLED();
 #else
-	STOPIF_CODE_EPIPE( printf("\tDevice number:\t%llu:%llu\n", 
-				(t_ull)MAJOR(sts->st.rdev),
-				(t_ull)MINOR(sts->st.rdev)), NULL);
+		STOPIF_CODE_EPIPE( printf("\tDevice number:\t%llu:%llu\n", 
+					(t_ull)MAJOR(sts->st.rdev),
+					(t_ull)MINOR(sts->st.rdev)), NULL);
+	}
 #endif
 	else
 		STOPIF_CODE_EPIPE( printf("\tSize:\t\t%llu\n", 

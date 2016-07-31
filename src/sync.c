@@ -104,7 +104,7 @@ int sync___recurse(struct estat *cur_dir,
 {	
 	int status;
 	svn_error_t *status_svn;
-	apr_pool_t *subpool;
+	apr_pool_t *subpool, *subsubpool;
 	apr_hash_t *dirents;
 	char *path;
 	const char *name;
@@ -119,7 +119,7 @@ int sync___recurse(struct estat *cur_dir,
 
 
 	status=0;
-	subpool=NULL;
+	subpool=subsubpool=NULL;
 
 	/* get a fresh pool */
 	STOPIF( apr_pool_create_ex(&subpool, pool, NULL, NULL), 
@@ -149,40 +149,44 @@ int sync___recurse(struct estat *cur_dir,
 					NULL, 0, 0, NULL, 0, (void**)&sts), NULL);
 
 		if (url__current_has_precedence(sts->url) &&
-				sts->entry_type != FT_DIR)
+				!S_ISDIR(sts->st.mode))
 		{
 			/* File or special entry. */
 			sts->st.size=val->size;
 
-			DEBUGP("%s is type %X %s", sts->name, sts->entry_type, 
-					st__type_string(sts));
+			DEBUGP("%s has mode %o (%s)", sts->name, sts->st.mode, 
+					st__type_string(sts->st.mode));
 
 			decoder= sts->user_prop ? 
 				apr_hash_get(sts->user_prop, 
 						propval_updatepipe, APR_HASH_KEY_STRING) : 
 					NULL;
 
-			if (sts->entry_type == FT_FILE && !decoder)
+			if (S_ISREG(sts->st.mode) && !decoder)
 			{
 				/* Entry finished. */
 			}
-			else if (sts->entry_type == FT_FILE && val->size > 8192)
+			else if (S_ISREG(sts->st.mode) && val->size > 8192)
 			{
 				/* Make this size configurable? Remove altogether? After all, the 
 				 * processing time needs not be correlated to the encoded size. */
 				DEBUGP("file encoded, but too big for fetching (%llu)", 
-						val->size);
+						(t_ull)val->size);
 			}
 			else
 			{
 				/* Now we're left with special devices and small, encoded files. */
 				STOPIF( url__full_url(sts, NULL, &url), NULL);
 
+				/* get a fresh pool */
+				STOPIF( apr_pool_create_ex(&subsubpool, subpool, NULL, NULL), 
+						"no pool");
+
 				/* That's the third time we access this file ...
 				 * svn_ra needs some more flags for the directory listing functions. */
 				STOPIF( rev__get_text_into_buffer(url, sts->repos_rev,
 							decoder ? decoder->data : NULL,
-							&entry_text, NULL, sts, NULL, subpool), NULL);
+							&entry_text, NULL, sts, NULL, subsubpool), NULL);
 
 				sts->st.size=entry_text->len;
 				DEBUGP("parsing %s as %llu: %s", url,
@@ -190,15 +194,17 @@ int sync___recurse(struct estat *cur_dir,
 
 				/* If the entry exists locally, we might have a more detailed value 
 				 * than FT_ANYSPECIAL. */
-				if (sts->entry_type != FT_FILE)
+				if (!S_ISREG(sts->st.mode))
 					/* We don't need the link destination; we already got the MD5. */
 					STOPIF( ops__string_to_dev(sts, entry_text->data, NULL), NULL);
 
 				/* For devices there's no length to compare; the rdev field 
 				 * shares the space.
 				 * And for normal files the size is already correct. */
-				if (sts->entry_type == FT_SYMLINK)
+				if (S_ISLNK(sts->st.mode))
 					sts->st.size-=strlen(link_spec);
+
+				if (subsubpool) apr_pool_destroy(subsubpool);
 			}
 
 			/* After this entry is done we can return a bit of memory. */
@@ -274,10 +280,9 @@ int sync__progress(struct estat *sts)
 	 * */
 	if ( hlp__lstat(path, &st) == 0 )
 	{
-		if (sts->entry_type == FT_ANYSPECIAL)
+		if ((sts->st.mode & S_IFMT) == 0)
 		{
 			sts->st=st;
-			sts->entry_type=ops___filetype(& sts->st);
 		}
 
 		/* We fetch the dev/inode to get a correct sorting.
@@ -309,9 +314,9 @@ int sync__progress(struct estat *sts)
 	}
 	else
 	{
-		if (sts->entry_type == FT_ANYSPECIAL)
+		if (S_ISANYSPECIAL(sts->st.mode))
 		{
-			sts->entry_type=FT_FILE;
+			/* We don't know what it really is. BUG? */
 			sts->st.mode= (sts->st.mode & ~S_IFMT) | S_IFREG;
 		}
 	}
@@ -355,7 +360,7 @@ int sync__work(struct estat *root, int argc, char *argv[])
 
 		/* We have nothing ... */
 		current_url->current_rev=0;
-		STOPIF( cb__record_changes(NULL, root, rev, global_pool), NULL);
+		STOPIF( cb__record_changes(root, rev, global_pool), NULL);
 
 		/* set new revision */
 		current_url->current_rev=rev;

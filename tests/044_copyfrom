@@ -64,8 +64,8 @@ else
 fi
 
 # A "true | fsvs cp load" doesn't work, as the copyfrom information is 
-# added, not replaced. So we revert.
-$BINdflt revert .
+# added, not replaced. So we undo the copy.
+$BINdflt uncopy 3 6 2
 if [[ `$BINdflt cp dump -v` == "No copyfrom information was written." ]]
 then
   $SUCCESS "Purging copyfrom works"

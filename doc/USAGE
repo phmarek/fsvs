@@ -28,7 +28,7 @@ Local configuration and information:
 
 Defining which entries to take:
 
-   ignore
+   ignore and rign
           Define ignore patterns
 
    unversion
@@ -38,7 +38,7 @@ Defining which entries to take:
           Add entries that would be ignored
 
    cp, mv
-          Tell fsvs that entries were copied.
+          Tell fsvs that entries were copied
 
 Commands working with the repository:
 
@@ -52,13 +52,16 @@ Commands working with the repository:
           Fetch some part of the repository, and register it as working
           copy
 
-   revert
-          Undo local changes
+   cat
+          Get a file from the directory
+
+   revert and uncp
+          Undo local changes and entry markings
 
    remote-status
           Ask what an update would bring
 
-Property handling
+Property handling:
 
    prop-set
           Set user-defined properties
@@ -82,8 +85,8 @@ Additional commands used for recovery and debugging:
           Multi-url-operations are relatively new; there might be rough
           edges.
 
-   The return code is 0 for successfull and 2 for an error. 1 is returned
-   if the option Stopping status reports as soon as changes are found is
+   The return code is 0 for success, or 2 for an error. 1 is returned if
+   the option Stopping status reports as soon as changes are found is
    used, and changes are found; see also Filtering entries.
 
 Universal options
@@ -134,24 +137,8 @@ Universal options
 
 -C -- checksum
 
-   -C increments the checksum flag. Normally status tells that a file has
-   possible modification, if its mtime has changed but its size not. Using
-   -C you can tell the commands to be extra careful and always check for
-   modifications.
-
-   The values are
-   0 Normal operations
-   1 Check files for modifications if possibly changed
-   2 Do an MD5 verification for all files, and check all directories for
-     new entries.
-
-   If a files size has changed, we can be sure that it's changed; a
-   directory is checked for changes if any of its meta-data has changed
-   (mtime, ctime, owner, group, size, mode).
-
-   Note:
-          commit and update set the checksum flag to at least 1, to avoid
-          missing changed files.
+   -C chooses to use more change detection checks; please see the
+   change_check option for more details.
 
 -f -- filter entries
 
@@ -159,15 +146,15 @@ Universal options
    operations, modification of the work done on given entries.
 
    It requires a specification at the end, which can be any combination of
-   any, text, new, deleted, meta, mtime, group or owner.
+   any, text, new, deleted (or removed), meta, mtime, group, mode, changed
+   or owner.
 
    By giving eg. the value text, with a status action only entries that
    are new or changed are shown; with mtime,group only entries whose group
    or modification time has changed are printed.
 
    Note:
-          The list does not include possibly changed entries; see -C --
-          checksum -C.
+          Please see Change detection for some more information.
           If an entry gets replaced with an entry of a different type (eg.
           a directory gets replaced by a file), that counts as deleted and
           new.
@@ -350,6 +337,34 @@ _build_new_list
    revision of the entries is unknown, we can only use 0 - and loose
    information this way!
 
+delay
+
+   This command delays execution until the time has passed at least to the
+   next second after writing the dir and urls files. So, where previously
+   the delay option was used, this can be substituted by the given command
+   followed by the delay command.
+
+   The advantage is over the Waiting for a time change after working copy
+   operations option is, that read-only commands can be used in the
+   meantime.
+
+   An example:
+   fsvs commit /etc/X11 -m "Backup of X11"
+   ... read-only commands, like "status"
+   fsvs delay /etc/X11
+   ... read-write commands, like "commit"
+
+   In the testing framework it is used to save a bit of time; in normal
+   operation, where fsvs commands are not so tightly packed, it is
+   normally preferable to use the delay option.
+
+cat
+
+ fsvs cat [-r rev] path
+
+   Fetches a file with the specified revision or, if not given, BASE, from
+   the repository, and outputs it to STDOUT.
+
 checkout
 
  fsvs checkout [path] URL [URLs...]
@@ -408,9 +423,9 @@ cp
  fsvs cp dump
  fsvs cp load
 
-   This command marks DEST as a copy of SRC at revision rev, so that on
-   the next commit of DEST the corresponding source path is sent as copy
-   source.
+   The copy command marks DEST as a copy of SRC at revision rev, so that
+   on the next commit of DEST the corresponding source path is sent as
+   copy source.
 
    The default value for rev is BASE, ie. the revision the SRC (locally)
    is at.
@@ -546,6 +561,27 @@ copyfrom-detect
           If too many possible matches are found, not all may be printed;
           only the indicator ... is shown at the end.
 
+uncp
+
+ fsvs uncopy DEST [DEST ...]
+
+   The uncopy command removes a copyfrom mark from the destination entry.
+   This will make the entry unknown again, and reported as New on the next
+   invocations.
+
+   Only the base of a copy can be un-copied; if a directory structure was
+   copied, and the given entry is just implicitly copied, this command
+   will give you an error.
+
+   This is not folded in revert, because it's not clear whether revert
+   should restore the original copyfrom data or remove the copy attribute;
+   by using a special command this is no longer ambiguous.
+
+   Example:
+   $ fsvs copy SourceFile DestFile
+   # Whoops, was wrong!
+   $ fsvs uncopy DestFile
+
 diff
 
  fsvs diff [-v] [-r rev[:rev2]] [-R] PATH [PATH...]
@@ -602,8 +638,8 @@ help
 
 ignore
 
- fsvs ignore [prepend|append|at=n] pattern[s]
  fsvs ignore dump|load
+ fsvs ignore [prepend|append|at=n] pattern [pattern ...]
 
    This command adds patterns to the end of the ignore list, or, with
    prepend , puts them at the beginning of the list. With at=x the
@@ -652,6 +688,36 @@ ignore
    Note:
           Please take care that your wildcard patterns are not expanded by
           the shell!
+
+rign
+
+ fsvs rel-ignore [prepend|append|at=n] path-spec [path-spec ...]
+ fsvs ri [prepend|append|at=n] path-spec [path-spec ...]
+
+   If you use more than a single working copy for the same data, it will
+   be stored in different paths - and that makes absolute ignore patterns
+   infeasible. But relative ignore patterns are anchored at the beginning
+   of the WC root - which is a bit tiring if you're deep in your WC
+   hierarchy and want to ignore some files.
+
+   To make that easier you can use the rel-ignore (abbreviated as ri)
+   command; this converts all given path-specifications (that may include
+   wildcards as per the shell pattern specification above) to WC-relative
+   values before storing them.
+
+   Example for /etc as working copy root:
+        fsvs rel-ignore '/etc/X11/xorg.conf.*'
+
+        cd /etc/X11
+        fsvs rel-ignore 'xorg.conf.*'
+
+   Both commands would store the pattern "./X11/xorg.conf.*".
+
+   Note:
+          This works only for shell patterns.
+
+   For more details about ignoring files please see the ignore command and
+   Using ignore patterns.
 
 info
 
@@ -783,8 +849,8 @@ revert
        the copy source data.
      * An unmodified direct copy destination entry, and other uncommitted
        entries with special flags (manually added, or defined as copied),
-       are changed back to "<i>N</i>"ew -- the copy definition and the
-       special status is removed.
+       are changed back to "N"ew -- the copy definition and the special
+       status is removed.
        Please note that on implicitly copied entries (entries that are
        marked as copied because some parent directory is the base of a
        copy) cannot be un-copied; they can only be reverted to their
@@ -849,14 +915,8 @@ Recursive behaviour
 Working with copied entries
 
    If an entry is marked as copied from another entry (and not
-   committed!), a revert will undo the copy setting - which will make the
-   entry unknown again, and reported as new on the next invocations.
-
-   If a directory structure was copied, and the current entry is just a
-   implicitly copied entry, revert would take the copy source as
-   reference, and get the file data from there.
-
-   Summary: Only the base of a copy can be un-copied.
+   committed!), a revert will fetch the original copyfrom source. To undo
+   the copy setting use the uncp command.
 
 status
 
@@ -891,8 +951,8 @@ status
      * If the entry has been modified, the change is shown as 'C'.
        If the modification or status change timestamps (mtime, ctime) are
        changed, but the size is still the same, the entry is marked as
-       possibly changed (a question mark '?' is printed). See
-       opt_checksum.
+       possibly changed (a question mark '?' is printed) - but see change
+       detection for details.
      * The meta-data flag 'm' shows meta-data changes like properties,
        modification timestamp and/or the rights (owner, group, mode);
        depending on the -v/-q command line parameters, it may be splitted

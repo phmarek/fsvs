@@ -81,8 +81,8 @@ struct cache_t {
 };
 
 
-/** Adds a copy of the given data to the cache; return the new data 
- * pointer.
+/** Adds a copy of the given data (\a id, \a data with \a len) to the \a 
+ * cache; return the new allocated data pointer in \a copy.
  * */
 int cch__add(struct cache_t *cache, 
 		cache_value_t id, const char *data, int len,

@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <poll.h>
 #include <time.h>
 #include <fcntl.h>
 
@@ -287,6 +288,7 @@ int df__do_diff(struct estat *sts,
 	 * printed a second time from the child. */
 	fflush(NULL);
 
+
 	last_child=fork();
 	STOPIF_CODE_ERR( last_child == -1, errno,
 			"Cannot fork diff program");
@@ -294,6 +296,9 @@ int df__do_diff(struct estat *sts,
 	if (!last_child)
 	{
 		STOPIF( hlp__format_path(sts, path, &disp_dest), NULL);
+
+		/* Remove the ./ at the front */
+		setenv(FSVS_EXP_CURR_ENTRY, path+2, 1);
 
 		disp_source= is_copy ? url_to_fetch : disp_dest;
 
@@ -343,9 +348,9 @@ int df__do_diff(struct estat *sts,
 
 
 		/* Print header line, just like a recursive diff does. */
-		STOPIF_CODE_ERR( printf("diff -u %s.r%llu %s.%s\n", 
+		STOPIF_CODE_EPIPE( printf("diff -u %s.r%llu %s.%s\n", 
 					disp_source, (t_ull)rev1, 
-					disp_dest, short_desc) < 0, errno,
+					disp_dest, short_desc),
 				"Diff header");
 
 
@@ -457,19 +462,19 @@ int df___type_def_diff(struct estat *sts, svn_revnum_t rev,
 
 	status=0;
 	special_stg=NULL;
-	switch (sts->entry_type)
+	switch (sts->updated_mode & S_IFMT)
 	{
-		case FT_FILE:
+		case S_IFREG:
 			STOPIF( df__do_diff(sts, rev, 0, NULL), NULL);
 			break;
 
-		case FT_BDEV:
-		case FT_CDEV:
+		case S_IFCHR:
+		case S_IFBLK:
 			special_stg=ops__dev_to_filedata(sts);
 
 			/* Fallthrough, ignore first statement. */
 
-		case FT_SYMLINK:
+		case S_IFLNK:
 			if (!special_stg)
 				STOPIF( ops__link_to_string(sts, NULL, &special_stg), NULL);
 
@@ -512,7 +517,7 @@ int df___direct_diff(struct estat *sts)
 	STOPIF( ops__build_path( &fn, sts), NULL);
 
 	status=0;
-	if (sts->entry_type & FT_NONDIR)
+	if (!S_ISDIR(sts->updated_mode))
 	{
 		DEBUGP("doing %s", fn);
 
@@ -521,12 +526,11 @@ int df___direct_diff(struct estat *sts)
 		rev2=0;
 		if ( (sts->entry_status & FS_REMOVED))
 		{
-			printf("Only in repository: %s\n", fn);
+			STOPIF_CODE_EPIPE( printf("Only in repository: %s\n", fn), NULL);
 			goto ex;
 		}
 
-		if (sts->entry_type & FT_IGNORE)
-			goto ex;
+		if (sts->to_be_ignored) goto ex;
 
 		if ( (sts->entry_status & FS_NEW) || !sts->url)
 		{
@@ -537,7 +541,8 @@ int df___direct_diff(struct estat *sts)
 			else
 			{
 				if (opt_verbose>0)
-					printf("Only in local filesystem: %s\n", fn);
+					STOPIF_CODE_EPIPE( printf("Only in local filesystem: %s\n", 
+								fn), NULL);
 				goto ex;
 			}
 		}
@@ -546,7 +551,7 @@ int df___direct_diff(struct estat *sts)
 		if (sts->entry_status || opt_target_revisions_given)
 		{
 			DEBUGP("doing diff rev1=%llu", (t_ull)rev1);
-			if (sts->entry_type == FT_DIR)
+			if (S_ISDIR(sts->updated_mode))
 			{
 				/* TODO: meta-data diff? */
 			}
@@ -560,46 +565,6 @@ int df___direct_diff(struct estat *sts)
 	else
 	{
 		/* Nothing to do for directories? */
-	}
-
-ex:
-	return status;
-}
-
-
-/** Print the diff of entry \a sts against another revision. */
-int df___revX_diff(struct estat *sts)
-{
-  int status;
-	char *fn;
-
-
-	STOPIF( ops__build_path(&fn, sts), NULL);
-
-	if (sts->entry_type & FT_NONDIR)
-	{
-		/** \todo Print meta changes? */
-		DEBUGP("Ignoring directory %s", fn);
-		goto ex;
-	}
-
-  if ((sts->remote_status & FS_REPLACED) == FS_REMOVED)
-	{
-		if ((sts->entry_status & FS_REPLACED) == FS_REMOVED)
-			/* Removed locally and remote. */
-			;
-		else
-			printf("Only locally: %s\n", fn);
-	}	
-	else
-	{
-		if ((sts->entry_status & FS_REPLACED) == FS_REMOVED)
-			printf("Only in repository r%llu: %s\n", (t_ull)sts->repos_rev, fn);
-		else
-		{
-			/* Exists in both paths; do diff. */
-			STOPIF( df__do_diff(sts, sts->repos_rev, 0, NULL), NULL);
-		}
 	}
 
 ex:
@@ -642,7 +607,7 @@ int df___colordiff(int *handle, pid_t *cd_pid)
 {
 	const char *program;
 	int status;
-	int pipes[2], fdflags;
+	int pipes[2], fdflags, success[2];
 
 	status=0;
 	program=opt__get_int(OPT__COLORDIFF) ?
@@ -651,6 +616,23 @@ int df___colordiff(int *handle, pid_t *cd_pid)
 
 	STOPIF_CODE_ERR( pipe(pipes) == -1, errno,
 			"No more pipes");
+	STOPIF_CODE_ERR( pipe(success) == -1, errno,
+			"No more pipes, case 2");
+
+	/* There's a small problem if the parent gets scheduled before the child, 
+	 * and the child doesn't find the colordiff binary; then the parent might 
+	 * only find out when it tries to send the first data across the pipe.
+	 *
+	 * But the successfully spawned colordiff won't report success, so the 
+	 * parent would have to wait for a fail message - which delays execution 
+	 * unnecessary - or simply live with diff getting EPIPE.
+	 *
+	 * Trying to get it scheduled by sending it a signal (which will be 
+	 * ignored) doesn't work reliably, too.
+	 *
+	 * The only way I can think of is opening a second pipe in reverse 
+	 * direction; if there's nothing to be read but EOF, the program could be 
+	 * started - else we get a single byte, signifying an error. */
 
 	*cd_pid=fork();
 	STOPIF_CODE_ERR( *cd_pid == -1, errno,
@@ -658,6 +640,13 @@ int df___colordiff(int *handle, pid_t *cd_pid)
 
 	if (!*cd_pid)
 	{
+		close(success[0]);
+
+		fdflags=fcntl(success[1], F_GETFD);
+		fdflags |= FD_CLOEXEC;
+		fcntl(success[1], F_SETFD, fdflags);
+
+
 		STOPIF_CODE_ERR( 
 				( dup2(pipes[0], STDIN_FILENO) |
 					close(pipes[1]) |
@@ -666,19 +655,41 @@ int df___colordiff(int *handle, pid_t *cd_pid)
 
 		execlp( program, program, NULL);
 
+
 		/* "" as value means best effort, so no error; any other string should 
 		 * give an error. */
-		STOPIF_CODE_ERR(opt__get_int(OPT__COLORDIFF) != 0, errno,
-			"!Cannot start colordiff program \"%s\"", program);
+		if (opt__get_int(OPT__COLORDIFF) != 0)
+		{
+			fdflags=errno;
+			if (!fdflags) fdflags=EINVAL;
+
+			/* Report an error to the parent. */
+			write(success[1], &fdflags, sizeof(fdflags));
+
+			STOPIF_CODE_ERR_GOTO(1, fdflags, quit,
+					"!Cannot start colordiff program \"%s\"", program);
+		}
+
+		close(success[1]);
 
 		/* Well ... do the best. */
 		/* We cannot use STOPIF() and similar, as that would return back up to 
 		 * main - and possibly cause problems somewhere else. */
 		status=df___cheap_colordiff();
+
+quit:
 		exit(status ? 1 : 0);
 	}
 
 	close(pipes[0]);
+	close(success[1]);
+
+	status=read(success[0], &fdflags, sizeof(fdflags));
+	close(success[0]);
+	STOPIF_CODE_ERR( status>0, fdflags,
+			"!The colordiff program \"%s\" doesn't accept any data.\n"
+			"Maybe it couldn't be started, or stopped unexpectedly?",
+			opt__get_string(OPT__COLORDIFF) );	
 
 
 	/* For svn+ssh connections a ssh process is spawned off.
@@ -689,16 +700,6 @@ int df___colordiff(int *handle, pid_t *cd_pid)
 	fdflags |= FD_CLOEXEC;
 	/* Does this return errors? */
 	fcntl(pipes[1], F_SETFD, fdflags);
-
-
-	/* TODO: there's a small problem if the parent here gets scheduled before 
-	 * the child, and the child doesn't find the colordiff binary.
-	 * Then the parent might only find out when it tries to send the first 
-	 * data.
-	 *
-	 * But the successfully spawned diff won't report success, so the parent 
-	 * would have to wait for a fail message - which delays execution 
-	 * unnecessary. */
 
 	*handle=pipes[1];
 	DEBUGP("colordiff is %d", *cd_pid);
@@ -724,8 +725,8 @@ int df___diff_wc_remote(struct estat *entry, apr_pool_t *pool)
 	STOPIF( apr_pool_create(&subpool, pool), NULL);
 
 	removed = 
-		( ((entry->remote_status & FS_REPLACED) & FS_REMOVED) ? 1 : 0 ) |
-		( ((entry->entry_status  & FS_REPLACED) & FS_REMOVED) ? 2 : 0 );
+		( ((entry->remote_status & FS_REPLACED) == FS_REMOVED) ? 1 : 0 ) |
+		( ((entry->entry_status  & FS_REPLACED) == FS_REMOVED) ? 2 : 0 );
 
 	STOPIF( ops__build_path(&fn, entry), NULL);
 	DEBUGP("%s: removed=%X loc=%s rem=%s", fn, removed,
@@ -742,12 +743,12 @@ int df___diff_wc_remote(struct estat *entry, apr_pool_t *pool)
 
 		case 1:
 			/* Remotely removed. */
-			printf("Only locally: %s\n", fn);
+			STOPIF_CODE_EPIPE( printf("Only locally: %s\n", fn), NULL);
 			break;
 
 		case 2:
 			/* Locally removed. */
-			printf("Only in the repository: %s\n", fn);
+			STOPIF_CODE_EPIPE( printf("Only in the repository: %s\n", fn), NULL);
 			break;
 
 		case 0:
@@ -757,7 +758,7 @@ int df___diff_wc_remote(struct estat *entry, apr_pool_t *pool)
 			{
 				special_stg=NULL;
 
-				if (entry->entry_type == FT_DIR)
+				if (S_ISDIR(entry->updated_mode))
 				{
 					/* TODO: meta-data diff? */
 					if (entry->entry_count)
@@ -807,14 +808,21 @@ int df___repos_repos(struct estat *sts)
 
 	STOPIF( hlp__format_path( sts, fullpath, &path), NULL);
 
-	if (sts->remote_status & FS_NEW)
-		printf("Only in r%llu: %s\n", (t_ull)opt_target_revision2, path);
+	if ((sts->remote_status & FS_REPLACED) == FS_REPLACED)
+		STOPIF_CODE_EPIPE( 
+				printf("Completely replaced: %s\n", path), NULL);
+	else if (sts->remote_status & FS_NEW)
+		STOPIF_CODE_EPIPE( 
+				printf("Only in r%llu: %s\n", 
+					(t_ull)opt_target_revision2, path), NULL);
 	else if ((sts->remote_status & FS_REPLACED) == FS_REMOVED)
-		printf("Only in r%llu: %s\n", (t_ull)opt_target_revision, path);
+		STOPIF_CODE_EPIPE( 
+				printf("Only in r%llu: %s\n", 
+					(t_ull)opt_target_revision, path), NULL);
 	else if (sts->remote_status)
-		switch (sts->entry_type)
+		switch (sts->st.mode & S_IFMT)
 		{
-			case FT_DIR:
+			case S_IFDIR:
 				/* TODO: meta-data diff? */
 				if (sts->entry_count)
 				{
@@ -825,15 +833,18 @@ int df___repos_repos(struct estat *sts)
 
 				break;
 
-			case FT_ANYSPECIAL:
+				/* Normally a repos-repos diff can only show symlinks changing - 
+				 * all other types of special entries get *replaced*. */
+			case S_IFANYSPECIAL:
 				/* We don't know yet which special type it is. */
-			case FT_SYMLINK:
-			case FT_BDEV:
-			case FT_CDEV:
-				printf("Special entry changed: %s\n", path);
+			case S_IFLNK:
+			case S_IFBLK:
+			case S_IFCHR:
+				STOPIF_CODE_EPIPE( printf("Special entry changed: %s\n", 
+							path), NULL);
 				/* Fallthrough */
 
-			case FT_FILE:
+			case S_IFREG:
 				STOPIF( df__do_diff(sts, 
 							opt_target_revision, opt_target_revision2, NULL), 
 						NULL);
@@ -860,7 +871,8 @@ int df__work(struct estat *root, int argc, char *argv[])
 	int status;
 	int i, deinit;
 	char **normalized;
-	svn_revnum_t rev;
+	svn_revnum_t rev, base;
+	char *norm_wcroot[2]= {".", NULL};
 
 
 	status=0;
@@ -874,6 +886,7 @@ int df__work(struct estat *root, int argc, char *argv[])
 	signal(SIGINT, df___signal);
 	signal(SIGTERM, df___signal);
 	signal(SIGHUP, df___signal);
+	signal(SIGCHLD, SIG_DFL);
 
 
 	/* check for colordiff */
@@ -914,7 +927,7 @@ int df__work(struct estat *root, int argc, char *argv[])
 			/* Fetch remote changes ... */
 			while ( ! ( status=url__iterator(&rev) ) )
 			{
-				STOPIF( cb__record_changes(NULL, root, rev, current_url->pool), NULL);
+				STOPIF( cb__record_changes(root, rev, current_url->pool), NULL);
 			}
 			STOPIF_CODE_ERR( status != EOF, status, NULL);
 
@@ -927,6 +940,11 @@ int df__work(struct estat *root, int argc, char *argv[])
 			 * descending priority, and an entry removed at a higher priority 
 			 * could be replaced by one at a lower. */
 			/* TODO: 2 revisions per-URL. */
+
+			/* If no entries are given, do the whole working copy. */
+			if (!argc)
+				normalized=norm_wcroot;
+
 			while ( ! ( status=url__iterator(&rev) ) )
 			{
 				STOPIF( url__canonical_rev(current_url, &opt_target_revision), NULL);
@@ -936,16 +954,25 @@ int df__work(struct estat *root, int argc, char *argv[])
 				 * got nothing.  */
 				current_url->current_rev=0;
 				action->repos_feedback=df___reset_remote_st;
-				STOPIF( cb__record_changes(NULL, root, 
-							opt_target_revision, current_url->pool), NULL);
+				STOPIF( cb__record_changes(root, opt_target_revision, 
+							current_url->pool), NULL);
 
 				/* Now get changes. We cannot do diffs directly, because
 				 * we must not use the same connection for two requests 
 				 * simultaneously. */
 				action->repos_feedback=NULL;
-				STOPIF( cb__record_changes(NULL, root, 
-							opt_target_revision2, current_url->pool), NULL);
+
+				/* We say that the WC root is at the target revision, but that some 
+				 * paths are not. */
+				base=current_url->current_rev;
+				current_url->current_rev=opt_target_revision2;
+				STOPIF( cb__record_changes_mixed(root, opt_target_revision2, 
+							normalized, base, current_url->pool), 
+						NULL);
 			}
+			STOPIF_CODE_ERR( status != EOF, status, NULL);
+
+
 			/* If we'd use the log functions to get a list of changed files 
 			 * we'd be slow for large revision ranges; for the various 
 			 * svn_ra_do_update, svn_ra_do_diff2 and similar functions we'd 
@@ -967,7 +994,6 @@ int df__work(struct estat *root, int argc, char *argv[])
 			 * Ad 1: Ignoring "does not exist" messages when we say "directory 
 			 * 'not-needed' is already at revision 'target'" and this isn't 
 			 * true. TODO: Test whether all ra layers make that possible. */
-			STOPIF_CODE_ERR( status != EOF, status, NULL);
 
 			STOPIF( df___repos_repos(root), NULL);
 			status=0;

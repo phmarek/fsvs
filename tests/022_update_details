@@ -42,12 +42,11 @@ if $BINdflt st | grep new | cmp $logfile -
 then
   $SUCCESS "update keeps new files, status shows them"
 else
-  $ERROR_NB "update hides new files:"
 	$ERROR_NB "old was:"
 	cat $logfile
 	$ERROR_NB "new is:"
 	$BINdflt st
-	exit 1
+  $ERROR "update hides new files"
 fi
 
 # Now commit, so that the new files are versioned

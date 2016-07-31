@@ -5,46 +5,47 @@ $PREPARE_CLEAN > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
-COUNT1=20
-COUNT2=20
-COUNT3=20
-seq1=`seq 1 $COUNT1`
-seq2=`seq 1 $COUNT2`
-seq3=`seq 1 $COUNT3`
+logfile=$LOGDIR/019.log
+
+# Start counting from here, so that the length of the names is equal 
+# (needed for sorting later).
+START=11
+COUNT=20
 
 # We have to escape ( ) and *, as the shell would try to interpret these.
-exp_count=`expr $COUNT1 \* \( $COUNT2 \* \( $COUNT3 + 1 \) + 1 \) + 1`
+exp_count=$(($COUNT * ( $COUNT * ( $COUNT + 1 ) + 1 ) + 1))
 
-echo -n "Generating $exp_count entries: "
+echo "Generating $exp_count entries."
 
-for lev1 in $seq1
-do
-	echo -n "."
-	mkdir $lev1
-	cd $lev1
-	for lev2 in $seq2
-	do
-		mkdir $lev2
-		( cd $lev2
-			for lev3 in $seq3
-			do
-				echo $lev1-$lev2-$lev3 >> $lev3.txt
-			done &
-		)
-	done
-	cd ..
-done
+# Previously this was done via the shell, and partly parallel - but was 
+# still much slower than perl.
+perl -e '
+($start, $end)=@ARGV;
+for $a ($start .. $end) {
+	mkdir($a) || die "$a: $!";
+	for $b ($start .. $end) {
+		$d="$a/$b";
+		mkdir($d) || die "$d: $!";
+		for $c ($start .. $end) {
+			$i++;
+			$f="$d/$c";
+			open(F, "> $f") || die "$f: $!";
+			print F "$a-$b-$c\n", ("." x ($i % 269)), "\n";
+		}
+	}
+}
+' $START $(($START+$COUNT-1))
 
-echo "!"
 echo "Looking for them."
 
-found=`$BINdflt st | wc -l`
+# Generating them is so fast that the directory might stay in the same 
+# second.
+found=`$BINdflt st -C | wc -l`
 if [[ $found -eq $exp_count ]]
 then
-  $SUCCESS "fsvs found all $exp_count changed entries."
+	$SUCCESS "fsvs found all $exp_count changed entries."
 else
-  $ERROR_NB "fsvs found $found instead of $exp_count entries!"
-	exit 1
+	$ERROR "fsvs found $found instead of $exp_count entries!"
 fi
 
 
@@ -53,4 +54,57 @@ $BINq ci -m many
 
 echo "Checkout ..."
 $WC2_UP_ST_COMPARE
+
+# Do some swapping of entries, so that the names are unchanged, but the 
+# inode numbers are mixed.
+# That's to see that such changes are detected and correctly handled.
+function Swap
+{
+	find $1 | perl -e '
+	@list=map { chomp; $_; } <STDIN>;
+	srand(1975007003);
+	$last=$list[rand(@list)];
+	$lfn="x";
+	@l=($last);
+	rename($last, $lfn) || die "$last => $lfn: $!\n";
+	for(2 .. shift())
+	{
+		$cur=splice(@list, rand(@list), 1);
+		rename($cur, $last) || die "$cur => $last: $!\n";
+		$last=$cur;
+		push @l, $last;
+	}
+	rename($lfn, $last) || die "$lfn => $last: $!\n";
+# Use two spaces, no tab, in picture line!
+	format STDOUT=
+  ^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< ~~
+		$l
+.
+	$l=join(" ",@l);
+	write;
+	' $2
+
+# Now there must be N+1 swapped entries.
+# We need the -C as the size might be the same.
+	$BINdflt st -C -C -f text > $logfile
+	if [[ `wc -l < $logfile` -eq $3 ]]
+	then
+		$SUCCESS "Swapping $2 entries with '$1' ok ($3 changed)"
+	else
+		cat $logfile
+		$ERROR_NB "Swapping $2 entries with '$1' wrong"
+		$ERROR "expected $3 changed, got "`wc -l $logfile`
+	fi
+
+	$BINq ci -m x -o delay=yes
+	$WC2_UP_ST_COMPARE
+}
+
+# Swap files only
+Swap "$START -type f" 50 50
+# If we swap 10 directories with 20 entries each, we get 200 changed 
+# entries
+Swap ". -maxdepth 2 -mindepth 2 -type d " 10 200
+# 20*20*3 == 1200
+Swap ". -maxdepth 1 -mindepth 1 -type d " 3 1200
 

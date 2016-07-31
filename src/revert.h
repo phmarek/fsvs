@@ -17,9 +17,6 @@
 /** \ref revert main action function. */
 work_t rev__work;
 
-/** \a Revert callback function. */
-action_t rev__action;
-
 /** Has to fetch the decoder from the repository. */
 #define DECODER_UNKNOWN ((char*)-1)
 
@@ -52,6 +49,15 @@ int rev__get_text_to_tmpfile(char *loc_url, svn_revnum_t revision,
 int rev__get_text_into_buffer(char *loc_url, svn_revnum_t revision,
 		const char *decoder,
 		svn_stringbuf_t **output,
+		struct estat *sts_for_manber,
+		struct estat *output_sts,
+		apr_hash_t **props,
+		apr_pool_t *pool);
+
+/** General function to get a file into a stream. */
+int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
+		const char *decoder,
+		svn_stream_t *output,
 		struct estat *sts_for_manber,
 		struct estat *output_sts,
 		apr_hash_t **props,

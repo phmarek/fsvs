@@ -1,5 +1,5 @@
 /************************************************************************
- * Copyright (C) 2005-2007-2008 Philipp Marek.
+ * Copyright (C) 2005-2008 Philipp Marek.
  *
  * This program is free software;  you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -18,7 +18,6 @@
 #include <subversion-1/svn_ra.h>
 #include <subversion-1/svn_auth.h>
 #include <subversion-1/svn_client.h>
-#include <subversion-1/svn_config.h>
 #include <subversion-1/svn_cmdline.h>
 
 
@@ -41,12 +40,11 @@ svn_error_t *cb__init(apr_pool_t *pool)
 	svn_config_t *cfg;
 
 
-	status=0;
-	STOPIF_SVNERR(svn_config_get_config,
-			(&cfg_hash, NULL, pool) );
+	STOPIF( hlp__get_svn_config(&cfg_hash), NULL);
 
 	cfg = apr_hash_get(cfg_hash, SVN_CONFIG_CATEGORY_CONFIG,
 			APR_HASH_KEY_STRING);
+
 
 	/* Set up Authentication stuff. */
 	STOPIF_SVNERR( svn_cmdline_setup_auth_baton,
@@ -55,8 +53,8 @@ svn_error_t *cb__init(apr_pool_t *pool)
 			 opt__get_int(OPT__AUTHOR) ? 
 			 opt__get_string(OPT__AUTHOR) : NULL,
 			 NULL, /* Password */
-			 NULL, /* Config dir */
-			 1, /* no_auth_cache */
+			 opt__get_string(OPT__CONFIG_DIR),
+			 0, /* no_auth_cache */
 			 cfg,
 			 NULL, /* cancel function */
 			 NULL, /* cancel baton */
@@ -238,12 +236,10 @@ int cb__add_entry(struct estat *dir,
 		if (!(mode & 0777))
 			mode |= S_ISDIR(mode) ? 0700 : 0600;
 		/* Until we know better */
-		sts->st.mode = mode; 
+		sts->updated_mode = sts->st.mode = mode; 
 
 /* Default is current time. */
 		time( & sts->st.mtim.tv_sec );
-
-		sts->entry_type = ops___filetype( &(sts->st) );
 
 		/* To avoid EPERM on chmod() etc. */
 		sts->st.uid=getuid(); 
@@ -485,6 +481,10 @@ svn_error_t *cb___close_directory(
 	struct estat *sts=dir_baton;
 	int status;
 
+	/* Release some memory; that was likely needed by cb__add_entry(), but is no
+	 * longer. */
+	IF_FREE(sts->by_name);
+
 	STOPIF( cb___close(sts), NULL);
 
 ex:
@@ -725,15 +725,15 @@ ex:
 
 
 /** -.
- * Just a proxy. */
-int cb__record_changes(svn_ra_session_t *session,
-		struct estat *root,
+ * Just a proxy; calls cb__record_changes_mixed() with the \a root, \a target
+ * and \a pool, and default values for the rest. */
+int cb__record_changes(struct estat *root,
 		svn_revnum_t target,
 		apr_pool_t *pool)
 {
 	int status;
 
-	STOPIF( cb__record_changes_mixed(session, root, target, 
+	STOPIF( cb__record_changes_mixed(root, target, 
 				NULL, 0, pool), NULL);
 ex:
 	return status;
@@ -742,10 +742,12 @@ ex:
 
 /** -.
  * Calls the svn libraries and records which entries would be changed
- * on this update. 
- * \param session An opened session
+ * on this update on \c current_url.
  * \param root The root entry of this wc tree
  * \param target The target revision. \c SVN_INVALID_REVNUM is not valid.
+ * \param other_paths A \c NULL-terminated list of paths that are sent to
+ * the svn_ra_reporter2_t::set_path().
+ * \param other_revs The revision to be sent for \a other_paths.
  * \param pool An APR-pool.
  *
  * When a non-directory entry gets replaced by a directory, its 
@@ -765,9 +767,13 @@ ex:
  *
  * \a other_paths is a \c NULL -terminated list of pathnames (which may 
  * have the \c "./" in front, ie. the \e normalized paths) that are to be 
- * reported at revision  \a other_revs. */
-int cb__record_changes_mixed(svn_ra_session_t *session,
-		struct estat *root,
+ * reported at revision  \a other_revs.
+ *
+ * If \a other_paths is \c NULL, or doesn't include an <tt>"."</tt> entry, 
+ * the WC root is reported to be at \c current_url->current_rev or, if this 
+ * is \c 0, to be at \a target, but empty.
+ * */
+int cb__record_changes_mixed(struct estat *root,
 		svn_revnum_t target,
 		char *other_paths[], svn_revnum_t other_revs,
 		apr_pool_t *pool)
@@ -776,13 +782,14 @@ int cb__record_changes_mixed(svn_ra_session_t *session,
 	svn_error_t *status_svn;
 	void *report_baton;
 	const svn_ra_reporter2_t *reporter;
+	int sent_wcroot;
+	char *cur, **op;
 
 
 	status=0;
 	cb___dest_rev=target;
-	if (!session) session=current_url->session;
 	STOPIF_SVNERR( svn_ra_do_status,
-			(session,
+			(current_url->session,
 			 &reporter,
 			 &report_baton,
 			 "",
@@ -792,10 +799,29 @@ int cb__record_changes_mixed(svn_ra_session_t *session,
 			 root,
 			 pool) );
 
+	sent_wcroot=0;
+	cur=NULL;
+	op=NULL;
+	if (other_paths)
+	{
+		op=other_paths;
+		while ( (cur=*op) )
+		{
+			if (cur[0] == '.' && cur[1] == 0)
+				break;
+			op++;
+		}
+	}
+
 	/* If this is a checkout, we need to set the base directory at HEAD, but
 	 * empty. We cannot use the base at revision 0, because it probably didn't
 	 * exist there. */
-	if (current_url->current_rev == 0)
+	if (cur)
+		STOPIF_SVNERR( reporter->set_path,
+				(report_baton,
+				 "", other_revs,
+				 FALSE, NULL, pool));
+	else if (current_url->current_rev == 0)
 		STOPIF_SVNERR( reporter->set_path,
 				(report_baton,
 				 "", target,
@@ -808,20 +834,29 @@ int cb__record_changes_mixed(svn_ra_session_t *session,
 
 	if (other_paths)
 	{
-		while (*other_paths)
+	/* The root entry must be the first to be reported (because of
+		 * subversion/libsvn_repos/reporter.c).
+		 * So we have to loop through the list - in case the user does
+		 *   "fsvs diff file ."
+		 * or something like that. */
+		while ( (cur=*other_paths) )
 		{
-			DEBUGP("reporting %s@%llu", *other_paths, (t_ull)other_revs);
+			/* cur loops through the entries, but *op is still set. */ 
+			if (op != other_paths) 
+			{
+				DEBUGP("reporting %s@%llu", cur, (t_ull)other_revs);
 
-			/* Ignore the . path */
-			if (strcmp(*other_paths, ".") != 0)
+				if (cur[0] == '.' && cur[1] == PATH_SEPARATOR) 
+					cur+=2;
+
 				STOPIF_SVNERR( reporter->set_path,
-						(report_baton,
-						 *other_paths + (strncmp(*other_paths, "./", 2) == 0 ? 2 : 0),
-						 other_revs, FALSE, NULL, pool));
+						(report_baton, cur, other_revs, FALSE, NULL, pool));
+			}
 
 			other_paths++;
 		}
 	}
+
 
 	DEBUGP("Getting changes from %llu to %llu", 
 			(t_ull)current_url->current_rev,

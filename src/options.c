@@ -19,6 +19,7 @@
 /** \file
  * Functions dealing with user settings. */
 
+#define ENV_PREFIX "FSVS_"
 
 /** A structure to associate a string with an integer. */
 struct opt___val_str_t 
@@ -50,8 +51,7 @@ const struct opt___val_str_t opt___log_output_strings[]= {
 /** Strings for auto/yes/no settings.
  *
  * Don't change the order without changing all users! */
-const struct opt___val_str_t opt___yes_no_auto[]= {
-	{ .val=OPT__AUTO, 								.string="auto" },
+const struct opt___val_str_t opt___yes_no[]= {
 	{ .val=OPT__YES,				 					.string="yes" },
 	{ .val=OPT__YES,				 					.string="true" },
 	{ .val=OPT__YES,				 					.string="on" },
@@ -62,7 +62,7 @@ const struct opt___val_str_t opt___yes_no_auto[]= {
 };
 
 /* Why doesn't this work?? */
-// const struct opt___val_str_t opt___yes_no[] = &opt___yes_no_auto[1];
+const struct opt___val_str_t *opt___no_words = opt___yes_no+3;
 
 
 /** Filter strings and bits.
@@ -73,11 +73,25 @@ const struct opt___val_str_t opt___filter_strings[]= {
 	{ .val=FS_META_CHANGED, 									.string="meta" }, 
 	{ .val=FS_META_MTIME, 										.string="mtime" }, 
 	{ .val=FS_META_OWNER, 										.string="owner" },
+	{ .val=FS_META_UMODE,											.string="mode" },
 	{ .val=FS_META_GROUP, 										.string="group" },
 	{ .val=FS_NEW, 														.string="new" },
+	{ .val=FS_CHANGED, 												.string="changed" },
 	{ .val=FS_REMOVED, 												.string="deleted" },
+	{ .val=FS_REMOVED, 												.string="removed" },
 	{ .val=0, 																.string="none" },
 	{ .string=NULL, }
+};
+
+
+/** Change detection strings.
+ * \ref o_chcheck. */
+const struct opt___val_str_t opt___chcheck_strings[]= {
+	{ .val=0,																	.string="none" },
+	{ .val=CHCHECK_FILE,											.string="file_mtime" },
+	{ .val=CHCHECK_DIRS,			 								.string="dir" },
+	{ .val=CHCHECK_ALLFILES,	 								.string="allfiles" },
+	{ .val=-1,	 															.string="full" },
 };
 
 
@@ -143,19 +157,27 @@ struct opt__list_t opt__list[OPT__COUNT]=
 	},
 	[OPT__DIR_SORT] = {
 		.name="dir_sort", .i_val=OPT__NO, 
-		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+		.parse=opt___string2val, .parm=opt___yes_no,
 	},
 	[OPT__STATUS_COLOR] = {
 		.name="stat_color", .i_val=OPT__NO, 
-		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+		.parse=opt___string2val, .parm=opt___yes_no,
 	},
 	[OPT__STOP_ON_CHANGE] = {
 		.name="stop_change", .i_val=OPT__NO, 
-		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+		.parse=opt___string2val, .parm=opt___yes_no,
 	},
 	[OPT__FILTER] = {
 		.name="filter", .i_val=0, 
 		.parse=opt___strings2bitmap, .parm=opt___filter_strings,
+	},
+	[OPT__CHANGECHECK] = {
+		.name="change_check", .i_val=CHCHECK_FILE, 
+		.parse=opt___strings2bitmap, .parm=opt___chcheck_strings,
+	},
+	[OPT__ALL_REMOVED] = {
+		.name="all_removed", .i_val=OPT__YES, 
+		.parse=opt___string2val, .parm=opt___yes_no,
 	},
 
 	[OPT__DEBUG_OUTPUT] = {
@@ -210,10 +232,15 @@ struct opt__list_t opt__list[OPT__COUNT]=
 			 .cp_val=DEFAULT_CONF_PATH, .i_val=strlen(DEFAULT_CONF_PATH), */
 		.cp_val=NULL, .i_val=0,
 	},
+	[OPT__CONFIG_DIR] = {
+		.name="config_dir", .parse=opt___store_string,
+		.cp_val=NULL, .i_val=0,
+	},
+
 
 	[OPT__EMPTY_COMMIT] = {
 		.name="empty_commit", .i_val=OPT__YES, 
-		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+		.parse=opt___string2val, .parm=opt___yes_no,
 	},
 	[OPT__DELAY] = {
 		.name="delay", .i_val=OPT__NO,
@@ -221,7 +248,7 @@ struct opt__list_t opt__list[OPT__COUNT]=
 	},
 	[OPT__COPYFROM_EXP] = {
 		.name="copyfrom_exp", .i_val=OPT__YES,
-		.parse=opt___string2val, .parm=opt___yes_no_auto+1,
+		.parse=opt___string2val, .parm=opt___yes_no,
 	},
 };
 
@@ -520,13 +547,12 @@ ex:
 
 
 /** -.
- * Looks for environment variables with the given \c prefix, and tries to 
+ * Looks for environment variables with the given \c ENV_PREFIX, and tries to 
  * parse them as options.
  *
  * Invalid names are ignored, invalid values not. */
 int opt__load_env(char **env)
 {
-	static const char prefix[]="FSVS_";
 	int status;
 	char *cur;
 	char buffer[32];
@@ -536,10 +562,10 @@ int opt__load_env(char **env)
 
 	while ( (cur=*(env++)) )
 	{
-		if (strncmp(cur, prefix, strlen(prefix)) == 0)
+		if (strncmp(cur, ENV_PREFIX, strlen(ENV_PREFIX)) == 0)
 		{
 			DEBUGP("found env %s", cur);
-			cur += strlen(prefix);
+			cur += strlen(ENV_PREFIX);
 
 			for(i=0; cur[i] != '=' && i<sizeof(buffer)-1; i++)
 				buffer[i]=tolower(cur[i]);
@@ -595,7 +621,25 @@ int opt__doesnt_say_off(const char *string)
 	int i;
 
 	i=OPT__YES;
-	if (opt___find_string(opt___yes_no_auto+4, string, &i)) return 1;
+	if (opt___find_string(opt___yes_no+3, string, &i)) return 1;
 	return i;
 }
 
+
+/** -.
+ *
+ * \todo Maybe the variable reading should be changed to use this code, and
+ * loop via \c getenv() over all options? */
+char *opt__variable_from_option(enum opt__settings_e which)
+{
+	static char buffer[ strlen(ENV_PREFIX) + 
+		sizeof(opt__list[0].name) + 1] = ENV_PREFIX;
+	char * const target=buffer+strlen(ENV_PREFIX);
+	int i;
+
+	i=0;
+	while ( (target[i] = toupper(opt__list[which].name[i])) )
+		i++;
+
+	return buffer;
+}

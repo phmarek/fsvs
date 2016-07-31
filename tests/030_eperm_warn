@@ -44,17 +44,15 @@ logfile=$LOGDIR/030.logfile
 echo "Testing stopping"
 if $BINdflt -v up -W chown-eperm=stop > $logfile 2>&1
 then
-	$ERROR_NB "not stopped!"
 	cat $logfile
-	exit 1
+	$ERROR "not stopped!"
 else
 	if [[ `grep chown-eperm $logfile | wc -l` -eq 1 ]]
 	then
 		$SUCCESS "stopped."
 	else
-		$ERROR_NB "stopped for wrong reason?"
 		cat $logfile
-		exit 1
+		$ERROR "stopped for wrong reason?"
 	fi
 fi
 
@@ -68,9 +66,8 @@ if [[ `grep chown-eperm $logfile | wc -l` -ge 1 ]]
 then
 	$SUCCESS "warning given"
 else
-	$ERROR_NB "warning NOT given"
 	cat $logfile
-	exit 1
+	$ERROR "warning NOT given"
 fi
 
 

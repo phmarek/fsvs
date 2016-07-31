@@ -12,27 +12,24 @@ for filename in new-file1 ' ' new-file2 $STG_UTF8 $STG_LOC
 do
 	if [[ `$BINdflt st | wc -l` -ne 0 ]]
 	then
-		$ERROR_NB "status gave unexpected lines:"
 		$BINdflt st
-		exit 1
+		$ERROR "status gave unexpected lines"
 	fi
 
 	touch "$filename"
 	if [[ `$BINdflt st | wc -l` -ne 2 ]]
 	then
-		$ERROR_NB "status gave unexpected lines; only 2 line expected,"
-		echo ". changed, '$filename' as new"
+		$ERROR_NB "Expect: . changed, '$filename' as new"
 		$BINdflt st
-		exit 1
+		$ERROR "got something else."
 	fi
 
 	echo "     ci"
 	$BINdflt ci -m "$filename-$RANDOM" -o delay=yes . > $tmp
 	if [[ `grep -F "N...         0  ./$filename" < $tmp > /dev/null` ]]
 	then
-		$ERROR_NB "expected '$filename' as new"
 		cat $tmp
-		exit 1
+		$ERROR "expected '$filename' as new"
 	else
 		$SUCCESS "'$filename' is new"
 	fi
@@ -41,9 +38,8 @@ do
 	then
 		$SUCCESS "found revision line"
 	else
-		$ERROR_NB "expected 'committed revision'"
 		cat $tmp
-		exit 1
+		$ERROR "expected 'committed revision'"
 	fi
 
 	$WC2_UP_ST_COMPARE
@@ -59,10 +55,9 @@ fi
 
 if [[ `$BINdflt st | wc -l` -ne 2 ]]
 then
-	$ERROR_NB "status gave unexpected lines; only 2 line expected,"
-	echo ". changed, $filename as deleted"
+	echo "Expect: . changed, $filename as deleted"
 	$BINdflt st
-	exit 1
+	$ERROR "Doesn't match."
 fi
 
 
@@ -76,9 +71,8 @@ echo "     ci"
 $BINdflt ci -m delete . > $tmp
 if [[ `grep -F "D...         0  ./$filename" < $tmp > /dev/null` ]]
 then
-	$ERROR_NB "expected $filename as deleted"
 	cat $tmp
-	exit 1
+	$ERROR "expected $filename as deleted"
 else
 	$SUCCESS "$filename is deleted"
 fi
@@ -87,9 +81,8 @@ if [[ `tail -1 $tmp` == "committed revision"* ]]
 then
 	$SUCCESS "found revision line"
 else
-	$ERROR_NB "expected 'committed revision'"
 	cat $tmp
-	exit 1
+	$ERROR "expected 'committed revision'"
 fi
 
 

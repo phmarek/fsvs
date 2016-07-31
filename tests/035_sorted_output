@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -e
+$INCLUDE_FUNCS
+$PREPARE_DEFAULT > /dev/null
+cd $WC
+
+
+logfile=$LOGDIR/035.sorted_output
+
+funsort=$logfile.unsort
+fsort=$logfile.sort
+
+
+$INFO "Testing sorting"
+
+# We try to create entries with a lower inode number than their parent.
+touch z a y b x c w
+mkdir H
+mv z a y b x c w H
+for parm in "" "-v"
+do
+	$BINdflt st > $funsort
+	$BINdflt st -o dir_sort=yes > $fsort
+
+	if cmp -s $funsort $fsort
+	then
+	  $WARN "Sorted equals unsorted?"
+	fi
+
+	if sort -k3 $funsort | cmp -s - $fsort
+	then
+	  echo "Sorting ok"
+	else
+		sort -k3 $funsort | diff -u - $fsort
+	  $ERROR "Didn't sort (cmdline='$parm')"
+	fi
+done
+$SUCCESS "Sorting works."
+

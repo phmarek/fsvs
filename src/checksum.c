@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 
 #include "checksum.h"
+#include "helper.h"
 #include "global.h"
 #include "est_ops.h"
 #include "waa.h"
@@ -247,7 +248,10 @@ ex:
  * file has been checked already and fullpath is \c NULL, a debug message 
  * can write \c (null), as then even the name calculation
  * is skipped.
- * \param result is set to 0 for identical to old or !=0 for changed.
+ * \param result is set to \c 0 for identical to old and \c &gt;0 for 
+ * changed.
+ * As a special case this function returns \c &lt;0 for <i>don't know</i> 
+ * if the file is unreadable due to a \c EACCESS.
  *
  * \note Performance optimization
  * In normal circumstances not the whole file has to be read to get the 
@@ -264,10 +268,13 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 	unsigned char *filedata;
 	int do_manber;
 	char *cp;
+	struct sstat_t actual;
 	md5_digest_t old_md5 = { 0 };
 	static struct t_manber_data mb_dat;
 
 
+	/* Default is "don't know". */
+	if (result) *result = -1;
 	if (S_ISDIR(sts->st.mode)) return 0;
 
 	fh=-1;
@@ -288,7 +295,12 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 	DEBUGP("hashing %s",fullpath);
 	memcpy(old_md5, sts->md5, sizeof(old_md5));
 
-	if (S_ISREG(sts->st.mode))
+	/* We'll open and read the file now, so the additional lstat() doesn't 
+	 * really hurt - and it makes sure that we see the current values (or at 
+	 * least the _current_ ones :-). */
+	STOPIF( hlp__lstat(fullpath, &actual), NULL);
+
+	if (S_ISREG(actual.mode))
 	{
 		do_manber=1;
 		/* Open the file and read the stream from there, comparing the blocks
@@ -296,7 +308,7 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 		 * If a difference is found, stop, and mark file as different. */
 		/* If this call returns ENOENT, this entry simply has no md5s-file.
 		 * We'll have to MD5 it completely. */
-		if (sts->st.size < CS__MIN_FILE_SIZE)
+		if (actual.size < CS__MIN_FILE_SIZE)
 			do_manber=0;
 		else
 		{
@@ -314,14 +326,30 @@ int cs__compare_file(struct estat *sts, char *fullpath, int *result)
 		current_pos=0;
 
 		fh=open(fullpath, O_RDONLY);
-		STOPIF_CODE_ERR(fh < 0, errno, 
-				"open(\"%s\", O_RDONLY) failed", fullpath);
+		/* We allow a single special case on error handling: EACCES, which 
+		 * could simply mean that the file has mode 000. */
+		if (fh<0)
+		{
+			/* The debug statement might change errno, so we have to save the 
+			 * value.  */
+			status=errno;
+			DEBUGP("File %s is unreadable: %d", fullpath, status);
+			if (status == EACCES) 
+			{
+				status=0;
+				goto ex;
+			}
+
+			/* Can that happen? */
+			if (!status) status=EBUSY;
+			STOPIF(status, "open(\"%s\", O_RDONLY) failed", fullpath);
+		}
 
 		status=0;
-		while (current_pos < sts->st.size)
+		while (current_pos < actual.size)
 		{
-			if (sts->st.size-current_pos < MAPSIZE)
-				length_mapped=sts->st.size-current_pos;
+			if (actual.size-current_pos < MAPSIZE)
+				length_mapped=actual.size-current_pos;
 			else
 				length_mapped=MAPSIZE;
 			DEBUGP("mapping %u bytes from %llu", 

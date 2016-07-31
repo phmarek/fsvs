@@ -46,9 +46,9 @@
  * fsvs cp load
  * \endcode
  *
- * This command marks \c DEST as a copy of \c SRC at revision \c rev, so 
- * that on the next commit of \c DEST the corresponding source path is sent 
- * as copy source.
+ * The \c copy command marks \c DEST as a copy of \c SRC at revision \c 
+ * rev, so that on the next commit of \c DEST the corresponding source path 
+ * is sent as copy source.
  *
  * The default value for \c rev is \c BASE, ie. the revision the \c SRC 
  * (locally) is at.
@@ -196,6 +196,36 @@
  * only the indicator <tt>...</tt> is shown at the end.
  * 
  * */
+
+/**
+ * \addtogroup cmds
+ *
+ * \section uncp
+ *
+ * \code
+ * fsvs uncopy DEST [DEST ...]
+ * \endcode
+ *
+ * The \c uncopy command removes a \c copyfrom mark from the destination 
+ * entry. This will make the entry unknown again, and reported as \c New on 
+ * the next invocations.
+ *
+ * Only the base of a copy can be un-copied; if a directory structure was 
+ * copied, and the given entry is just implicitly copied, this command will 
+ * give you an error.
+ *
+ * This is not folded in \ref revert, because it's not clear whether \c 
+ * revert should restore the original copyfrom data or remove the copy 
+ * attribute; by using a special command this is no longer ambiguous. 
+ *
+ * Example:
+ * \code
+ *   $ fsvs copy SourceFile DestFile
+ *   # Whoops, was wrong!
+ *   $ fsvs uncopy DestFile
+ * \endcode
+ * */
+
 /* Or should for dirlist just the raw data be showed - common_files, 
  * files_in_new_dir? */
 
@@ -368,10 +398,12 @@ cm___format_fn cm___output_pct;
 struct cm___match_t {
 /** Name for this way of matching */
 	char name[8];
-	/** Which entry types are allowed? */
-	int entry_types;
+	/** Which entry type is allowed? */
+	mode_t entry_type;
 	/** Whether this can be avoided by an option. */
-	int is_expensive;
+	int is_expensive:1;
+	/** Whether this match is allowed. */
+	int is_enabled:1;
 
 	/** Callback function for inserting elements */
 	cm___register_fn *insert;
@@ -410,22 +442,25 @@ struct cm___match_t cm___match_array[]=
 {
 	[CM___NAME_F] = { .name="name", .to_key=cm___name_datum, 
 		.insert=cm___hash_register, .get_list=cm___hash_list,
-		.entry_types=FT_FILE,  .filename=WAA__FILE_NAME_EXT},
+		.entry_type=S_IFREG,  .filename=WAA__FILE_NAME_EXT},
 	[CM___NAME_D] = { .name="name", .to_key=cm___name_datum, 
 		.insert=cm___hash_register, .get_list=cm___hash_list,
-		.entry_types=FT_DIR,  .filename=WAA__DIR_NAME_EXT},
+		.entry_type=S_IFDIR,  .filename=WAA__DIR_NAME_EXT},
+
 	[CM___DIRLIST] = { .name="dirlist", 
 		.get_list=cm___match_children, .format=cm___output_pct,
-		.entry_types=FT_DIR, },
+		.entry_type=S_IFDIR, },
+
 	{ .name="md5", .to_key=cm___md5_datum, .is_expensive=1,
 		.insert=cm___hash_register, .get_list=cm___hash_list,
-		.entry_types=FT_FILE, .filename=WAA__FILE_MD5s_EXT},
+		.entry_type=S_IFREG, .filename=WAA__FILE_MD5s_EXT},
+
 	{ .name="inode", .to_key=cm___inode_datum, 
 		.insert=cm___hash_register, .get_list=cm___hash_list,
-		.entry_types=FT_FILE,  .filename=WAA__FILE_INODE_EXT},
+		.entry_type=S_IFDIR, .filename=WAA__FILE_INODE_EXT},
 	{ .name="inode", .to_key=cm___inode_datum, 
 		.insert=cm___hash_register, .get_list=cm___hash_list,
-		.entry_types=FT_DIR,  .filename=WAA__DIR_INODE_EXT},
+		.entry_type=S_IFREG, .filename=WAA__DIR_INODE_EXT},
 };
 #define CM___MATCH_NUM (sizeof(cm___match_array)/sizeof(cm___match_array[0]))
 
@@ -517,7 +552,7 @@ int cm___match_children(struct estat *sts, struct cm___match_t *match,
 	struct cm___candidate_t *cur, tmp_cand={0};
 	size_t simil_dir_count;
 	int common;
-	struct estat **children;
+	struct estat **children, *curr;
 	struct estat **others, *other_dir;
 	int other_count, i;
 	datum key;
@@ -535,16 +570,17 @@ int cm___match_children(struct estat *sts, struct cm___match_t *match,
 	children=sts->by_inode;
 	while (*children)
 	{
+		curr=*children;
 		/* Find entries with the same name. Depending on the type of the entry  
 		 * we have to look in one of the two hashes. */
-		if ((*children)->entry_type == FT_DIR)
+		if (S_ISDIR(curr->updated_mode))
 			name_match=cm___match_array+CM___NAME_D;
-		else if ((*children)->entry_type == FT_FILE)
+		else if (S_ISREG(curr->updated_mode))
 			name_match=cm___match_array+CM___NAME_F;
 		else goto next_child;
 
 
-		key=(name_match->to_key)(*children);
+		key=(name_match->to_key)(curr);
 		status=hsh__list_get(name_match->db, key, &key, &others, &other_count);
 
 
@@ -662,8 +698,10 @@ int cm___register_entry(struct estat *sts)
 		for(i=0; i<CM___MATCH_NUM; i++)
 		{
 			match=cm___match_array+i;
-			if ((sts->entry_type & match->entry_types) &&
-					match->insert)
+			/* We need the original value (st.mode). estat::updated_mode would be 
+			 * 0 for a deleted node. */
+			if (match->is_enabled && match->insert &&
+					(sts->st.mode & S_IFMT) == match->entry_type )
 			{
 				STOPIF( (match->insert)(sts, match), NULL);
 				DEBUGP("inserted %s for %s", sts->name, match->name);
@@ -711,7 +749,7 @@ static int cm___match(struct estat *entry)
 		match=cm___match_array+i;
 
 		/* Avoid false positives. */
-		if (!(entry->entry_type & match->entry_types))
+		if ((entry->updated_mode & S_IFMT) != match->entry_type)
 			continue;
 
 		/* \todo Loop if too many for a single call. */
@@ -879,13 +917,13 @@ int cm__find_copied(struct estat *root)
 		 * we could maybe save some searching for all children.... */
 		if (sts->entry_status & FS_NEW)
 		{
-			switch(sts->entry_type)
+			switch (sts->updated_mode & S_IFMT)
 			{
-				case FT_DIR:
+				case S_IFDIR:
 					STOPIF( cm__find_dir_source(sts), NULL);
 					break;
-				case FT_SYMLINK:
-				case FT_FILE:
+				case S_IFLNK:
+				case S_IFREG:
 					STOPIF( cm__find_file_source(sts), NULL);
 					break;
 				default:
@@ -893,7 +931,7 @@ int cm__find_copied(struct estat *root)
 			}
 		}
 
-		if (sts->entry_type == FT_DIR && 
+		if (S_ISDIR(sts->updated_mode) && 
 				(sts->entry_status & (FS_CHILD_CHANGED | FS_CHANGED)) )
 			STOPIF( cm__find_copied(sts), NULL);
 
@@ -919,9 +957,8 @@ int cm__detect(struct estat *root, int argc, char *argv[])
 	/* Operate recursively. */
 	opt_recursive++;
 	/* But do not allow to get current MD5s - we need the data from the 
-	 * repository.
-	 * TODO? */
-	opt_checksum=0;
+	 * repository. */
+	opt__set_int(OPT__CHANGECHECK, PRIO_MUSTHAVE, CHCHECK_NONE);
 
 	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
 
@@ -938,8 +975,8 @@ int cm__detect(struct estat *root, int argc, char *argv[])
 	{
 		match=cm___match_array+i;
 
-		if (match->is_expensive && !opt__get_int(OPT__COPYFROM_EXP))
-			match->entry_types=0;
+		match->is_enabled= !match->is_expensive || 
+			opt__get_int(OPT__COPYFROM_EXP);
 
 		if (!match->filename[0]) continue;
 
@@ -1250,6 +1287,103 @@ int cm___make_copy(struct estat *root,
 	STOPIF( url__full_url( src, NULL, &url), NULL);
 	STOPIF( cm___rev_path_to_string(url, revision, &buffer), NULL);
 	STOPIF( hsh__store_charp(db, wc_dest, buffer), NULL);
+
+ex:
+	return status;
+}
+
+
+/** Sets all entries that are just implicitly copied to ignored.
+ * Explicitly added entries (because of \ref add, or \ref prop-set) are 
+ * kept.
+ *
+ * Returns a \c 0 or \c 1, with \c 1 saying that \b all entries below are 
+ * ignored, and so whether \a cur can (perhaps) be completely ignored, too.
+ * */
+int cm___ignore_impl_copied(struct estat *cur)
+{
+	struct estat **sts;
+	int all_ign;
+
+
+	all_ign=1;
+	cur->flags &= ~RF_COPY_SUB;
+
+	if (cur->flags & (RF_ADD | RF_PUSHPROPS))
+		all_ign=0;
+
+	if (S_ISDIR(cur->updated_mode) && cur->entry_count)
+	{
+		sts=cur->by_inode;
+		while (*sts)
+		{
+			all_ign &= cm___ignore_impl_copied(*sts);
+			sts++;
+		}
+	}
+
+	if (all_ign)
+		cur->to_be_ignored=1;
+	DEBUGP("%s: all_ignore=%d", cur->name, all_ign);
+
+	return all_ign;
+}
+
+
+/** -.
+ * */
+int cm__uncopy(struct estat *root, int argc, char *argv[])
+{
+	int status;
+	char **normalized;
+	struct estat *dest;
+
+
+	/* Do only the selected elements. */
+	opt_recursive=-1;
+
+	if (!argc)
+		ac__Usage_this();
+
+	STOPIF( waa__find_common_base(argc, argv, &normalized), NULL);
+
+	STOPIF( url__load_nonempty_list(NULL, 0), NULL);
+
+	only_check_status=1;
+	/* Load the current data, without updating */
+	status=waa__input_tree(root, NULL, NULL);
+	if (status == ENOENT)
+		STOPIF( EINVAL, "!No working copy could be found.");
+	else
+		STOPIF( status, NULL);
+
+	while (*normalized)
+	{
+		DEBUGP("uncopy %s %s", *normalized, normalized[1]);
+
+		STOPIF( ops__traverse(root, *normalized, 
+					OPS__FAIL_NOT_LIST, 0, 
+					&dest), 
+				"!The entry \"%s\" is not known.", *normalized);
+		STOPIF_CODE_ERR( !(dest->flags & RF_COPY_BASE), EINVAL,
+				"!The entry \"%s\" is not a copy base.", *normalized);
+
+		/* Directly copied, unchanged entry.
+		 * Make it unknown - remove copy relation (ie. mark hash value for 
+		 * deletion), and remove entry from local list. */
+		STOPIF( cm__get_source(dest, NULL, NULL, NULL, 1), NULL);
+
+		dest->flags &= ~RF_COPY_BASE;
+
+		/* That removes all not explicitly added entries from this subtree. */
+		cm___ignore_impl_copied(dest);
+
+		normalized++;
+	}
+
+	STOPIF( waa__output_tree(root), NULL);
+	/* Purge. */
+	STOPIF( cm__get_source(NULL, NULL, NULL, NULL, 0), NULL);
 
 ex:
 	return status;

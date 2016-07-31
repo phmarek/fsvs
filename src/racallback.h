@@ -22,13 +22,11 @@ extern struct svn_ra_callbacks_t cb__cb_table;
 svn_error_t *cb__init(apr_pool_t *pool);
 
 /** A change-recording editor. */
-int cb__record_changes(svn_ra_session_t *session,
-		struct estat *root,
+int cb__record_changes(struct estat *root,
 		svn_revnum_t target,
 		apr_pool_t *pool);
 /** Like cb__record_changes(), but allowing mixed reporting. */
-int cb__record_changes_mixed(svn_ra_session_t *session,
-		struct estat *root,
+int cb__record_changes_mixed(struct estat *root,
 		svn_revnum_t target,
 		char *other_paths[], svn_revnum_t other_revs,
 		apr_pool_t *pool);

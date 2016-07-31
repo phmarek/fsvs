@@ -46,6 +46,10 @@ Shell-like patterns
           you want to exclude a directories' files, but not the directory
           itself, use something like ./dir/* or ./dir/**
 
+   If you're deep within your working copy and you'd like to ignore some
+   files with a WC-relative ignore pattern, you might like to use the rign
+   command.
+
 Absolute shell patterns
 
    There's another way to specify shell patterns - using absolute paths.
@@ -146,15 +150,56 @@ Ignoring a single file, by inode
 
 Modifiers
 
-   All of these patterns can have one or more of these modifiers *before*
-   them; not all combinations make sense.
+   All of these patterns can have one or more of these modifiers before
+   them, with (currently) optional "," as separators; not all combinations
+   make sense.
 
-   Modifier                    Meaning
-      i     Ignore case for matching
-      t     A negative ignore pattern, ie. a take pattern.
+   Modifier Meaning
+   i Ignore case for matching
+   t A negative ignore pattern, ie. a take pattern.
+   d Match directories only. This is useful if you have a directory tree
+   in which only certain files should be taken; see below.
+   m:specification Mode matching; this expects a specification of two
+   octal values in the form m:and_value:compare_value, like m:04:00; the
+   following examples give only the numbers.
+   As an example: the file has mode 0750; a specification of
+     * 0700:0700 matches, and
+     * 0007:0007 doesn't match.
+
+   A real-world example: 0007:0000 would match all entries that have no
+   right bits set for "others", and could be used to exclude private files
+   (like /etc/shadow). (Alternatively, the others-read bit could be used:
+   0004:0000.
+   FSVS will give an error for invalid specifications, ie. ones that can
+   never match; an example would be 0700:0007.
+
+   For patterns with the m (mode match) and d (dironly) modifiers the
+   filename pattern gets optional; so you don't have to give an all-match
+   wildcard pattern (./**) for these cases.
 
      t./proc/stat
      ./proc/
 
    Such declaration would store only /proc/stat , and nothing else of
    /proc .
+
+     t,d,./var/vmail/**
+     t./var/vmail/**/.*.sieve
+     ./var/vmail/**
+
+   This would take all ".*.sieve" files (or directories) below /var/vmail,
+   in all depths, and all directories there; but no other files.
+
+   If your files are at a certain depth, and you don't want all other
+   directories taken, too, you can specify that exactly:
+     td./var/vmail/*§
+     td./var/vmail/*/*
+     t./var/vmail/*/*/.*.sieve
+     ./var/vmail/**
+
+     m:04:0
+     t,./etc/
+     ./**
+
+   This would take all files from /etc, but ignoring the files that are
+   not world-readable (other-read bit cleared).

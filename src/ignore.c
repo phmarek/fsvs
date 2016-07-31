@@ -37,9 +37,9 @@
  * \addtogroup cmds
  * \section ignore
  *
- * \code 
- * fsvs ignore [prepend|append|at=n] pattern[s]
+ * \code
  * fsvs ignore dump|load
+ * fsvs ignore [prepend|append|at=n] pattern [pattern ...]
  * \endcode
  *
  * This command adds patterns to the end of the ignore list, 
@@ -95,8 +95,42 @@
  *
  * \note Please take care that your wildcard patterns are not expanded
  * by the shell!
+ */
+
+ /**
+ * \addtogroup cmds
+ * \section rign
+ *
+ * \code
+ * fsvs rel-ignore [prepend|append|at=n] path-spec [path-spec ...]
+ * fsvs ri [prepend|append|at=n] path-spec [path-spec ...]
+ * \endcode
  * 
- **/
+ * If you use more than a single working copy for the same data, it will be 
+ * stored in different paths - and that makes absolute ignore patterns 
+ * infeasible. But relative ignore patterns are anchored at the beginning 
+ * of the WC root - which is a bit tiring if you're deep in your WC 
+ * hierarchy and want to ignore some files.
+ * 
+ * To make that easier you can use the \c rel-ignore (abbreviated as \c ri) 
+ * command; this converts all given path-specifications (that may include 
+ * wildcards as per the shell pattern specification above) to WC-relative 
+ * values before storing them.
+ * 
+ * Example for \c /etc as working copy root:
+ * \code
+ * 		fsvs rel-ignore '/etc/X11/xorg.conf.*'
+ * 
+ * 		cd /etc/X11
+ * 		fsvs rel-ignore 'xorg.conf.*'
+ * \endcode
+ * Both commands would store the pattern "./X11/xorg.conf.*".
+ * 
+ * \note This works only for \ref ign_shell "shell patterns".
+ *
+ * For more details about ignoring files please see the \ref ignore command 
+ * and \ref ignpat.
+ */
 
 /**
  * \defgroup ignpat_dev Developers' reference
@@ -229,6 +263,10 @@
  * pattern <tt>./sys</tt> will match \b only a file or directory named \c 
  * sys. If you want to exclude a directories' files, but not the directory 
  * itself, use something like <tt>./dir/§*</tt> or <tt>./dir/§**</tt>
+ *
+ * If you're deep within your working copy and you'd like to ignore some 
+ * files with a WC-relative ignore pattern, you might like to use the \ref 
+ * rign command.
  * 
  *
  * \subsection ignpat_shell_abs Absolute shell patterns
@@ -347,9 +385,9 @@
  * 
  * \section ign_mod Modifiers
  * 
- * All of these patterns can have one or more of these modifiers *before*
- * them; not all combinations make sense.
- * 
+ * All of these patterns can have one or more of these modifiers \b before 
+ * them, with (currently) optional \c "," as separators; not all 
+ * combinations make sense.
  * 
  * <table>
  * <tr><th>Modifier<th>Meaning
@@ -357,16 +395,60 @@
  *   <td>Ignore case for matching
  * <tr><th>t
  *   <td>A negative ignore pattern, ie. a take pattern.
+ * <tr><th>d
+ *   <td>Match directories only. This is useful if you have a directory
+ *   tree in which only certain files should be taken; see below.
+ * <tr><th>m:<i>specification</i>
+ *   <td>Mode matching; this expects a specification of two octal values in 
+ *   the form <tt>m:<i>and_value</i>:<i>compare_value</i></tt>, like 
+ *   <tt>m:04:00</tt>; the following examples give only the numbers. \n
+ *   As an example: the file has mode \c 0750; a specification of<UL>
+ *   <LI><tt>0700:0700</tt> matches, and
+ *   <LI><tt>0007:0007</tt> doesn't match.</UL> \n
+ *   A real-world example: <tt>0007:0000</tt> would match all entries that 
+ *   have \b no right bits set for \e "others", and could be used to 
+ *   exclude private files (like \c /etc/shadow). (Alternatively, the \e 
+ *   others-read bit could be used: <tt>0004:0000</tt>. \n
+ *   FSVS will give an error for invalid specifications, ie. ones that can 
+ *   never match; an example would be <tt>0700:0007</tt>.
  * </table>
+ *
+ * For patterns with the \c m (mode match) and \c d (dironly) modifiers the 
+ * filename pattern gets optional; so you don't have to give an all-match 
+ * wildcard pattern (<tt>./§**</tt>) for these cases.
  *
  * \code
  *     t./proc/stat
  *     ./proc/
  * \endcode
- * Such
- * declaration would store \e only \c /proc/stat , and nothing else of \c 
- * /proc .
+ * Such declaration would store \e only \c /proc/stat , and nothing else 
+ * of \c /proc .
  * 
+ * \code
+ *     t,d,./var/vmail/§**
+ *     t./var/vmail/§**§/.*.sieve
+ *     ./var/vmail/§**
+ * \endcode
+ * This would take all \c ".*.sieve" files (or directories) below 
+ * \c /var/vmail, in all depths, and all directories there; but no other
+ * files.
+ *
+ * If your files are at a certain depth, and you don't want all other 
+ * directories taken, too, you can specify that exactly:
+ * \code
+ *     td./var/vmail/§*§
+ *     td./var/vmail/§*§/§*
+ *     t./var/vmail/§*§/§*§/.*.sieve
+ *     ./var/vmail/§**
+ * \endcode
+ *
+ * \code
+ *     m:04:0
+ *     t,./etc/
+ *     ./§**
+ * \endcode
+ * This would take all files from \c /etc, but ignoring the files that are 
+ * not world-readable (\c other-read bit cleared).
  * */
 
 
@@ -696,9 +778,11 @@ ex:
 int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 {
 	int status, stop;
+	int and_value, cmp_value;
 	char *cp;
 
 
+	status=0;
 	cp=pattern+strlen(pattern);
 	if (!end || end>cp) end=cp;
 
@@ -711,9 +795,9 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 	}
 
 	/* This are the defaults: */
+	memset(ignore, 0, sizeof(*ignore));
 	ignore->pattern = pattern;
 	ignore->is_ignore=1;
-	ignore->is_icase=0;
 	stop=0;
 	while (!stop)
 	{
@@ -722,28 +806,69 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 			case 't':
 				ignore->is_ignore=0;
 				break;
+			case 'd':
+				ignore->dir_only=1;
+				break;
 			case 'i':
 				ignore->is_icase=1;
+				break;
+			case ',':
+				/* Separator, currently just ignored. */
+				break;
+			case 'm':
+				STOPIF_CODE_ERR( ignore->mode_match_and, EINVAL,
+						"!Pattern \"%s\" has two or more mode specifications.",
+						ignore->pattern);
+
+				STOPIF_CODE_ERR( sscanf(pattern+1, ":%o:%o%n", 
+						&and_value, &cmp_value, &stop) != 2, EINVAL,
+						"!Ignore pattern \"%s\" has a bad mode specification;\n"
+						"the expected syntax is \"m:<AND>:<CMP>\".",
+						ignore->pattern);
+
+				STOPIF_CODE_ERR( and_value>07777 || cmp_value>0777 ||
+						(cmp_value & ~and_value), EINVAL,
+						"Mode matching specification in \"%s\" has invalid numbers.",
+						ignore->pattern);
+
+				ignore->mode_match_and=and_value;
+				ignore->mode_match_cmp=cmp_value;
+				pattern += stop;
+				stop=0;
 				break;
 			default:
 				stop=1;
 				break;
 		}
 
+		DEBUGP("now at %d == %p; end=%p", *pattern, pattern, end);
 		if (!stop) 
 		{
 			pattern++;
-			STOPIF_CODE_ERR( pattern>=end, EINVAL, 
-					"pattern not \\0-terminated");
+			STOPIF_CODE_ERR( pattern>end || (pattern == end && *end!=0), 
+					EINVAL, "pattern not \\0-terminated");
 		}
 	}
 	
-	STOPIF_CODE_ERR(!pattern, EINVAL, "pattern ends prematurely");
-	DEBUGP("pattern: %ccase, %s",
-			ignore->is_icase ? 'I' : ' ',
-			ignore->is_ignore ? "ignore" : "take");
+	/* Don't know if it makes *really* sense to allow a dironly pattern 
+	 * without pattern - but there's no reason to deny it outright. */
+	STOPIF_CODE_ERR(!(*pattern || ignore->mode_match_and || 
+				ignore->dir_only), EINVAL, 
+			"!Pattern \"%s\"ends prematurely", ignore->pattern);
 
-	if (strncmp(dev_prefix, pattern, strlen(dev_prefix)) == 0)
+	DEBUGP("pattern: %ccase, %s, %sdironly, mode&0%o==0%o",
+			ignore->is_icase ? 'I' : ' ',
+			ignore->is_ignore ? "ignore" : "take",
+			ignore->dir_only ? "" : "not ",
+			ignore->mode_match_and, ignore->mode_match_cmp);
+
+	if (!*pattern)
+	{
+		/* Degenerate case of shell pattern without pattern; allowed in certain 
+		 * cases. */
+		ignore->type=PT_SHELL;
+	}
+	else if (strncmp(dev_prefix, pattern, strlen(dev_prefix)) == 0)
 	{
 		ignore->type=PT_DEVICE;
 		ignore->compare_string = pattern;
@@ -988,7 +1113,9 @@ inline int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
 }
 
 
-/* Searches this entry for a take/ignore
+/** -.
+ *
+ * Searches this entry for a take/ignore pattern.
  *
  * If a parent directory has an ignore entry which might be valid 
  * for this directory (like **§/§*~), it is mentioned in this
@@ -999,6 +1126,8 @@ inline int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
  * we cannot easily optimize.
  * is_ignored is set to +1 if ignored, 0 if unknown, and -1 if 
  * on a take-list (overriding later ignore list).
+ *
+ * \a sts must already have the correct estat::st.mode bits set.
  */
 int ign__is_ignore(struct estat *sts,
 		int *is_ignored)
@@ -1018,7 +1147,7 @@ int ign__is_ignore(struct estat *sts,
 	/* root directory won't be ignored */
 	if (!dir) goto ex;
 
-	if (ops___filetype(&(sts->st)) == FT_IGNORE)
+	if (sts->to_be_ignored)
 	{
 		*is_ignored=1;
 		goto ex;
@@ -1091,15 +1220,29 @@ int ign__is_ignore(struct estat *sts,
 			if (ign->type == PT_SHELL || ign->type == PT_PCRE ||
 					ign->type == PT_SHELL_ABS)
 			{
-				DEBUGP("matching %s against %s",
-						cp, ign->pattern);
-				status=pcre_exec(ign->compiled, ign->extra, 
-						cp, len, 
-						0, 0,
-						NULL, 0);
-				STOPIF_CODE_ERR( status && status != PCRE_ERROR_NOMATCH, 
-						status, "cannot match pattern %s on data %s",
-						ign->pattern, cp);
+				DEBUGP("matching %s(0%o) against \"%s\" "
+						"(dir_only=%d; and=0%o, cmp=0%o)",
+						cp, sts->st.mode, ign->pattern, ign->dir_only,
+						ign->mode_match_and, ign->mode_match_cmp);
+				if (ign->dir_only && !S_ISDIR(sts->st.mode))
+				{
+					status=PCRE_ERROR_NOMATCH;
+				}
+				else if (ign->mode_match_and && 
+						((sts->st.mode & ign->mode_match_and) != ign->mode_match_cmp))
+				{
+					status=PCRE_ERROR_NOMATCH;
+				}
+				else if (ign->compiled)
+				{
+					status=pcre_exec(ign->compiled, ign->extra, 
+							cp, len, 
+							0, 0,
+							NULL, 0);
+					STOPIF_CODE_ERR( status && status != PCRE_ERROR_NOMATCH, 
+							status, "cannot match pattern %s on data %s",
+							ign->pattern, cp);
+				}
 			}
 			else if (ign->type == PT_DEVICE)
 			{
@@ -1318,7 +1461,45 @@ ex:
 }
 
 
-/* This is called to append new ignore patterns.
+/** Parses the optional position specification.
+ * */
+int ign___parse_position(char *arg, int *position, int *advance)
+{
+	int status;
+	int i;
+
+	status=0;
+	*advance=0;
+
+	/* Normal pattern inclusion. May have a position specification here.  */
+	*position=PATTERN_POSITION_END;
+	if (strcmp(arg, "prepend") == 0)
+	{
+		*advance=1;
+		*position=PATTERN_POSITION_START;
+	}
+	else if (sscanf(arg, "at=%d", &i) == 1)
+	{
+		*advance=1;
+		STOPIF_CODE_ERR(i > used_ignore_entries, EINVAL,
+				"The position %d where the pattern "
+				"should be inserted is invalid.\n", i);
+		*position=i;
+	}
+	else if (strcmp(arg, "append") == 0)
+	{
+		/* Default */
+		*advance=1;
+	}
+
+ex:
+	return status;
+}
+
+
+
+/** -.
+ * This is called to append new ignore patterns.
  **/
 int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 {
@@ -1339,6 +1520,8 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 	/* Goto correct base. */
 	status=waa__find_common_base(0, NULL, NULL);
 	if (status == ENOENT)
+		STOPIF(EINVAL, "!No working copy base was found.");
+	STOPIF(status, NULL);
 
 
 	DEBUGP("first argument is %s", argv[0]);
@@ -1383,35 +1566,46 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 		}
 		else 
 		{
-			/* Normal pattern inclusion. May have a position specification here. */
-			position=PATTERN_POSITION_END;
-			if (strcmp(argv[0], "prepend") == 0)
-			{
-				argv++;
-				argc--;
-				position=PATTERN_POSITION_START;
-			}
-			else if (sscanf(argv[0], "at=%d", &i) == 1)
-			{
-				argv++;
-				argc--;
-				STOPIF_CODE_ERR(i > used_ignore_entries, EINVAL,
-						"The position %d where the pattern "
-						"should be inserted is invalid.\n", i);
-				position=i;
-			}
-			else if (strcmp(argv[0], "append") == 0)
-			{
-				/* Default */
-				argv++;
-				argc--;
-			}
-
-
+			STOPIF( ign___parse_position(argv[0], &position, &i), NULL);
+			argv+=i;
+			argc-=i;
 			STOPIF( ign__new_pattern(argc, argv, NULL, 1, position), NULL);
 		}
 	} /* not "fsvs load" */
 
+	STOPIF( ign__save_ignorelist(NULL), NULL);
+
+ex:
+	return status;
+}
+
+
+/** -.
+ * Relativizes the given paths, and stores them.
+ **/
+int ign__rign(struct estat *root UNUSED, int argc, char *argv[])
+{
+	int status;
+	int i, position;
+	char **normalized;
+
+	status=0;
+	if (argc==0) ac__Usage_this();
+
+	/* Position given? */
+	STOPIF( ign___parse_position(argv[0], &position, &i), NULL);
+	argv+=i;
+	argc-=i;
+
+	/* Goto correct base. */
+	status=waa__find_common_base2(argc, argv, &normalized, 1);
+	if (status == ENOENT)
+		STOPIF(EINVAL, "!No working copy base was found.");
+	STOPIF(status, NULL);
+
+	/* Load, insert, save. */
+	STOPIF( ign__load_list(NULL), NULL);
+	STOPIF( ign__new_pattern(argc, normalized, NULL, 1, position), NULL);
 	STOPIF( ign__save_ignorelist(NULL), NULL);
 
 ex:

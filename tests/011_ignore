@@ -12,6 +12,9 @@ cd $WC
 # - not ignoring a file (take-pattern)
 # - all of these in subdirectories
 
+logfile=$LOGDIR/011.ignore
+logfile_all=$logfile.all
+
 
 export PREFIX=igntest
 export TAKE=TAKE
@@ -71,9 +74,9 @@ do
 done
 
 
-all_new=`$BINdflt st | grep $POSTFIX | wc -l`
-take_new=`$BINdflt st | grep $POSTFIX | grep $TAKE | wc -l`
-take_new_list=`$BINdflt st | grep $POSTFIX | grep $TAKE`
+$BINdflt st | grep $POSTFIX > $logfile_all
+all_new=`wc -l < $logfile_all`
+take_new=`grep $TAKE < $logfile_all | wc -l`
 echo $all_new new files, $take_new to take.
 
 PATTERN_COUNT=15
@@ -121,19 +124,19 @@ if [[ $transfer = "$PATTERN_COUNT patterns loaded." && $after = $before ]]
 then
   $SUCCESS "'ignore dump | ignore load' gives identity"
 else
-  $ERROR_NB "ignore dump/load error"
   echo "**** Got: $after"
   echo "**** expected: $before"
   echo "**** Transfer said: $transfer"
-  exit 1
+  $ERROR "ignore dump/load error"
 fi
 
 
-filt_new=`$BINdflt st | grep $POSTFIX | wc -l`
+$BINdflt st | grep $POSTFIX > $logfile
+filt_new=`wc -l < $logfile`
 echo $filt_new after filtering.
 if [[ $filt_new -ne $take_new ]]
 then
-  $BINdflt st | grep $POSTFIX
+  cat $logfile
   $ERROR "   mismatch - $filt_new got, $take_new expected!"
 fi
 
@@ -197,9 +200,8 @@ if [[ `md5sum - < $ign_file` == "897316929176464ebc9ad085f31e7284"* ]]
 then
   $SUCCESS "empty state."
 else
-  $ERROR_NB "not emptied:"
   cat $ign_file
-  exit 1
+  $ERROR "not emptied"
 fi
 
 $BINq ignore prepend ./1
@@ -212,9 +214,8 @@ if ( echo ./0 ; echo ./1 ; echo ./2 ; echo ./3 ) | cmp -s - $file
 then
   $SUCCESS "pattern edit operations work."
 else
-  $ERROR_NB "dump gives wrong results:"
   cat $file
-  exit 1
+  $ERROR "dump gives wrong results"
 fi
 
 rm $file
@@ -271,4 +272,25 @@ then
 fi
 
 $SUCCESS "Absolute ignore pattern warnings tests"
+
+
+# Test the "dir-only" specification
+true | $BINdflt ignore load
+$BINq ci -m1
+# now we're clean.
+mkdir -p deep/a/b/c/dir
+touch deep/fileA
+touch deep/a/fileB
+touch deep/a/b/fileC
+touch deep/a/b/c/fileD
+touch deep/a/b/c/dir/file-ok
+$BINq ignore 't./deep/**ok*' 'dt./deep/**' './deep/**'
+$BINq ci -m1
+if [[ `$BINdflt log -v -r HEAD | grep file | wc -l` -eq 1 ]]
+then
+  $SUCCESS "dir-only pattern looks ok."
+else
+  $ERROR "wrong commit for dir-only pattern"
+fi
+
 

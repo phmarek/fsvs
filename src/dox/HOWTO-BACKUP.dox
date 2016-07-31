@@ -23,16 +23,18 @@
 	to have stored in your backup, and what should be left out.
 
 	Depending on your system usage and environment you first have to decide:
-	- Do you only want to backup your data in \c /home?
-		- Less storage requirements
-		- In case of hardware crash the OS must be set up again
-	- Do you want to keep track of your configuration in \c etc?
-		- Very small storage overhead
-		- Not much use for backup/restore, but shows what has been changed
-	- Or do you want to backup your whole installation, from \c / on?
-		- Whole system versioned, restore is only a few commands
-		- Much more storage space needed - typically you'd need at least a few 
-			GB free space.
+  <ul>
+	<li> Do you only want to backup your data in \c /home?<ul>
+		<li> Less storage requirements
+		<li> In case of hardware crash the OS must be set up again</ul>
+	<li> Do you want to keep track of your configuration in \c etc?<ul>
+		<li> Very small storage overhead
+		<li> Not much use for backup/restore, but shows what has been changed</ul>
+	<li> Or do you want to backup your whole installation, from \c / on?<ul>
+		<li> Whole system versioned, restore is only a few commands
+		<li> Much more storage space needed - typically you'd need at least a few 
+			GB free space.</ul>
+  </ul>
  
 	The next few moments should be spent thinking about the storage space for 
 	the repository - will it be on the system harddisk, a secondary or an 
@@ -55,12 +57,13 @@
 
 
 	A fair bit of time should go to a small investigation which file patterns 
-	and paths you \b not want to back-up.
-	- Backup files like \c *.bak, \c *~, \c *.tmp, and similar
-	- History files: <tt>.sh-history</tt> and similar in the home-directories
-	- Cache directories: your favourite browser might store many MB of cached 
+	and paths you \b not want to back-up.<ul>
+	<li>Backup files like \c *.bak, \c *~, \c *.tmp, and similar
+	<li>History files: <tt>.sh-history</tt> and similar in the home-directories
+	<li>Cache directories: your favourite browser might store many MB of cached 
 		data in you home-directories
-	- Virtual system directories, like \c /proc and \c /sys, \c /dev/shmfs.
+	<li>Virtual system directories, like \c /proc and \c /sys, \c /dev/shmfs.
+	</ul>
 
 
 
@@ -78,13 +81,20 @@
 	Now you have to say what should be ignored - that'll differ depending on 
 	your needs/wishes.
 	\code
-		 fsvs ignore ./§**~ ./§**.tmp ./§**.bak
+		 fsvs ignore './§**~' './§**.tmp' './§**.bak'
 		 fsvs ignore ./proc/ ./sys/ ./tmp/
 		 fsvs ignore ./var/tmp/ ./var/spool/lpd/
-		 fsvs ignore ./var/log/*.gz
-		 fsvs ignore ./etc/*.dpkg-dist
-		 fsvs ignore ./etc/*.dpkg-old
+		 fsvs ignore './var/log/§*.gz'
+		 fsvs ignore ./var/run/ /dev/pts/
+		 fsvs ignore './etc/*.dpkg-dist' './etc/*.dpkg-new'
+		 fsvs ignore './etc/*.dpkg-old' './etc/*.dpkg-bak'
 	\endcode
+
+	\note \c /var/run is for transient files; I've heard reports that \ref revert
+	"reverting" files there can cause problems with running programs.\n
+  Similar for \c /dev/pts - if that's a \c devpts filesystem, you'll run into
+  problems on \ref update or \ref revert - as FSVS won't be allowed to create
+  entries in this directory.
 
 	Now you may find that you'd like to have some files encrypted in your 
 	backup - like \c /etc/shadow, or your \c .ssh/id_* files. So you tell 
@@ -111,44 +121,44 @@
 	\section howto_backup_usage Further use and maintenance
 
 	The further usage is more or less the \c commit command from the last 
-	section.
-	When do you have to do some manual work?
-	- When ignore patterns change.
-		- New filesystems that should be ignored, or would be ignored but 
+	section. \n
+	When do you have to do some manual work?<UL>
+	<li>When ignore patterns change.<UL>
+		<li>New filesystems that should be ignored, or would be ignored but 
 			shouldn't
-		- You find that your favourite word-processor leaves many *.segv files 
-			behind, and similar things
-	- If you get an error message from fsvs, check the arguments and retry.
+		<li>You find that your favorite word-processor leaves many *.segv files 
+			behind, and similar things</UL>
+	<li>If you get an error message from fsvs, check the arguments and retry.
 		In desperate cases (or just because it's quicker than debugging 
 		yourself) ask on <tt>dev [at] fsvs.tigris.org</tt>.
+	</UL>
 
 
 	\section howto_backup_restore Restoration in a working system
   
 	Depending on the circumstances you can take different ways to restore 
-	data from your repository.
-	- <tt>fsvs \ref export</tt> allows you to just dump some repository data 
+	data from your repository.<UL>
+	<li><tt>"fsvs export"</tt> allows you to just dump some repository data 
 		into your filesystem - eg. into a temporary directory to sort things 
 		out.
-	- Using <tt>fsvs \ref revert</tt> you can go to older revisions of a 
-		given file inplace. \note Whole directory structures are planned, just 
-		not done yet.
-	- Or you can do a fresh checkout - set an URL in an (empty) directory, 
+	<li>Using <tt>"fsvs revert"</tt> you can get older revisions of a 
+		given file, directory or directory tree inplace. \n
+	<li>Or you can do a fresh checkout - set an URL in an (empty) directory, 
 		and update to the needed revision.
-	- If everything else fails (no backup media with fsvs on it), you can use 
+	<li>If everything else fails (no backup media with fsvs on it), you can use 
 		subversion commands (eg. \c export) to restore needed parts, and update 
 		the rest with fsvs.
-
+	</ul>
 
   \section howto_backup_recovery Recovery for a non-booting system
 
   In case of a real emergency, when your harddisks crashed or your 
 	filesystem was eaten and you have to re-partition or re-format, you 
-	should get your system working again by 
-	- booting from a knoppix or some other Live-CD (with \c fsvs on it),
-	- partition/format as needed,
-	- mount your harddisk partitions below eg. \c /mnt,
-	- and then recovering by
+	should get your system working again by<UL>
+	<li>booting from a knoppix or some other Live-CD (with \c fsvs on it),
+	<li>partition/format as needed,
+	<li>mount your harddisk partitions below eg. \c /mnt,
+	<li>and then recovering by</ul>
 	\code
 	  $ cd /mnt
 		$ export FSVS_CONF=/etc/fsvs					# if non-standard

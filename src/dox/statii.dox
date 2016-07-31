@@ -93,10 +93,11 @@
 
 			New -> CopiedU [label="copy", URL="\ref cp"];
 
+			CopiedU -> New [label="uncopy", URL="\ref uncp"];
+
 			{
 				edge [ color=blue, URL="\ref revert",
 				  tooltip="revert"];
-				CopiedU -> New;
 				CopiedC -> CopiedU;
 				Changed -> Committed;
 				Deleted -> Committed;

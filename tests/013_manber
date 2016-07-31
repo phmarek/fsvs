@@ -31,6 +31,10 @@ file2=$subdir2/$filename
 timestamp=200602231527.00
 
 
+# The test uses the "fast" behaviour, ie. where showing "?" for a file is 
+# allowed.
+echo change_check=none >> $FSVS_CONF/config
+
 function L()
 {
 	if [[ "$VERBOSE" != "" ]]
@@ -55,13 +59,12 @@ function T()
 	then
 		$SUCCESS "       $OK ('$TS', with '$OPT')"
 	else
-		$ERROR_NB "       $NOK (expected '$TS', with '$OPT')"
-		$ERROR_NB "       '"$*"'"
 		if [[ "$VERBOSE" != "" ]]
 		then
 			$BINdflt st $OPT
 		fi
-		exit 1
+		$ERROR_NB "       $NOK (expected '$TS', with '$OPT')"
+		$ERROR    "       '"$*"'"
 	fi
 }
 
@@ -154,7 +157,6 @@ close(F2) || die $!;
 if [[ `diff -U0 $file1 $file2 | egrep "^[^ ]" | wc -l` -ne 5 ]]
 then
   $ERROR 'NOK, more than one line changed??'
-	exit 1
 fi
 
 # ignore the 2nd file

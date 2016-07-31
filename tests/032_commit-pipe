@@ -103,15 +103,14 @@ tmp=x$filename
 cp -a $filename $tmp
 perl -e 'open(F, "+< " . shift) || die $!; print F $$;' $filename
 touch -r $tmp $filename
-# Should be seen when using two -C, and not without any -C.
+# Should be seen when using checksums, and not without.
 # With a single -C it would be checksummed if it's likely to be changed - 
 # which it is, because the ctime changed.
-if [[ `$BINdflt st $filename       | wc -l` != 0 ||
-      `$BINdflt st $filename -C -C | wc -l` == 0 ]]
+if [[ `$BINdflt st $filename -o change_check=none     | wc -l` != 0 ||
+      `$BINdflt st $filename -o change_check=allfiles | wc -l` == 0 ]]
 then
-	$BINdflt st $filename
-	$BINdflt st $filename -C
-	$BINdflt st $filename -C -C
+	$BINdflt st $filename -o change_check=none
+	$BINdflt st $filename -o change_check=allfiles
 	$ERROR "File status wrong?"
 fi
 
