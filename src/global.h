@@ -866,7 +866,7 @@ extern char *opt_commitmsgfile;
 extern svn_revnum_t target_revision;
 /** The revision the user wants to get at (\c -r parameter).
  * \c HEAD is represented by \c SVN_INVALID_REVNUM.
- * Has to be splitted per-URL when we're going to multi-url operation. */
+ * Has to be split per-URL when we're going to multi-url operation. */
 extern svn_revnum_t opt_target_revision;
 /** The second revision number the user specified. */
 extern svn_revnum_t opt_target_revision2;

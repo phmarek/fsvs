@@ -1037,7 +1037,7 @@ status
      * A 'x' signifies a conflict.
      * The meta-data flag 'm' shows meta-data changes like properties,
        modification timestamp and/or the rights (owner, group, mode);
-       depending on the -v/-q command line parameters, it may be splitted
+       depending on the -v/-q command line parameters, it may be split
        into 'P' (properties), 't' (time) and 'p' (permissions).
        If 'P' is shown for the non-verbose case, it means only property
        changes, ie. the entries filesystem meta-data is unchanged.

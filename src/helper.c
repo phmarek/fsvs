@@ -469,7 +469,7 @@ void Increment()
  * */
 /* As we need to compare up to 4 characters "/../", we use 4 pointers, which
  * usually will point to neighbor characters. 
- * That gives the compares easy access to characters splitted over several
+ * That gives the compares easy access to characters split over several
  * arguments. */
 char *hlp__pathcopy(char *dst, int *len, ...)
 {

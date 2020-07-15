@@ -78,7 +78,7 @@
  *   The meta-data flag \c 'm' shows meta-data changes like properties, 
  *   modification timestamp and/or the rights (owner, group, mode); 
  *   depending on the \ref glob_opt_verb "-v/-q" command line parameters, 
- *   it may be splitted into \c 'P' (properties), \c 't' (time) and \c 'p' 
+ *   it may be split into \c 'P' (properties), \c 't' (time) and \c 'p' 
  *   (permissions). \n
  *   If \c 'P' is shown for the non-verbose case, it means \b only property 
  *   changes, ie. the entries filesystem meta-data is unchanged.
