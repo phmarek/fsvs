@@ -12,6 +12,7 @@
 #include <alloca.h>
 #include <time.h>
 #include <fcntl.h>
+#include <apr_hash.h>
 
 
 #include "global.h"

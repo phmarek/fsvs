@@ -5,6 +5,13 @@ $PREPARE_DEFAULT > /dev/null
 $INCLUDE_FUNCS
 cd $WC
 
+if [[ $UID -eq 0 &&
+	"$REPURL" == "file://"* ]]
+then
+	echo "The root user may always access local files."
+	exit 0
+fi
+
 TMP=$LOGDIR/067.msg
 
 date > blabla
@@ -21,7 +28,7 @@ function ER
 	else
 		echo "Got an error:"
 		cat $TMP
-		if grep -F "$msg" $TMP
+		if egrep "$msg" $TMP
 		then
 			$SUCCESS "correct message."
 		else
@@ -34,11 +41,12 @@ function ER
 $INFO "ci to inaccessible dir"
 # chmod goes top-down, which doesn't work with removing rights.
 find $REP -depth | xargs chmod 000
-ER "Couldn't open a repository (180001)" $BINq ci -m "RO"
+ER "Couldn't open a repository \(180001\)|Can't create session \(170013\)" $BINq ci -m "RO"
+
 
 $INFO "ci to readonly dir"
 chmod -R 555 $REP
-ER "Permission denied (13)" $BINq ci -m "RO"
+ER "Permission denied \(13\)" $BINq ci -m "RO"
 
 chmod -R 777 $REP
 

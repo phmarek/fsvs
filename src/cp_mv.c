@@ -646,10 +646,14 @@ int cm___hash_list(struct estat *sts, struct cm___match_t *match,
 char* cm___output_pct(struct cm___match_t *match, 
 		struct cm___candidate_t *cand)
 {
-	static char buffer[8];
+	static char buffer[16];
 
 	BUG_ON(cand->match_count > 1000 || cand->match_count < 0);
 
+	/* GCC notes
+	 *   ‘sprintf’ output between 6 and 16 bytes into a destination of size 8
+	 * which isn't correct (see the BUG_ON above),
+	 * but it can be 1+4+1+1+1 == 8 characters. */
 	sprintf(buffer, "=%d.%1d%%",
 			cand->match_count/10, cand->match_count % 10);
 
@@ -1085,7 +1089,7 @@ ex:
  * If that isn't possible (because \a path is not below \c wc_path),
  * \c EINVAL is returned.
  * The case \c path==wc_path is not allowed, either. */
-inline int cm___not_below_wcpath(char *path, char **out)
+int cm___not_below_wcpath(char *path, char **out)
 {
 	if (strncmp(path, wc_path, wc_path_len) != 0 ||
 			path[wc_path_len] != PATH_SEPARATOR)

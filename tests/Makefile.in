@@ -169,7 +169,7 @@ $(DFLT_REPO): $(TEST_PROG_DIR)/001_init_dir
 
 prepare_empty:
 	@echo Preparing clean repository ...
-	test -d $(REP) && rm -rf $(REP) || true
+	test -d $(REP) && (chmod u+rwx $(REP) && rm -rf $(REP)) || true
 	rm -rf $(FSVS_CONF) $(FSVS_WAA) || true
 	$(MAKE) $(FSVS_CONF) $(FSVS_WAA) || true
 	test -d $(LOGDIR) || mkdir $(LOGDIR)
@@ -212,3 +212,6 @@ run_tests:
 	@echo '' > $(FSVS_CONF)/config
 	@$(TEST_PROG_DIR)/run-tests
 
+shell:
+	@echo Opening shell.
+	@cd $(TESTBASE) && env PATH=$(dir $(BIN_FULLPATH)):$(PATH) bash -i

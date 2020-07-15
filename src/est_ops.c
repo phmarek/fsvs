@@ -501,6 +501,7 @@ int ops__save_1entry(struct estat *sts,
 	};
 	int is_dir, is_dev, status;
 	int intnum;
+	svn_revnum_t revision;
 
 
 #if 0
@@ -524,10 +525,12 @@ int ops__save_1entry(struct estat *sts,
 		STOPIF( ops__apply_group(sts, NULL, NULL), NULL);
 
 
-	if (sts->url)
+	revision = sts->repos_rev;
+	if (sts->url) {
 		intnum=sts->url->internal_number;
-	else
-	{
+		if (revision == SET_REVNUM)
+			revision = sts->url->current_rev;
+	} else {
 		/* A non-root entry has no url. May happen with _build_list, when
 		 * there are no urls. */
 		if (sts->parent)
@@ -543,7 +546,7 @@ int ops__save_1entry(struct estat *sts,
 			( is_dev ? ops__dev_to_waa_string(sts) : "nd" ),
 			( is_dir ? "x" : cs__md5tohex_buffered(sts->md5) ),
 			(t_ull)sts->st.size,
-			sts->repos_rev == SET_REVNUM ? sts->url->current_rev : sts->repos_rev,
+			revision,
 			intnum,
 			(t_ul)sts->st.dev,
 			(t_ull)sts->st.ino,
@@ -1346,7 +1349,7 @@ int ops__update_single_entry(struct estat *sts, struct sstat_t *output)
 	if (sts->parent)
 		if (sts->parent->entry_status & FS_REMOVED)
 		{
-			goto removed;
+			goto removed_memset;
 		}
 
 	/* Check for current status */
@@ -1362,9 +1365,9 @@ int ops__update_single_entry(struct estat *sts, struct sstat_t *output)
 		if (abs(status) != ENOENT) 
 			STOPIF(status, "cannot lstat(%s)", fullpath);
 
-removed:
 		/* Re-set the values, if needed */
 		if (st.mode)
+removed_memset:
 			memset(&st, 0, sizeof(st));
 
 		sts->entry_status=FS_REMOVED;
@@ -1422,7 +1425,7 @@ ex:
 /** Set the estat::do_* bits, depending on the parent.
  * Should not be called for the root.
  * */
-inline void ops___set_todo_bits(struct estat *sts)
+void ops___set_todo_bits(struct estat *sts)
 {
 	/* For recursive operation: If we should do the parent completely, we do 
 	 * the sub-entries, too. */

@@ -7,6 +7,7 @@
  ************************************************************************/
 
 #include <fcntl.h>
+#include <string.h>
 
 #include "global.h"
 #include "waa.h"
@@ -195,6 +196,8 @@ int hsh___new_bare(char *wcfile, char *name, int gdbm_mode,
 
 	if (gdbm_mode == HASH_TEMPORARY)
 	{
+		/* Replace our own constant with a public available value. */
+		gdbm_mode = GDBM_NEWDB;
 		cp=waa_tmp_path;
 		/* Use this bit, so that the open filehandle says what it was. */
 		eos=waa_tmp_fn;
@@ -205,7 +208,7 @@ int hsh___new_bare(char *wcfile, char *name, int gdbm_mode,
 					| waa__get_gwd_flag(name)), NULL);
 	strcpy(eos, name);
 
-	if (gdbm_mode == GDBM_NEWDB || gdbm_mode == HASH_TEMPORARY)
+	if (gdbm_mode == GDBM_NEWDB)
 	{
 		/* libgdbm3=1.8.3-3 has a bug - with GDBM_NEWDB an existing database is 
 		 * not truncated. Only the O_CREAT, not the O_TRUNC flag is used.

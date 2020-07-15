@@ -188,14 +188,18 @@ int up__parse_prop(struct estat *sts,
 
 	/* if an invalid utf8_value is detected, we'd better ignore it.
 	 * who knows which Pandora's box we'd open ... */
-	if (0 == strcmp(utf8_name, propname_special) &&
-			0 == strcmp(utf8_value->data, propval_special))
+	if (0 == strcmp(utf8_name, propname_special))
 	{
 		if (!utf8_value) {
 			sts->st.mode = (sts->st.mode & ~S_IFMT) | S_IFREG;
 			DEBUGP("no longer special");
+			goto ex;
 		}
-		else if (TEST_PACKED(S_ISANYSPECIAL, sts->new_rev_mode_packed))
+
+		if (strcmp(utf8_value->data, propval_special))
+			goto ex;
+
+		if (TEST_PACKED(S_ISANYSPECIAL, sts->new_rev_mode_packed))
 		{
 			DEBUGP("already marked as special");
 		}

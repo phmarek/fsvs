@@ -80,7 +80,7 @@ typedef struct dirent64 fsvs_dirent;
 /** Starts enumeration of the given \a path. The directory handle is returned
  * in \a *dirp.
  * \return 0 for success, or an error code. */
-inline int dir__start_enum(dir__handle *dh, char *path)
+int dir__start_enum(dir__handle *dh, char *path)
 {	
 	int status;
 
@@ -100,7 +100,7 @@ ex:
  * \param count The maximum number of bytes in \a dirp.
  *
  * \return The number of bytes used in \a dirp. */
-inline int dir__enum(dir__handle dh, fsvs_dirent *dirp, unsigned int count)
+int dir__enum(dir__handle dh, fsvs_dirent *dirp, unsigned int count)
 {
 	return syscall(__NR_getdents64, dh, dirp, count);
 }
@@ -108,7 +108,7 @@ inline int dir__enum(dir__handle dh, fsvs_dirent *dirp, unsigned int count)
 
 /** Simply closes the handle \a dh.
  * */
-inline int dir__close(dir__handle dh)
+int dir__close(dir__handle dh)
 {
 	int status;
 
@@ -123,7 +123,7 @@ ex:
 
 /** How to get the length of a directory (in bytes), from a handle \a dh,
  * into \a st->size. */
-inline int dir__get_dir_size(dir__handle dh, struct sstat_t *st)
+int dir__get_dir_size(dir__handle dh, struct sstat_t *st)
 {
 	int status;
 
@@ -151,7 +151,7 @@ typedef struct fsvs_dirent_t fsvs_dirent;
 typedef DIR* dir__handle;
 
 
-inline int dir__start_enum(dir__handle *dh, char *path)
+int dir__start_enum(dir__handle *dh, char *path)
 {
 	int status;
 
@@ -164,7 +164,7 @@ ex:
 
 
 /* Impedance matching .. don't like it. */
-inline int dir__enum(dir__handle dh, fsvs_dirent *dirp, unsigned int count)
+int dir__enum(dir__handle dh, fsvs_dirent *dirp, unsigned int count)
 {
 	struct dirent *de;
 
@@ -181,7 +181,7 @@ inline int dir__enum(dir__handle dh, fsvs_dirent *dirp, unsigned int count)
 }
 
 
-inline int dir__close(dir__handle dh)
+int dir__close(dir__handle dh)
 {
 	int status;
 
@@ -193,7 +193,7 @@ ex:
 }
 
 
-inline int dir__get_dir_size(dir__handle dh, struct sstat_t *st)
+int dir__get_dir_size(dir__handle dh, struct sstat_t *st)
 {
 	int status;
 
@@ -259,7 +259,7 @@ int dir___f_sort_by_inode(struct estat **a, struct estat **b)
  * Used for type checking cleanliness. 
  * 'C' as for 'Const'.
  * \return +2, +1, 0, -1, -2, suitable for \a qsort(). */
-inline int dir___f_sort_by_nameCC(const void *a, const void *b)
+int dir___f_sort_by_nameCC(const void *a, const void *b)
 {
 	return strcoll(a,b);
 }

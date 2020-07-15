@@ -1426,8 +1426,9 @@ int hlp__chrooter(void)
 			}
 			/* We allow to specify only "m" for "libm.so". */
 		}
-		STOPIF_CODE_ERR( hdl == NULL, errno, 
-				"Cannot load library %s", libs);
+		/* errno is typically 0. */
+		STOPIF_CODE_ERR( hdl == NULL, EINVAL, 
+				"Cannot load library %s: dlerror says %s", libs, dlerror());
 
 		libs=strtok(NULL, delim);
 	}
@@ -1476,7 +1477,7 @@ ex:
  * If \a value_len is not \c NULL, it get set to the length of the path in 
  * the environment variable.
  * */
-inline int hlp___is_valid_env(char *env, 
+int hlp___is_valid_env(char *env, 
 		char *path2cmp, int p2c_len,
 		char **value, int *value_len)
 {

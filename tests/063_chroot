@@ -12,7 +12,7 @@ if [[ $UID -eq 0 ]]
 then
 	export FSVS_CHROOT_CWD=17
 	export FSVS_CHROOT_ROOT=84
-	export FSVS_CHROOT_LIBS=m
+	export FSVS_CHROOT_LIBS=libm.so.6
 
 	mkdir dir
 	echo gurgle > empty-file

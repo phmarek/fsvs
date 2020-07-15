@@ -830,7 +830,7 @@ ex:
 int cb__remove_from_url(struct estat *root, struct url_t *to_remove, 
 		int *was_changed)
 {
-	struct url_t *nevermind;
+	struct url_t *nevermind = NULL;
 	int status;
 
 	*was_changed=0;

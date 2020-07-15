@@ -11,12 +11,12 @@
 ################################ Definitions ################################
 DIR	:= /usr/share/doc
 
-HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.2.7/fsvs/src/Makefile.in $"
-HEADREV	:= "$Revision: 2478 $"
+HEADURL	:= "$URL: http://fsvs.tigris.org/svn/fsvs/tags/fsvs-1.2.9/fsvs/src/Makefile.in $"
+HEADREV	:= "$Revision: 2506 $"
 VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEADURL) ) =~ m:/tags/([^/]+): ? $$1 : "trunk"; print "$$t:$$r\n";' )
 
 CFLAGS	:= @CFLAGS@
-CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'
+CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'  -Wno-deprecated-declarations
 LDFLAGS	:= @LDFLAGS@
 FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm -ldl
 EXTRALIBS	:= @EXTRALIBS@
@@ -27,6 +27,8 @@ LDFLAGS	+= -Wl,-rpath,$(RPATH)
 endif
 
 ifeq (@ENABLE_DEBUG@, 1)
+	# The component tests need all local variables, ie. no optimization.
+	CFLAGS += -O0
 	CFLAGS += -DDEBUG -g
 	LDFLAGS += -g
 ifeq (@ENABLE_GCOV@, 1)
@@ -217,7 +219,7 @@ structs: $(DEST)
 
 ################################ Testing ####################################
 run-tests: $(DEST)
-	WAA_CHARS=$(WAA_CHARS) $(MAKE) -C ../tests BINARY=$(shell pwd)/$(DEST) $(TESTS)
+	WAA_CHARS=$(WAA_CHARS) $(MAKE) -C ../tests BINARY=$(shell pwd)/$(DEST) VERBOSE=$(VERBOSE) $(TESTS)
 ifeq (@ENABLE_GCOV@, 1)
 # I don't know why, but gcov wants to open the .gcda and .gcno
 # files Read-Write. I filed a bug report for this.

@@ -430,6 +430,8 @@ int rev__install_file(struct estat *sts, svn_revnum_t revision,
 
 
 	BUG_ON(!pool);
+	filename_tmp = NULL;
+	url = NULL;
 	STOPIF( ops__build_path(&filename, sts), NULL);
 
 
@@ -567,7 +569,7 @@ int rev__install_file(struct estat *sts, svn_revnum_t revision,
 ex:
 	/* On error remove the temporary file. */
 	/* Return the original error. */
-	if (status)
+	if (status && filename_tmp)
 		unlink(filename_tmp);
 
 	return status;

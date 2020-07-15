@@ -1394,7 +1394,7 @@ ex:
  * \a ign.
  * Does the less-than, greater-than and/or equal comparision.
  * */
-inline int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
+int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
 {
 #ifdef DEVICE_NODES_DISABLED
 	DEVICE_NODES_DISABLED();
@@ -2015,6 +2015,7 @@ int ign__print_group_stats(FILE *output)
 	int i;
 	struct ignore_t *ign;
 
+	status = 0;
 	STOPIF_CODE_EPIPE( fprintf(output, "\nGrouping statistics ("
 				"tested, matched, groupname, pattern):\n\n"), NULL);
 

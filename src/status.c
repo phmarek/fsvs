@@ -654,7 +654,7 @@ ex:
 }
 
 
-inline volatile char* st__flags_string_fromint(int mask)
+volatile char* st__flags_string_fromint(int mask)
 {
 	const struct st___bit_info flags[]={
 		BIT_INFO( RF_ADD,				"add"),

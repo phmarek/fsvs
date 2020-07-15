@@ -381,7 +381,7 @@ int opt___atoi(struct opt__list_t *ent, char *string,
 
 
 /** Find an integer value by comparing with predefined strings. */
-inline int opt___find_string(const struct opt___val_str_t *list, 
+int opt___find_string(const struct opt___val_str_t *list, 
 		const char *string, 
 		int *result)
 {

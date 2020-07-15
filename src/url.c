@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/select.h>
+#include <subversion-1/svn_dirent_uri.h>
 
 
 #include "url.h"
@@ -1093,12 +1094,15 @@ int url__open_session(svn_ra_session_t **session, char **missing_dirs)
 	if (current_url->session) goto ex;
 
 
-	/* We wouldn't need to allocate this memory if the URL was ok; but we 
-	 * don't know that here, and it doesn't hurt that much. */
-	STOPIF( hlp__strnalloc(current_url->urllen, 
-				&buffer, current_url->url), NULL);
-	cp=buffer+current_url->urllen;
+	/* We wouldn't need to allocate this memory if the URL was ok; but we
+	 * don't know that here, and it doesn't hurt that much.
+	 * Furthermore, only SVN knows what characters should be escaped - so
+	 * lets get it done there. */
+	buffer = (char*)svn_uri_canonicalize(current_url->url, global_pool);
+	BUG_ON(!buffer);
+	cp=buffer+strlen(buffer);
 	BUG_ON(*cp);
+
 
 	STOPIF_SVNERR_TEXT( svn_ra_open,
 				(& current_url->session, buffer,
@@ -1133,7 +1137,7 @@ int url__open_session(svn_ra_session_t **session, char **missing_dirs)
 		while (cp > buffer+4 && *cp != '/') cp--;
 
 		/* If we're before the hostname, signified by a "//", we abort. */
-		STOPIF_CODE_EPIPE(cp[-1] == '/', EINVAL,
+		STOPIF_CODE_ERR( cp[-1] == '/', EINVAL,
 				"!Unsuccessfull svn_ra_stat() on every try for URL \"%s\".",
 				current_url->url);
 
@@ -1152,7 +1156,6 @@ int url__open_session(svn_ra_session_t **session, char **missing_dirs)
 		if (buffer + current_url->urllen == cp)
 		{
 			*missing_dirs=NULL;
-			IF_FREE(buffer);
 		}
 		else
 		{
@@ -1169,7 +1172,6 @@ int url__open_session(svn_ra_session_t **session, char **missing_dirs)
 			*missing_dirs=buffer;
 		}
 	}
-	else IF_FREE(buffer);
 
 
 	if (session) 
@@ -1432,7 +1434,7 @@ int url__find(char *url, struct url_t **output)
  * Writes the given URLs into the WAA. */
 int url__work(struct estat *root UNUSED, int argc, char *argv[])
 {
-	int status, fh, l, i, had_it;
+	int status, l, i, had_it;
 	char *dir;
 	char *cp;
 	int have_space;
@@ -1443,7 +1445,6 @@ int url__work(struct estat *root UNUSED, int argc, char *argv[])
 
 
 	dir=NULL;
-	fh=-1;
 
 	STOPIF( waa__given_or_current_wd(NULL, &dir), NULL );
 	/* The current directory is the WC root. */

@@ -116,7 +116,7 @@ int cs___end_of_block(const unsigned char *data, int maxlen,
 /** Hex-character to ascii. 
  * Faster than sscanf().
  * Returns -1 on error. */
-inline static int cs__hex2val(char ch)
+static int cs__hex2val(char ch)
 {
 	/* I thought a bit whether I should store the values+1, ie. keep most of 
 	 * the array as 0 - but that doesn't save any memory, it only takes more 

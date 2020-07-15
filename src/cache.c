@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <unistd.h>
+#include <errno.h>
 
 
 #include "global.h"
@@ -96,7 +97,7 @@ ex:
 
 /** -.
  * Can return \c ENOENT if not found. */
-inline int cch__find(struct cache_t *cache, cache_value_t id, 
+int cch__find(struct cache_t *cache, cache_value_t id,
 		int *index, char **data, int *len)
 {
 	int i;
@@ -209,7 +210,7 @@ void cch__set_active(struct cache_t *cache, int i)
  * Copies the significant bits ' ' .. 'Z' (or, really, \\x20 ..  \\x60) of 
  * at most 6 bytes of \a stg into a packed bitfield, so that 30bits are 
  * used.  */
-inline cache_value_t cch___string_to_cv(const char *stg)
+cache_value_t cch___string_to_cv(const char *stg)
 {
   union {
 	  cache_value_t cv;
