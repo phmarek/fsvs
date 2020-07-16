@@ -1,0 +1,11 @@
+autom4te.cache/
+config.log
+config.status
+configure
+src/Makefile
+src/config.h
+tests/Makefile
+src/.*.d
+src/*.o
+src/fsvs
+src/tags
