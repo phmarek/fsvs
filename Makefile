@@ -24,3 +24,8 @@ distclean:
 
 test-shell: src/fsvs
 	@$(MAKE) BINARY=$(CURDIR)/$< --no-print-directory -C tests shell
+
+tags:
+	ctags -R src /usr/include/apr-1.0/ /usr/include/subversion-1/
+
+.PHONY: tags
