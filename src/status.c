@@ -152,8 +152,7 @@ char * st___meta_string(int status_bits, int flags)
     }
     else
     {
-        buffer[0] = status_bits & FS_META_CHANGED ? 'm' : 
-            prop ? 'P' : '.';
+        buffer[0] = prop ? 'P' : ((status_bits & FS_META_CHANGED) ? 'm' : '.');
         buffer[1]=0;
     }
 

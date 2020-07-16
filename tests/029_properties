@@ -81,7 +81,7 @@ file=abc.$RANDOM
 function CheckStatus
 {
 	exp=$1
-  verb=$2
+	verb=$2
 
 	# We need -C for the test with only changed mtime, but again with 0 
 	# bytes.
@@ -117,7 +117,7 @@ CheckStatus ".PC. " "...PC. "
 
 rm $file
 touch $file
-CheckStatus ".m.. " ".t.P.. "
+CheckStatus ".P.. " ".t.P.. "
 
 $SUCCESS "All status outputs are ok."
 
