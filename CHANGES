@@ -1,3 +1,6 @@
+Changes in 1.2.10
+- Restore properties like the update- and commit-pipe on "sync-repos"
+
 Changes in 1.2.9
 - Various small fixes that got visible with new compiler versions and/or LLVM.
 

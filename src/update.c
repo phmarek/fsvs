@@ -349,6 +349,7 @@ int up__parse_prop(struct estat *sts,
 		STOPIF( cs__char2md5( utf8_value->data, NULL, sts->md5), NULL);
 		DEBUGP("got a orig-md5: %s", cs__md5tohex_buffered(sts->md5));
 		sts->has_orig_md5=1;
+		if (not_handled) *not_handled=1;
 	}
 	else
 	{
