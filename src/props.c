@@ -337,8 +337,7 @@ const char propname_mtime[]=SVN_PROP_TEXT_TIME,
  *
  * And as they're not widely used, it's easier this way. */
 const char prp___to_be_removed_value[]=
-	"FSVS:INTERNAL-\nto-be-removed\n-"
-	"\x8f\xc1\xa6\xe5\x86\x0a\x01\x72\x54\x89\x25\x23\x03\xc3\xfa\x75";
+	"FSVS:INTERNAL-to-be-removed-- 91b88fdf-c285-4b73-a988-32d333c7548";
 
 
 
