@@ -321,7 +321,7 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 	{
 		output_sts->repos_rev = revision;
 		STOPIF( prp__set_from_aprhash( output_sts, properties, 
-					ONLY_KEEP_USERDEF, NULL, pool), NULL);
+					STORE_IN_FS | ONLY_KEEP_USERDEF, NULL, pool), NULL);
 	}
 
 	if (props)

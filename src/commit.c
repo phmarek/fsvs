@@ -432,6 +432,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	svn_stringbuf_t *str;
 	struct encoder_t *encoder;
 	int transfer_text, has_manber;
+	hash_t db;
 
 
 	str=NULL;
@@ -596,6 +597,12 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 			stg=svn_string_create(cp, pool);
 			STOPIF_SVNERR( editor->change_file_prop,
 					(baton, propname_origmd5, stg, pool) );
+
+
+			STOPIF( prp__open_byestat(sts,
+						GDBM_WRCREAT | HASH_REMEMBER_FILENAME, &db), NULL);
+			STOPIF( prp__set(db, propname_origmd5, cp, -1), NULL);
+			STOPIF( hsh__close(db, 0), NULL);
 		}
 
 	}
