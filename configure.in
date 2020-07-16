@@ -4,7 +4,7 @@
 AC_PREREQ(2.60)
 AC_INIT(fsvs, 
 	[esyscmd(make --quiet --no-print-directory -f Makefile.in version-nnl 2>/dev/null)], 
-	http://fsvs.tigris.org/)
+	https://github.com/phmarek/fsvs)
 AC_GNU_SOURCE
 
 # if [[ "x$cache_file" == /dev/null ]]
@@ -363,7 +363,7 @@ then
   * MAJOR(), MINOR() and MAKEDEV() definitions not found.
   * Fake a definition, but that could make problems for ignore patterns
   * and commits/updates of device nodes, so these will be disabled.
-  * Please contact dev@fsvs.tigris.org for help, or, if you know your 
+  * Please use a github issue for help or, if you know your 
   * systems' way, to report the correct header name.
   *
   * If you *really* need to use device compares, and have *no* other way, 
