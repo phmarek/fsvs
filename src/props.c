@@ -703,7 +703,7 @@ int prp__s_work(struct estat *root, int argc, char *argv[])
 		if (action->i_val == FS_REMOVED)
 		{
 			if (status == ENOENT) 
-				DEBUGP("%s on %s didnt exist anyway", key.dptr, *normalized);
+				DEBUGP("%s on %s didn't exist anyway", key.dptr, *normalized);
 			else
 				change++;
 		}
