@@ -18,7 +18,8 @@ VERSION	= $(shell  perl -e '($$r) = (q( $(HEADREV) ) =~ m:(\d+):); $$t= q( $(HEA
 CFLAGS	:= @CFLAGS@
 CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'  -Wno-deprecated-declarations
 LDFLAGS	:= @LDFLAGS@
-FSVS_LDFLAGS = $(LDFLAGS) -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm -ldl
+FSVS_LDFLAGS = $(LDFLAGS)
+BASELIBS := -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm -ldl
 EXTRALIBS	:= @EXTRALIBS@
 WAA_CHARS?= @WAA_WC_MD5_CHARS@
 
@@ -148,13 +149,13 @@ docs: $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 ################################ Rules ######################################
 %.o:	%.c
 	@echo "     CC $<"
-	@$(CC) $(CFLAGS) -c -o $@ $<
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 # if the Makefile has changed, the output will (at least sometimes)
 # change, too.
 $(DEST): $(C_FILES:%.c=%.o)
 	@echo "     Link $@"
-	@$(CC) $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) $(EXTRALIBS) -o $@ $^
+	@$(CC) $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) -o $@ $^ $(BASELIBS) $(EXTRALIBS) 
 ifeq (@ENABLE_RELEASE@, 1)
 	-strip $@
 endif
@@ -171,7 +172,7 @@ endif
 deps:	$(D_FILES)
 .%.d:	%.c
 	@echo "     deps for $<"
-	@$(CC) $(CFLAGS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
 include $(D_FILES)
 
 tools/fsvs-chrooter: tools/fsvs-chrooter.c
