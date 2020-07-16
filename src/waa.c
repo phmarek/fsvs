@@ -764,7 +764,7 @@ int waa__make_info_file(char *directory, char *name, char *dest)
 	int status;
 	int hdl;
 	static const char readme_1[]="This directory is used by FSVS.\n"
-		"Please see http://fsvs.tigris.org/ for more details.\n\n"
+		"Please see https://github.com/phmarek/fsvs for more details.\n\n"
 		"The working copy for this hash value is\n"
 		"\t";
 	static const char readme_2[]="\n";

@@ -1064,7 +1064,7 @@ int rev__work(struct estat *root, int argc, char *argv[])
 				"!We know nothing about previous or current versions, as this tree\n"
 				"was never checked in.\n"
 				"If you need such an entry reverted, you could either write the needed\n"
-				"patch (and send it to dev@fsvs.tigris.org), or try with a 'sync-repos'\n"
+				"patch (and create a pull request on github), or try with a 'sync-repos'\n"
 				"command before (if you know a good revision number)\n");
 	else
 		STOPIF(status, NULL);

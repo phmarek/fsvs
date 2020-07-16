@@ -130,7 +130,7 @@
 			behind, and similar things</UL>
 	<li>If you get an error message from fsvs, check the arguments and retry.
 		In desperate cases (or just because it's quicker than debugging 
-		yourself) ask on <tt>dev [at] fsvs.tigris.org</tt>.
+		yourself) create a github issue.
 	</UL>
 
 
@@ -175,8 +175,7 @@
 
 	\section howto_backup_feedback Feedback
 
-	If you've got any questions, ideas, wishes or other feedback, please tell 
-	us in the mailing list <tt>users [at] fsvs.tigris.org</tt>. 
+	If you've got any questions, ideas, wishes or other feedback, please tell me.
 
 	Thank you!
 

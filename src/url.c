@@ -697,7 +697,7 @@ int url___set_internal_nums(void)
 
 	STOPIF_CODE_ERR( sizeof(bitmap)*8 < urllist_count, EMFILE,
 			"Your fd_set is too small for the number of urls.\n"
-			"Please contact dev@fsvs.tigris.org for help.");
+			"Please create a github issue.");
 
 	status=0;
 	FD_ZERO(&bitmap);

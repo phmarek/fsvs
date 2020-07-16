@@ -188,7 +188,7 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([
   }
   ])],
   [AC_MSG_NOTICE([S_IFMT is ok.])],
-  [AC_MSG_FAILURE([You have a sparse S_IFMT. Please tell the dev@ mailing list.])])
+  [AC_MSG_FAILURE([You have a sparse S_IFMT. Please create a github issue.])])
 
 
 AC_CHECK_HEADERS([linux/kdev_t.h])

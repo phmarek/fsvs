@@ -213,8 +213,7 @@
 /** Local install commandline.
  *
  * \note This is not yet implemented. This list is more or less just a kind 
- * of brainstorming. If you need this feature, tell us at 
- * dev@fsvs.tigris.org - you'll get it.
+ * of brainstorming. If you need this feature, tell me.
  *
  * This is used after the temporary file (which had possibly used \ref 
  * FSVS_PROP_UPDATE_PIPE) has been written; the normal, internal fsvs 

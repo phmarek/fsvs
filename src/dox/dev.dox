@@ -27,11 +27,11 @@ command line you're calling fsvs with, and the output it gives.
 Furthermore it might help diagnosing if you tried with the \ref 
 glob_opt_verb "-v" parameter, and/or with \ref glob_opt_deb "-d"; but 
 please mind that there might be data in the dump that you don't want to 
-make public -- if you're not sure, ask on the mailing lists.
+make public!
 
 
-Send these things along with a description of what you wanted to do to \b 
-\c dev@fsvs.tigris.org or, if you like that alternative better, just file 
+Send these things along with a description of what you wanted to do to
+me or, if you like that alternative better, just file 
 an issue. \n
 (The bugs I find and the things on my \c TODO are not in the issue tracker,
 as I can't access it while on the train - and that's where I spend the most
