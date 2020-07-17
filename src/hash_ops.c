@@ -355,9 +355,12 @@ int hsh__close(hash_t db, int has_failed)
 	else
 	{
 		DEBUGP("reorganize?");
+#if 0
+		// Deactivated because of Debian#965191
 		/* At least fewer space used? */
 		if (have_removed)
 			gdbm_reorganize(db->db);
+#endif
 	}
 
 	DEBUGP("closing hash");
