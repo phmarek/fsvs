@@ -7,6 +7,7 @@
  ************************************************************************/
 
 #include <fcntl.h>
+#include <errno.h>
 #include <string.h>
 
 #include "global.h"
