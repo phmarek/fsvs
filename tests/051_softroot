@@ -16,8 +16,9 @@ $INCLUDE_FUNCS
 logfile=$LOGDIR/051.softroot
 
 SRDIR=$WC/softroot
-DIR=/bin
-FILE=$DIR/ls
+# /bin/ and /sbin/ might be symlinks!
+DIR=/etc
+FILE=$DIR/hosts
 
 if [[ ! -e $FILE ]]
 then
