@@ -9,3 +9,4 @@ src/.*.d
 src/*.o
 src/fsvs
 src/tags
+doxygen
