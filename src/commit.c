@@ -117,7 +117,7 @@ int missing_path_utf8_len;
  * */
 int ci__set_revision(struct estat *this, svn_revnum_t rev)
 {
-	int i;
+	uint32_t i;
 
 	/* should be benchmarked.
 	 * perhaps use better locality by doing levels at once. */
@@ -158,7 +158,7 @@ svn_error_t * ci__callback (
 	/* recursively set the new revision */
 //	STOPIF( ci__set_revision(root, new_revision), NULL);
 	current_url->current_rev = new_revision;
-	
+
 //ex:
 	RETURN_SVNERR(status);
 }
@@ -633,7 +633,7 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 	int status;
 	struct estat *sts;
 	apr_pool_t *subpool;
-	int i, exists_now;
+	uint32_t i, exists_now;
 	char *filename;
 	char *utf8_filename, *tmp;
 	svn_error_t *status_svn;
