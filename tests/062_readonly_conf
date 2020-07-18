@@ -19,7 +19,7 @@ function Go
 	run="$1"
 
 	$BINdflt st > $logfile.$run,st
-	$BINdflt diff > $logfile.$run,diff
+	$BINdflt diff -d -o verbose=stack > $logfile.$run,diff
 	$BINdflt log -rHEAD > $logfile.$run,log
 	$BINdflt pl -v * > $logfile.$run,pl
 	$BINdflt pg fsvs:commit-pipe enc-dec > $logfile.$run,pg
@@ -28,7 +28,7 @@ function Go
 
 # Get compare values. 
 # The chmod must be done before, to get the same status output.
-#chmod -R a-w .
+chmod -R a-w .
 Go 1
 
 
@@ -36,27 +36,25 @@ Go 1
 chmod -R a-w $FSVS_WAA
 chmod -R a-w $FSVS_CONF
 
+cleanup_062() {
+	chmod -R u+w "$FSVS_WAA"
+	chmod -R u+w "$FSVS_CONF"
+	chmod -R u+w "$WC"
+}
+FSVS_ERR_TRAP="cleanup_062"
+
 # We must be careful to clean up after this test, so that normal testing 
 # can resume.
-# So we run in a subshell, and look at the return value afterwards.
-if ! result=$(
-		Go 2
-		if ! $BINdflt diff -r HEAD > /dev/null
-		then
-			echo "diff -r HEAD gives an error"
-			exit 1
-		fi
-	)
+Go 2
+if ! $BINdflt diff -r HEAD > /dev/null
 then
-	if [[ "$result" == "" ]]
-	then
-		result="Exit code"
-	fi
+	echo "diff -r HEAD gives an error"
+	exit 1
 fi
+cleanup_062
+FSVS_ERR_TRAP=true
 
 # Allow removing these hierarchies
-chmod -R u+w $FSVS_WAA
-chmod -R u+w $FSVS_CONF
 
 if [[ "$result" != "" ]]
 then
