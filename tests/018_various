@@ -124,9 +124,9 @@ fi
 	echo file:/// | $BINq urls load 
 	echo './*' | $BINq ignore load 
 )
-if FSVS_CONF=$WC FSVS_WAA=$WC $BINdflt status -N -N /sbin /bin > $logfile 2>&1
+if FSVS_CONF=$WC FSVS_WAA=$WC $BINdflt status -N -N /etc /usr > $logfile 2>&1
 then
-	if ! grep '^N\.\.\. \+dir \+/s\?bin$' $logfile > $logfile.2
+	if ! grep '^N\.\.\. \+dir \+/\(etc\|usr\)$' $logfile > $logfile.2
 	then
 	  $ERROR "Wrong status output"
 	fi
