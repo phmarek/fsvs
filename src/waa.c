@@ -452,7 +452,7 @@ ex:
  *
  * The intermediate directories are created, so files can be created
  * or read directly after calling this function. */
-int waa__get_waa_directory(char *path,
+int waa__get_waa_directory(const char *path,
 		char **erg, char **eos, char **start_of_spec,
 		int flags)
 {
@@ -795,7 +795,7 @@ ex:
  *
  * That the string is always freshly allocated on the heap makes
  * sense in that callers can \b always just free it. */
-int waa__given_or_current_wd(char *name, char **erg)
+int waa__given_or_current_wd(const char *name, char **erg)
 {
 	int status;
 
@@ -890,8 +890,8 @@ ex:
  * | O_TRUNC</tt>) and is given to \c waa__open().
  * 
  * \c ENOENT is returned without giving an error message. */
-int waa__open_byext(char *entry_name,
-		char *extension,
+int waa__open_byext(const char *entry_name,
+		const char *extension,
 		int mode,
 		int *fh)
 {

@@ -282,7 +282,9 @@ int rev__get_text_to_stream( char *loc_url, svn_revnum_t revision,
 			 current_url->url,
 			 loc_url, hlp__rev_to_string(revision));
 
-		prop_val=apr_hash_get(properties, propval_updatepipe, APR_HASH_KEY_STRING);
+		prop_val=(svn_string_t*)apr_hash_get(properties,
+						propval_updatepipe,
+						APR_HASH_KEY_STRING);
 		decoder=prop_val ? prop_val->data : NULL;
 	}
 

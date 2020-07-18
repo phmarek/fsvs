@@ -643,7 +643,7 @@ struct estat {
 #define DEBUGP(...) do { } while (0)
 #else
 /** Declaration of the debug function. */
-extern void _DEBUGP(const char *file, int line, const char *func, char *format, ...)
+extern void _DEBUGP(const char file[], int line, const char func[], const char format[], ...)
 	__attribute__ ((format (printf, 4, 5) ));
 	/** The macro used for printing debug messages.
 	 * Includes time, file, line number and function name. 
@@ -681,8 +681,8 @@ extern void _DEBUGP(const char *file, int line, const char *func, char *format, 
 	 * some \c silent parameter. */
 	extern int make_STOP_silent;
 	/** Master error function. */
-extern int _STOP(const char *file, int line, const char *function,
-		int errl, const char *format, ...)
+extern int _STOP(const char file[], int line, const char function[],
+		int errl, const char format[], ...)
 __attribute__ ((format (printf, 5, 6) ));
 /** Completely customizable error call macro. 
  * Seldom used, as all things are parametrized.

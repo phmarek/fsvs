@@ -240,8 +240,8 @@ int waa__input_tree(struct estat *root,
 		struct waa__entry_blocks_t **blocks,
 		action_t *callback);
 /** Wrapper function for \c waa__open(). */
-int waa__open_byext(char *directory,
-		char *extension,
+int waa__open_byext(const char *directory,
+		const char *extension,
 		int write,
 		int *fh);
 /** Wrapper for \c waa__load_repos_urls_silent(). */
@@ -250,7 +250,7 @@ int waa__load_repos_urls(char *dir, int reserve_space);
  * \a dir is \c NULL). */
 int waa__load_repos_urls_silent(char *dir, int reserve_space);
 /** Returns the given directory or, if \c NULL , \c getcwd() . */
-int waa__given_or_current_wd(char *directory, char **erg);
+int waa__given_or_current_wd(const char *directory, char **erg);
 /** Creates a README in the WAA. */
 int waa__make_info_file(char *directory, char *name, char *dest);
 /** This function takes a \a path and an \a extension and tries to remove
@@ -299,7 +299,7 @@ int waa__set_working_copy(const char * const wc_dir);
 #define GWD_MKDIR (4)
 /** This function determines the directory used in the WAA area for the 
  * given \a path. */
-int waa__get_waa_directory(char *path, 
+int waa__get_waa_directory(const char *path, 
 		char **erg, char **eos, char **start_of_spec,
 		int flags);
 /** Function that returns the right flag for the wanted file.

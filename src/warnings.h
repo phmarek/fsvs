@@ -103,7 +103,7 @@ typedef enum {
 
 
 /** Possibly print a warning. */
-int wa__warn(warning_e index, int status, char *format, ...)
+int wa__warn(warning_e index, int status, const char format[], ...)
 	__attribute__ ((format (printf, 3, 4) ));
 /** Set the action of one or warnings. */
 int wa__set_warn_option(char *stg, enum opt__prio_e prio);

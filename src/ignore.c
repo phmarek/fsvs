@@ -956,7 +956,7 @@ ex:
 
 
 static int data_seen;
-int have_now(struct ignore_t *ignore, int cur, char *err)
+int have_now(struct ignore_t *ignore, int cur, const char *err)
 {
 	int status;
 
@@ -1328,7 +1328,7 @@ int ign__load_list(char *dir)
 
 	STOPIF_CODE_ERR( fstat(fh, &st), errno, NULL);
 
-	memory=mmap(NULL, st.st_size, 
+	memory=(char*)mmap(NULL, st.st_size, 
 			PROT_READ, MAP_SHARED, 
 			fh, 0);
 	/* If there's an error, return it.
@@ -1340,7 +1340,7 @@ int ign__load_list(char *dir)
 
 
 	/* make header \0 terminated */
-	cp=memchr(memory, '\n', st.st_size);
+	cp=(char*)memchr(memory, '\n', st.st_size);
 	if (!cp)
 	{
 		/* This means no entries.
@@ -1428,7 +1428,7 @@ int ign___new_group(struct ignore_t *ign, struct grouping_t **result)
 	gn_len=strlen(ign->group_name);
 
 	if (ign___groups)
-		group=apr_hash_get(ign___groups, ign->group_name, gn_len);
+		group=(struct grouping_t*)apr_hash_get(ign___groups, ign->group_name, gn_len);
 	else
 	{
 		ign___groups=apr_hash_make(global_pool);
@@ -1463,7 +1463,7 @@ int ign___load_group(struct ignore_t *ign)
 	FILE *g_in;
 	int is_ok, gn_len;
 	static const char ps[]= { PATH_SEPARATOR, 0 };
-	char *cause;
+	const char *cause;
 	svn_string_t *str;
 
 

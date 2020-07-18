@@ -81,7 +81,7 @@ int wa__split_process(char *warn, int prio)
 		/* As per the strtok() rules - input only set on first call. */
 		input=NULL;
 
-		STOPIF( wa__set_warn_option(warn, prio),
+		STOPIF( wa__set_warn_option(warn, (enum opt__prio_e)prio),
 				"In string %s", warn);
 	}
 
@@ -160,7 +160,7 @@ ex:
  * \param stat The error code that could be used for stopping.
  * \param format \c printf()-style message.
  * */
-int wa__warn(warning_e index, int stat, char *format, ...)
+int wa__warn(warning_e index, int stat, const char format[], ...)
 {
 	va_list va;
 	int status, ret;

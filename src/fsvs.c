@@ -405,9 +405,9 @@ void _DEBUGP_open_output(FILE **output, int *was_popened)
  *
  * For uninitializing in the use case \c debug_buffer the \c line value is 
  * misused to show whether an error occured. */
-void _DEBUGP(const char *file, int line, 
-		const char *func, 
-		char *format, ...)
+void _DEBUGP(const char file[], int line, 
+		const char func[], 
+		const char format[], ...)
 {
 	static struct timeval tv;
 	static struct timezone tz;
@@ -475,7 +475,7 @@ void _DEBUGP(const char *file, int line,
 #ifdef ENABLE_DEBUGBUFFER
 		if (opt__get_int(OPT__DEBUG_BUFFER))
 		{
-			buffer_start=malloc(opt__get_int(OPT__DEBUG_BUFFER));
+			buffer_start=(char*)malloc(opt__get_int(OPT__DEBUG_BUFFER));
 			if (buffer_start)
 				debug_out=fmemopen(buffer_start, 
 						opt__get_int(OPT__DEBUG_BUFFER), "w+");
@@ -548,8 +548,8 @@ void _DEBUGP(const char *file, int line,
  *
  * \c -EPIPE is handled specially, in that it is passed up, but no message  
  * is printed. */
-int _STOP(const char *file, int line, const char *function,
-		int errl, const char *format, ...)
+int _STOP(const char file[], int line, const char function[],
+		int errl, const char format[], ...)
 {
 	static int already_stopping=0;
 	static int error_number;
