@@ -803,7 +803,7 @@ int ign__compile_pattern(struct ignore_t *ignore)
 			 * */
 			/* As norm_prefix is const, the compile should remove the strlen() by 
 			 * the value. */
-			strncpy(dest, norm_prefix, strlen(norm_prefix));
+			strncpy(dest, norm_prefix, strlen(norm_prefix)+1);
 			dest+=strlen(norm_prefix);
 		}
 
