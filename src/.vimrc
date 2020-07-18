@@ -5,7 +5,8 @@ set efm^=%-GAn\ error\ occurred\ at\ %.%#
 set tags+=tags
 set tags+=src/tags
 
-set errorformat+=\ \ "%f":1:\ (%s
+set errorformat^=\ \ "%f":1:\ (%s
+set errorformat^=\ \ in\ %m\ \[%f:%l\]
 
 set efm^=%-Gmake%.%#Makefile%.%#run%.%#tests%.%#Fehler%.%#
 
