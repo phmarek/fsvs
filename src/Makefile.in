@@ -64,7 +64,7 @@ check-dox: options.c dox/options.dox
 tags:	$(C_FILES) $(wildcard *.h)
 	@echo "     $@"
 	@-ctags $^
-	@echo ":au BufNewFile,BufRead *.c syntax keyword Constant" $(shell grep -v "^!" < $@ | cut -f1 | grep _) > .vimrc
+	@echo ":au BufNewFile,BufRead *.c syntax keyword Constant" $(shell grep -v "^!" < $@ | cut -f1 | grep _) > .vimrc.syntax
 .IGNORE: tags
 clean:
 	rm -f *.o *.s $(D_FILES) $(DEST) 2> /dev/null || true

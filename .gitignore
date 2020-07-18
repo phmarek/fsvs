@@ -10,3 +10,4 @@ src/*.o
 src/fsvs
 src/tags
 doxygen
+src/.vimrc.syntax
