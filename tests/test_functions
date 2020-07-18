@@ -50,6 +50,7 @@ export ERROR="_MSG 1 NOK 1 \$LINENO"
 # error, non-breaking
 export ERROR_NB="_MSG 0 NOK 1 \$LINENO"
 
+export FSVS_ERR_TRAP=true
 
 # When we're checking results in some locale, we nonetheless need the 
 # output in plain english, so that the strings (eg. from diff) can be 
@@ -62,6 +63,6 @@ export COMPAREWITH="$COMPARE $WC/"
 export COMPARE_1_2="$COMPAREWITH $WC2/"
 export PATH2SPOOL=$TEST_PROG_DIR/path2spool
 
-trap '$ERROR shell error' ERR
+trap '( eval $FSVS_ERR_TRAP ) ; $ERROR shell error' ERR
 
 set -e -E
