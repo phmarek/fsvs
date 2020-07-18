@@ -22,6 +22,8 @@ AC_MSG_NOTICE([***  Now configuring FSVS ]AC_PACKAGE_VERSION[  ***])
 AC_PROG_CC
 AC_PROG_CPP
 
+AC_DEFINE(APR_PATH)
+AC_SUBST(APR_PATH)
 
 ##################################### Header files
 INCDIRS="/usr/local/include /usr/include /openpkg/include "
@@ -35,9 +37,9 @@ AC_ARG_WITH(aprinc,
 		[
 			INCDIRS="$INCDIRS $withval"
 		], [
-			if APR=`apr-1-config --includedir || apr-config --includedir`
+			if APR_PATH=`apr-1-config --includedir || apr-config --includedir`
 			then
-				INCDIRS="$INCDIRS $APR"
+				INCDIRS="$INCDIRS $APR_PATH"
 			fi
 		])
 
@@ -351,7 +353,7 @@ AC_CHECK_FUNCS([fchdir getcwd gettimeofday memmove memset mkdir munmap rmdir str
 
 # AC_CACHE_SAVE
 
-AC_CONFIG_FILES([src/Makefile tests/Makefile])
+AC_CONFIG_FILES([src/Makefile tests/Makefile src/.ycm_extra_conf.py])
 AC_OUTPUT
 
 # Cause a recompile

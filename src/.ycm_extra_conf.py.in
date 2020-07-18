@@ -1,0 +1,8 @@
+def Settings( **kwargs ):
+  return {
+    'flags': [ '-x', 'c++', '-Wall', '-Wextra', '-Werror', 
+        '-Iconfig/',
+        '-Iinclude/',
+        '-I@APR_PATH@'
+        ],
+  }
