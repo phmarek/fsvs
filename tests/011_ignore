@@ -310,3 +310,16 @@ else
 	$ERROR "Group statistics output"
 fi
 
+# Test match vector reallocation.
+$BINq ignore load < /dev/null
+$BINq ignore 'take,PCRE:^.*/deep/((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))(/|$)'
+$BINq ignore 'ign,./waa/**'
+$BINq ignore 'ign,./deep/**'
+$BINq st
+if [[ `$BINdflt st | wc -l` -eq 11 ]]
+then
+  $SUCCESS "Many Parens are okay"
+else
+  $ERROR "Many Parens went wrong"
+fi
+

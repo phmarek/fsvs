@@ -22,7 +22,7 @@
 #include <apr_version.h>
 #include <subversion-1/svn_ra.h>
 #include <subversion-1/svn_string.h>
-#include <pcre.h>
+#include <pcre2.h>
 
 
 /** \file
@@ -117,9 +117,7 @@ struct ignore_t {
 		/* for shell and pcre */
 		struct {
 			/** PCRE main data storage */
-			pcre *compiled;
-			/** PCRE extra data storage. Currently nearly unused. */
-			pcre_extra *extra;
+			pcre2_code *compiled;
 		};
 
 		/** For device compares */

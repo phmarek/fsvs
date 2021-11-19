@@ -168,7 +168,7 @@ __DATA__
 /usr/lib/libldap_r.so.2
 /usr/lib/libm.so
 /usr/lib/libneon.so.26
-/usr/lib/libpcre.so.3
+/usr/lib/libpcre2.so.3
 /usr/lib/libpq.so.5
 /usr/lib/libsasl2.so.2
 /usr/lib/libsqlite3.so.0

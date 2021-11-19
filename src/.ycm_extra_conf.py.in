@@ -1,6 +1,7 @@
 def Settings( **kwargs ):
   return {
     'flags': [ '-x', 'c', '-Wall', '-Wextra', '-Werror', 
+        '-DPCRE2_CODE_UNIT_WIDTH=8',
         '-Iconfig/',
         '-Iinclude/',
         '-I@APR_PATH@'

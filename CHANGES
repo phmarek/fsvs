@@ -3,6 +3,7 @@ Changes in 1.2.10
 - When using a commit-pipe store the original (non-transformed) MD5
   in the local properties as well, so that they match the remote data.
 - Tigris.org was shut down without warning, moved to github.
+- Switched to pcre2 (Debian bug#1000123)
 
 Changes in 1.2.9
 - Various small fixes that got visible with new compiler versions and/or LLVM.

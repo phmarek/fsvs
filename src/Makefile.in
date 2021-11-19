@@ -17,7 +17,7 @@ CFLAGS	:= @CFLAGS@
 CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'  -Wno-deprecated-declarations
 LDFLAGS	:= @LDFLAGS@
 FSVS_LDFLAGS = $(LDFLAGS)
-BASELIBS := -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre -lgdbm -ldl
+BASELIBS := -lsvn_subr-1 -lsvn_delta-1 -lsvn_ra-1 -lpcre2-8 -lgdbm -ldl
 EXTRALIBS	:= @EXTRALIBS@
 WAA_CHARS?= @WAA_WC_MD5_CHARS@
 

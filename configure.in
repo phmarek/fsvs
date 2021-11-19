@@ -80,7 +80,7 @@ AC_DEFINE_UNQUOTED(WAA_WC_MD5_CHARS, $WAA_WC_MD5_CHARS,
 AC_SUBST(WAA_WC_MD5_CHARS)
 
 
-CFLAGS="$CFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64"
+CFLAGS="$CFLAGS -D_GNU_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DPCRE2_CODE_UNIT_WIDTH=8"
 for dir in $INCDIRS
 do
 # using -I would result in the files being _non_ system include 
@@ -139,9 +139,9 @@ AC_SUBST(EXTRALIBS)
 
 ##################################### Checks
 # Checks for libraries.
-AC_CHECK_LIB([pcre], [pcre_compile],
+AC_CHECK_LIB([pcre2-8], [pcre2_compile_8],
 	[],
-	[AC_MSG_FAILURE([Sorry, can't find PCRE.])])
+	[AC_MSG_FAILURE([Sorry, can't find PCRE2-8.])])
 AC_CHECK_LIB([aprutil-1], [apr_md5_init], [],
 	[AC_MSG_FAILURE([Sorry, can't find APR.])])
 AC_CHECK_LIB([svn_delta-1], [svn_txdelta_apply], [],
@@ -153,7 +153,7 @@ AC_CHECK_LIB([gdbm], [gdbm_firstkey], [],
 
 # Checks for header files.
 AC_HEADER_STDC
-AC_CHECK_HEADERS([fcntl.h stddef.h stdlib.h string.h sys/time.h unistd.h pcre.h ],
+AC_CHECK_HEADERS([fcntl.h stddef.h stdlib.h string.h sys/time.h unistd.h pcre2.h ],
 		[],
 		[AC_MSG_FAILURE([Needed header file not found.])])
 

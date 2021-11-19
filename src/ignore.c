@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <pcre.h>
+#include <pcre2.h>
 #include <sys/mman.h>
 
 
@@ -426,7 +426,7 @@
  * \section ignpat_pcre PCRE-patterns
  * 
  * PCRE stands for Perl Compatible Regular Expressions; you can read about
- * them with <tt>man pcre</tt> (if the manpages are installed), and/or
+ * them with <tt>man pcre2</tt> (if the manpages are installed), and/or
  * <tt>perldoc perlre</tt> (if perldoc is installed). \n
  * If both fail for you, just google it.
  * 
@@ -739,8 +739,8 @@ ex:
  * */
 int ign__compile_pattern(struct ignore_t *ignore)
 {
-	const char *err;
-	int offset;
+	int err;
+	size_t offset;
 	int len;
 	char *buffer;
 	char *src, *dest;
@@ -933,22 +933,14 @@ int ign__compile_pattern(struct ignore_t *ignore)
 	DEBUGP("    into \"%s\"", ignore->compare_string);
 
 	/* compile */
-	ignore->compiled = pcre_compile(dest,
-			PCRE_DOTALL | PCRE_NO_AUTO_CAPTURE | PCRE_UNGREEDY | PCRE_ANCHORED |
-			(ignore->is_icase ? PCRE_CASELESS : 0),
+	ignore->compiled = pcre2_compile((unsigned char*)dest, PCRE2_ZERO_TERMINATED,
+			PCRE2_DOTALL | PCRE2_NO_AUTO_CAPTURE | PCRE2_UNGREEDY | PCRE2_ANCHORED |
+			(ignore->is_icase ? PCRE2_CASELESS : 0),
 			&err, &offset, NULL);
 
 	STOPIF_CODE_ERR( !ignore->compiled, EINVAL,
-			"pattern \"%s\" (from \"%s\") not valid; error %s at offset %d.",
+			"pattern \"%s\" (from \"%s\") not valid; pcre2 error %d at offset %ld.",
 			dest, ignore->pattern, err, offset);
-
-	/* Patterns are used often - so it should be okay to study them.
-	 * Although it may not help much?
-	 * Performance testing! */
-	ignore->extra = pcre_study(ignore->compiled, 0, &err);
-	STOPIF_CODE_ERR( err, EINVAL,
-			"pattern \"%s\" not studied; error %s.",
-			ignore->pattern, err);
 
 ex:
 	return status;
@@ -1648,6 +1640,7 @@ int ign__is_ignore(struct estat *sts,
 	struct ignore_t *ign;
 	struct sstat_t *st;
 	struct estat sts_cmp;
+	static pcre2_match_data *match_data = NULL;
 
 
 	*is_ignored=0;
@@ -1660,6 +1653,11 @@ int ign__is_ignore(struct estat *sts,
 	{
 		*is_ignored=1;
 		goto ex;
+	}
+
+	if (!match_data) {
+		match_data = pcre2_match_data_create(2, NULL);
+		STOPIF_ENOMEM(!match_data);
 	}
 
 	/* TODO - see ign__set_ignorelist() */ 
@@ -1687,22 +1685,44 @@ int ign__is_ignore(struct estat *sts,
 					ign->mode_match_and, ign->mode_match_cmp);
 			if (ign->dir_only && !S_ISDIR(sts->st.mode))
 			{
-				status=PCRE_ERROR_NOMATCH;
+				status=PCRE2_ERROR_NOMATCH;
 			}
 			else if (ign->mode_match_and && 
 					((sts->st.mode & ign->mode_match_and) != ign->mode_match_cmp))
 			{
-				status=PCRE_ERROR_NOMATCH;
+				status=PCRE2_ERROR_NOMATCH;
 			}
 			else if (ign->compiled)
 			{
-				status=pcre_exec(ign->compiled, ign->extra, 
-						cp, len, 
-						0, 0,
-						NULL, 0);
-				STOPIF_CODE_ERR( status && status != PCRE_ERROR_NOMATCH, 
-						status, "cannot match pattern %s on data %s",
-						ign->pattern, cp);
+				while (1) {
+					status=pcre2_match(ign->compiled,
+							(unsigned char*)cp, len,
+							0, 0,
+							match_data, 0);
+					DEBUGP("match %s against %s: %d", cp, ign->pattern, status);
+
+					if (status > 0) {
+						/* Matched. */
+						status = 0;
+						break;
+					} else if (status == 0) {
+						/* Too small */
+						status = pcre2_get_match_data_size(match_data) * 2;
+						pcre2_match_data_free(match_data);
+
+						DEBUGP("match_data too small, realloc with %d", status);
+						match_data = pcre2_match_data_create(status, NULL);
+						if (!match_data)
+							STOPIF_ENOMEM(!match_data);
+						/* Try again. */
+					} else if (status == PCRE2_ERROR_NOMATCH) {
+						/* OK */
+						break;
+					} else {
+						STOPIF(status, "cannot match pattern %s on data %s",
+								ign->pattern, cp);
+					}
+				}
 			}
 		}
 		else if (ign->type == PT_DEVICE)
