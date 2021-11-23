@@ -1,3 +1,8 @@
+Changes in 1.2.11
+- (Potentially) fixed a long-standing bug (only on webdav):
+  removed duplicated open calls.
+  (https://bugs.launchpad.net/ubuntu/+source/fsvs/+bug/1875642)
+
 Changes in 1.2.10
 - Restore properties like the update- and commit-pipe on "sync-repos"
 - When using a commit-pipe store the original (non-transformed) MD5
