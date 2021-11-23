@@ -797,10 +797,6 @@ svn_error_t *ci__directory(const svn_delta_editor_t *editor,
 
 			DEBUGP("opening %s with base %llu", filename, 
 					(t_ull)current_url->current_rev);
-			status_svn= (S_ISDIR(sts->st.mode) ?
-					editor->open_directory : editor->open_file)
-				( utf8_filename, dir_baton, current_url->current_rev,
-					subpool, &baton);
 			TEST_FOR_OUT_OF_DATE(sts, status_svn,
 					"%s(%s) returns %d",
 					S_ISDIR(sts->st.mode) ? "open_directory" : "open_file",
