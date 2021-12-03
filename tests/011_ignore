@@ -312,11 +312,13 @@ fi
 
 # Test match vector reallocation.
 $BINq ignore load < /dev/null
-$BINq ignore 'take,PCRE:^.*/deep/((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))(/|$)'
+$BINq ignore 'take,PCRE:^.*/deep2/((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))(/|$)'
 $BINq ignore 'ign,./waa/**'
-$BINq ignore 'ign,./deep/**'
-$BINq st
-if [[ `$BINdflt st | wc -l` -eq 11 ]]
+$BINq ignore 'ign,./deep2/**'
+# "Generate" data
+mv deep deep2
+$BINdflt ci deep -m"remove"
+if [[ `$BINdflt st | wc -l` -eq 10 ]]
 then
   $SUCCESS "Many Parens are okay"
 else
