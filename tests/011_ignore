@@ -201,6 +201,20 @@ else
   $SUCCESS "empty state."
 fi
 
+
+echo "Ignore lists with comments"
+$BINq ignore prepend group:ignore,./1
+echo "# ignore me!!" | $BINq ignore load
+if [[ -e $ign_file ]]
+then
+  cat $ign_file
+  ls -la $ign_file
+  $ERROR "not emptied"
+else
+  $SUCCESS "empty state."
+fi
+
+
 $BINq ignore prepend group:ignore,./1
 $BINq ignore append  group:take,./3
 $BINq ignore at=1               ./2

@@ -2148,7 +2148,7 @@ int ign__work(struct estat *root UNUSED, int argc, char *argv[])
 		i=0;
 		while (1)
 		{
-			status=hlp__string_from_filep(stdin, &cp, NULL, SFF_WHITESPACE);
+			status=hlp__string_from_filep(stdin, &cp, NULL, SFF_WHITESPACE | SFF_COMMENT);
 			if (status == EOF) break;
 
 			STOPIF(status, NULL);
