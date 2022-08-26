@@ -1640,6 +1640,7 @@ int ign__is_ignore(struct estat *sts,
 	struct ignore_t *ign;
 	struct sstat_t *st;
 	struct estat sts_cmp;
+	static int pcre2_match_data_size = 2;
 	static pcre2_match_data *match_data = NULL;
 
 
@@ -1656,7 +1657,7 @@ int ign__is_ignore(struct estat *sts,
 	}
 
 	if (!match_data) {
-		match_data = pcre2_match_data_create(2, NULL);
+		match_data = pcre2_match_data_create(pcre2_match_data_size, NULL);
 		STOPIF_ENOMEM(!match_data);
 	}
 
@@ -1707,11 +1708,11 @@ int ign__is_ignore(struct estat *sts,
 						break;
 					} else if (status == 0) {
 						/* Too small */
-						status = pcre2_get_match_data_size(match_data) * 2;
 						pcre2_match_data_free(match_data);
+						pcre2_match_data_size += 5;
 
-						DEBUGP("match_data too small, realloc with %d", status);
-						match_data = pcre2_match_data_create(status, NULL);
+						DEBUGP("match_data too small, realloc with %d", pcre2_match_data_size);
+						match_data = pcre2_match_data_create(pcre2_match_data_size, NULL);
 						if (!match_data)
 							STOPIF_ENOMEM(!match_data);
 						/* Try again. */

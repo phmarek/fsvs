@@ -1,3 +1,6 @@
+- Don't use pcre2_get_match_data_size (github issue #2)
+- Allow comments in "fsvs ignore load" lists.
+
 Changes in 1.2.11
 - (Potentially) fixed a long-standing bug (only on webdav):
   removed duplicated open calls.
