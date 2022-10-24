@@ -76,25 +76,26 @@
  * to 0.
  * - The new value gets the current \c number prepended, and stored with 
  * the given \c key.
- * \dot
+* \dot
  * digraph {
- *   node [shape=record];
+ *   splines = false;
+ *   node [shape=plaintext];
  *   {
  *     rank=same;
- *     C0 [label = "<p>0 | value2" ];
- *     C1 [label = "<p>1 | value1" ];
+ *     C0 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">0</TD><TD port="v">value2</TD></TR></TABLE>>];
+ *     C1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">1</TD><TD port="v">value1</TD></TR></TABLE>>];
  *   }
  *   {
  *     rank=same;
- *     key;
- *     1;
+ *     key [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD port="p">key</TD></TR></TABLE>>];
+ *     1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD port="p">1</TD></TR></TABLE>>];
  *   }
- *   key -> C1;
- *   1 -> C0;
+ *   key:p -> C1:v;
+ *   1:p -> C0:v;
  *
  *   edge [style=dotted];
  *   edge [arrowhead=none, arrowtail=normal];
- *   1 -> C1:p;
+ *   1:p -> C1:p;
  *
  *   edge [style=invis, weight=20];
  *   key -> 1;
@@ -103,40 +104,41 @@
  * After several insertions, the situation might be like this:
  * \dot
  * digraph {
- *   node [shape=record];
+ *   splines = false;
+ *   node [shape=plaintext];
  *   {
  *     rank=same;
- *     Ca  [label = " { <p> 0 | value_A } " ];
- *     Cb  [label = " { <p> 0 | value_B2 } " ];
- *     Cb2 [label = " { <p> 1 | value_B1 } " ];
- *     Cc3 [label = " { <p> 3 | value_C3 } " ];
- *     Cc2 [label = " { <p> 2 | value_C2 } " ];
- *     Cc  [label = " { <p> 0 | value_C1 } " ];
+ *     Ca [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">0</TD></TR><TR><TD>value_A</TD></TR></TABLE>>];
+ *     Cb [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">0</TD></TR><TR><TD>value_B2</TD></TR></TABLE>>];
+ *     Cb2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">1</TD></TR><TR><TD>value_B1</TD></TR></TABLE>>];
+ *     Cc3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">3</TD></TR><TR><TD>value_C3</TD></TR></TABLE>>];
+ *     Cc2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">2</TD></TR><TR><TD>value_C2</TD></TR></TABLE>>];
+ *     Cc [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">0</TD></TR><TR><TD>value_C1</TD></TR></TABLE>>];
  *   }
  *   {
  *     rank=same;
- *     key_A;
- *     key_B;
- *     key_C;
- *     1;
- *     2;
- *     3;
+ *     key_A [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">Key_A</TD></TR></TABLE>>];
+ *     key_B [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">Key_B</TD></TR></TABLE>>];
+ *     key_C [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">Key_C</TD></TR></TABLE>>];
+ *     1 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">1</TD></TR></TABLE>>];
+ *     2 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">2</TD></TR></TABLE>>];
+ *     3 [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0"><TR><TD PORT="p">3</TD></TR></TABLE>>];
  *   }
  *
- *   "key_A" -> Ca;
+ *   "key_A":p -> Ca:p;
  *
- *   "key_B" -> Cb2;
- *   "1" -> Cb;
+ *   "key_B":p -> Cb2:p;
+ *   "1":p -> Cb:p;
  *
- *   "key_C" -> Cc3;
- *   "2" -> Cc;
- *   "3" -> Cc2;
+ *   "key_C":p -> Cc3:p;
+ *   "2":p -> Cc:p;
+ *   "3":p -> Cc2:p;
  *
  *   edge [style=dotted];
  *   edge [arrowhead=none, arrowtail=normal];
- *   1 -> Cb2:p;
- *   3 -> Cc3:p;
- *   2 -> Cc2:p;
+ *   1:p -> Cb2:p;
+ *   3:p -> Cc3:p;
+ *   2:p -> Cc2:p;
  *
  *   edge [style=invis, weight=20];
  *   key_A -> key_B;
