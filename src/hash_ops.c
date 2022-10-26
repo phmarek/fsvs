@@ -76,7 +76,7 @@
  * to 0.
  * - The new value gets the current \c number prepended, and stored with 
  * the given \c key.
-* \dot
+ * \dot
  * digraph {
  *   splines = false;
  *   node [shape=plaintext];
