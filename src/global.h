@@ -33,9 +33,9 @@
  * to \c NULL, to avoid repeated free()ing. */
 #define IF_FREE(x) do { if (x) free(x); x=NULL; } while (0)
 
-/* \addtogroup compati */
-/* @{ */
-/** The system-specific character to delimit directories.
+/** \addtogroup compati
+ * @{
+ * The system-specific character to delimit directories.
  * Surely there's something like that in APR somewhere. */
 #define PATH_SEPARATOR ('/')
 /** The system-specific character to be used before environment variables.
@@ -673,7 +673,7 @@ extern void _DEBUGP(const char file[], int line, const char func[], const char f
 	 *
 	 * It works by checking the return value; if it is not zero, a 
 	 * <tt>goto ex</tt> is done. At this mark some cleanup is possible. */
-	/** @{ */
+	 * @{ */
 	/** A flag to turn error printing temporarily off.
 	 * This is useful where entire calltrees would have to be equipped with 
 	 * some \c silent parameter. */
@@ -836,7 +836,6 @@ __attribute__ ((format (printf, 5, 6) ));
 #endif
 #endif
 /** @} */
-/** @} */
 
 
 /** \addtogroup Globals Global options.
@@ -844,7 +843,7 @@ __attribute__ ((format (printf, 5, 6) ));
  *
  * A list of variables that can be set by commandline parameters or 
  * environment variables; these are used in nearly every action. */
-/** @{ */
+ * @{ */
 /** Flag for recursive/non-recursive behaviour.
  * Starting with 0, gets incremented with \c -R and decremented with \c 
  * -N. Different actions have different default levels. */
@@ -922,9 +921,9 @@ extern const char propval_updatepipe[];
 /** \addtogroup cmds_strings Common command line strings
  * \ingroup compat
  *
+ * @{
  * These strings may have to be localized some time, that's why they're
  * defined in this place. */
-/** @{ */
 extern char parm_dump[],
 			 parm_test[],
 			 parm_load[];

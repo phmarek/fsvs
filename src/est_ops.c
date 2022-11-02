@@ -691,8 +691,7 @@ int ops__calc_path_len(struct estat *sts)
  * \todo A further optimization would be to check if a parent is already 
  * present, and append to that path. Similar for a neighbour entry.
  *
- * The \c cache_entry_t::id member is used as a pointer to the struct \ref  
- * estat.
+ * The \c cache_entry_t::id member is used as a pointer to the struct \ref estat.
  * */
 int ops__build_path(char **value, struct estat *sts)
 {

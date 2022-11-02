@@ -133,7 +133,7 @@
  * match. 
  *
  * This is just for information purposes and doesn't change any FSVS state, 
- * (TODO: unless some option/parameter is set).</i>
+ * <i>(TODO: unless some option/parameter is set).</i>
  *
  * The list format is <b>on purpose</b> incompatible with the \c load 
  * syntax, as the best match normally has to be taken manually. 

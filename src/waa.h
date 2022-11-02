@@ -115,11 +115,11 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * group, a whitespace, and the pattern (as, string with options); \c NUL 
  * -terminated, \c LF -separated. */
 #define WAA__IGNORE_EXT		"Ign"
-/** \anchor urls List of URLs.
+/** \anchor urls_l List of URLs.
  * They consist of a header with the number of URLs, followed by the URLs 
  * themselves; \c NUL -terminated, \c LF -separated.  */
 #define WAA__URLLIST_EXT		"Urls"
-/** \anchor urls Current revisions of the URLs.
+/** \anchor revs Current revisions of the URLs.
  * Very similar to \c WAA__URLLIST_EXT (see \ref url__load_list()).
  * These are split into a separate file, so that no data in \c /etc is 
  * changed after a commit. */

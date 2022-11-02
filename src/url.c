@@ -103,7 +103,7 @@
  * more readable version you can use \ref glob_opt_verb "-v".
  *
  *
- * \subsection urls_load Modifying URLs
+ * \subsection urls_modif Modifying URLs
  *
  * You can change the various parameters of the defined URLs like this:
  * \code

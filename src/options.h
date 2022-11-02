@@ -269,6 +269,7 @@ int opt__doesnt_say_off(const char *string);
 
 /** Return the variable name from an option. */
 char *opt__variable_from_option(enum opt__settings_e which);
+/** @} */
 
 /** \name Specific data for single options.
  * @{ */

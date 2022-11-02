@@ -81,7 +81,7 @@
 #define FSVS_EXP_WC_ROOT "FSVS_WC_ROOT"
 /** The revision we're updating or reverting to. */
 #define FSVS_EXP_TARGET_REVISION "FSVS_TARGET_REVISION"
-/** \addtogroup exp_env
+/**
  *
  * Apart from these \c $FSVS_CONF and \c $FSVS_WAA are always set.
  *

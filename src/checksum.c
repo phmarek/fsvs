@@ -924,7 +924,7 @@ ex:
  * And still, there's (nearly) always a swap space ... 
  *
  *
- * \subsection md5s_perf Allocation
+ * \subsection md5s_alloc Allocation
  *
  * To avoid the costs of the unused 4 bytes (which accumulate to 32MB
  * on a 1TB file) and to get the manber-hashes better into 

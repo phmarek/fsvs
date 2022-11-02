@@ -1953,8 +1953,8 @@ ex:
  * that need updating have estat::do_userselected set, and their children 
  * get marked via ops__set_todo_bits().
  *
- * On output we have estat::entry_status set; and the current \ref 
- * action->local_callback gets called.
+ * On output we have estat::entry_status set; and the current
+ * \ref actionlist_t::local_callback "action->local_callback" gets called.
  *
  * It's not as trivial to scan the inodes in ascending order as it was when 
  * this part of code was included in 

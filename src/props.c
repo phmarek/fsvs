@@ -289,7 +289,7 @@
  * \c FSVS has a number of reserved property names, where it stores the 
  * meta-data and other per-entry data in the repository.
  *
- * \section svn_props Meta-data of entries
+ * \section svn_data Meta-data of entries
  *
  * Such names are already in use in the \e mtime and \e meta-data branches
  * of subversion; we use the values defined in \c svn_props.h (if any), or 

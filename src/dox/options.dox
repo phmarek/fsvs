@@ -348,13 +348,12 @@ o_opt_path "the path option".
 <li>\c meta - One more than the default so it can be used via a single \c 
 "-v", it marks that the mtime and owner/group changes get reported as two 
 characters.
-.
 If \c "-v" is used to achieve that, even entries without changes are 
 reported, unless overridden by \ref o_filter.
 <li>\c url - Displays the entries' top priority URL
 <li>\c copyfrom - Displays the URL this entry has been copied from (see 
 \ref copy).
-<li>\c group - The group this entry belongs to, see \ref group
+<li>\c group - The group this entry belongs to
 <li>\c urls - Displays all known URLs of this entry
 <li>\c stacktrace - Print the full stacktrace when reporting errors; useful 
 for debugging.
