@@ -16,7 +16,7 @@
 #include "options.h"
 
 /** \file
- * Functions for handling of indiviual <tt>struct estat</tt>s. */
+ * Functions for handling of individual <tt>struct estat</tt>s. */
 
 
 /** Return the path of this entry. */

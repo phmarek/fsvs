@@ -49,7 +49,7 @@ enum opt__settings_e {
 	OPT__DIR_EXCLUDE_MTIME,
 	/** The filter mask as given with \ref o_filter "-f". */
 	OPT__FILTER,
-	/** Whichs change checks to perform, \ref o_chcheck. */
+	/** Which change checks to perform, \ref o_chcheck. */
 	OPT__CHANGECHECK,
 	/** Whether all removed entries should be printed as removed, or only the 
 	 * base directory. */
@@ -157,7 +157,7 @@ enum opt__prio_e {
 	PRIO_USER_WC,
 	/** Value read from environment variable. */
 	PRIO_ENV,
-	/** Value assumed from external state, but overrideable.
+	/** Value assumed from external state, but overridable.
 	 * Example: colors for log output; should not be printed when redirected 
 	 * into a file, except if explicitly told so on the command line. */
 	PRIO_PRE_CMDLINE,

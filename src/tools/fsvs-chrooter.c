@@ -51,7 +51,7 @@
  * This works by calling this wrapper program; it goes into a \c chroot 
  * jail and calls FSVS with additional data; FSVS then tries to load 
  * all needed libraries (see \ref hlp__chrooter), and goes out of the jail 
- * to resume operations from the default enviroment.
+ * to resume operations from the default environment.
  *
  *
  * \section chrooter_old On the old system
@@ -64,7 +64,7 @@
  * \endcode
  * 
  * This builds only \c tools/fsvs-chrooter -- this you put into \c \c 
- * /usr/local/bin or whereever you like. It should be in a directory listed 
+ * /usr/local/bin or wherever you like. It should be in a directory listed 
  * in \c PATH!
  *
  *
@@ -143,10 +143,10 @@
  * We need the old \c / to set the correct root directory back; and the 
  * current working directory has to be restored, too.\n
  * If we did a <tt>chroot(current working directory)</tt>, we'd see a 
- * completly different directory structure than all the other filesystem 
+ * completely different directory structure than all the other filesystem 
  * tools (except for the case <tt>cwd = "/"</tt>, of course).
  *
- * \note Maybe give the chrooter setuid and drop priviledges after 
+ * \note Maybe give the chrooter setuid and drop privileges after 
  * returning from chroot() jail? Not sure about security implications, 
  * seems to be unsafe. Does anybody know how to do that <b>in a safe 
  * manner</b>?

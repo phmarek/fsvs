@@ -181,7 +181,7 @@ struct ignore_t {
 #define INVALID_INTERNAL_NUMBER (-1)
 /** All the data FSVS must know about an URL. */
 struct url_t {
-	/** The URL itself (http:// or svn:// or similar) */
+	/** The URL itself (%http:// or svn:// or similar) */
 	char *url;
 	/** The user-given priority; need not be unique. 
 	 * The lower the number, the higher the priority. */

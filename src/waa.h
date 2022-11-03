@@ -54,7 +54,7 @@ extern struct waa__entry_blocks_t waa__entry_block;
 /** \defgroup waa_files Files used by fsvs
  * \ingroup compat
  *
- * \c FSVS uses various files to store its configuration and informations 
+ * \c FSVS uses various files to store its configuration and information 
  * about the system it is running on.
  *
  * Two file trees are used:<ul>
@@ -135,7 +135,7 @@ extern struct waa__entry_blocks_t waa__entry_block;
 /** @} */
 
 /** \anchor waa_file \name Per file/directory
- * The cached informations (per-file) are located in the \c cache 
+ * The cached information (per-file) are located in the \c cache 
  * subdirectory of the WAA; two subdirectory levels are created below that.  
  *
  * @{ */

@@ -90,7 +90,7 @@ static const char
 #define STS_WRITE .overwrite_sts_st=1
 /** waa__update_dir() may look for new entries */
 #define DIR_UPD .do_update_dir=1
-/** Action doesn't write into WAA, may be used by unpriviledged user */
+/** Action doesn't write into WAA, may be used by unprivileged user */
 #define RO .is_readonly=1
 
 

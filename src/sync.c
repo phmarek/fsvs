@@ -223,7 +223,7 @@ int sync___recurse(struct estat *cur_dir,
 		}
 
 		/* We have to loop even through obstructed directories - some
-		 * child may not be overlayed. */
+		 * child may not be overlaid. */
 		if (val->kind == svn_node_dir)
 		{
 			STOPIF( sync___recurse( sts, subpool), NULL);

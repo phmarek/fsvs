@@ -59,7 +59,7 @@ enum {
 	ALLOW_GROUPS,
 };
 
-/** List of bits for pattern definitons.
+/** List of bits for pattern definitions.
  * @{ */
 #define HAVE_DIR 1
 #define HAVE_CASE 2

@@ -87,7 +87,7 @@
 
 #undef NEED_ENVIRON_EXTERN
 
-/** Comparision function definition (for \c qsort()) */
+/** Comparison function definition (for \c qsort()) */
 #undef HAVE_COMPARISON_FN_T
 #ifndef HAVE_COMPARISON_FN_T
 typedef int (*comparison_fn_t) (__const void *, __const void *);

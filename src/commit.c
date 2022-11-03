@@ -61,8 +61,8 @@
  * front, and use just the filenames.
  * 
  * Please see \ref status for explanations on \c -v and \c -C . \n
- * For advanced backup usage see also \ref FSVS_PROP_COMMIT_PIPE "the 
- * commit-pipe property".  */
+ * For advanced backup usage see also \ref FSVS_PROP_COMMIT_PIPE
+ * "the commit-pipe property".  */
 
 
 #include <apr_md5.h>
@@ -132,7 +132,7 @@ int ci__set_revision(struct estat *this, svn_revnum_t rev)
 }
 
 
-/** Callback for successfull commits.
+/** Callback for successful commits.
  *
  * This is the only place that gets the new revision number 
  * told.
@@ -475,7 +475,7 @@ svn_error_t *ci__nondir(const svn_delta_editor_t *editor,
 	 * not send the data to the server.
 	 * BUT we have to store the correct MD5 locally; as the source file may 
 	 * have changed, we re-calculate it - that has the additional advantage 
-	 * that the manber-hashes get written, for faster comparision next time.  
+	 * that the manber-hashes get written, for faster comparison next time.  
 	 *
 	 * I thought about using cs__compare_file() in the local check sequence 
 	 * to build a new file; but if anything goes wrong later, the file would 

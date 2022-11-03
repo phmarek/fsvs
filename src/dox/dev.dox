@@ -14,8 +14,8 @@ mistakes will be politely answered, too.
 */
 
 /**
-	\defgroup dev_debug What to do in case of errors
-	\ingroup dev
+\defgroup dev_debug What to do in case of errors
+\ingroup dev
 
 First, please read the documentation to rule out the possibility that
 it's just a badly written sentence that caused misunderstanding.

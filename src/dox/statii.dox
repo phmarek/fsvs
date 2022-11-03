@@ -93,7 +93,7 @@
 
 			New -> CopiedU [label="copy", URL="\ref cp"];
 
-			CopiedU -> New [label="uncopy", URL="\ref uncp"];
+			CopiedU -> New [label="uncopy", URL="\ref uncopy"];
 
 			{
 				edge [ color=blue, URL="\ref revert",

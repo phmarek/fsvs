@@ -100,7 +100,7 @@ struct waa__entry_blocks_t waa__entry_block;
 
 
 /** -.
- * Valid after a successfull call to \ref waa__find_common_base(). */
+ * Valid after a successful call to \ref waa__find_common_base(). */
 char *wc_path;
 /** -. */
 int wc_path_len;
@@ -1010,7 +1010,7 @@ int waa___find_position(struct estat **new,
 	/* Recent gcov tests are still better:
 	 * - of ~24000 calls of this function
 	 * - 118 times the above shortcut for only a single directory was taken,
-	 * - ~23730 times this single comparision was enough,
+	 * - ~23730 times this single comparison was enough,
 	 * - and the binary search loop below was called only 16 times.
 	 * Hooray! */
 	if (dir___f_sort_by_inode(new, array[0]) < 0)
@@ -1090,7 +1090,7 @@ int waa___find_position(struct estat **new,
  *
  * Here the complete entry tree gets written to a file, which is used on the
  * next invocations to determine the entries' statii. It contains the names,
- * sizes, MD5s, devices, inode numbers, parent, mode and time informations,
+ * sizes, MD5s, devices, inode numbers, parent, mode and time information,
  * and a reference to the parent to re-build the tree.
  *
  * \todo Currently hardlinks with duplicate inode-numbers are not well done
@@ -1105,7 +1105,7 @@ int waa___find_position(struct estat **new,
  * at the end, followed by a newline.
  *
  * <h3>Order of entries in the file</h3>
- * We always write parents before childs, and (mostly) lower inode numbers 
+ * We always write parents before children, and (mostly) lower inode numbers 
  * before higher; mixing the subdirectories is allowed.
  * This allows us to rebuild the tree in one pass (because the parents are
  * already known), and gives us nearly linear reading on the storage media
@@ -2550,7 +2550,7 @@ only_rel_path:
 	 * The config file can be parsed only after we know what our base 
 	 * directory is ... so this can't be done directly after command line 
 	 * parsing.
-	 * waa__get_waa_directory() woudn't be enough - some commands, like 
+	 * waa__get_waa_directory() wouldn't be enough - some commands, like 
 	 * export, don't use it - but only 2 actions currently allow filtering: 
 	 * status, and commit. And both get here. */
 	if (!action->only_opt_filter ||

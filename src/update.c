@@ -941,7 +941,7 @@ into_stringbufs:
 		 * So we go the other route: we simply define a subpool, where we 
 		 * allocate the handles in, and clear that later.
 		 * That has the additional advantage that the struct estat could 
-		 * possibly be shrinked in the future. */
+		 * possibly be shrunk in the future. */
 		/* Please note that for svn+ssh the pool given to this function cannot
 		 * be used, as this is already destroyed by the time we get to
 		 * up__close_file, and an apr_pool_clear() then results in a segfault.
@@ -979,7 +979,7 @@ into_stringbufs:
 		{
 			STOPIF( hlp__encode_filter(svn_s_tgt, sts->decoder, 1, 
 						filename, &svn_s_tgt, &encoder, sts->filehandle_pool), NULL);
-			/* If the file gets decoded, use the original MD5 for comparision. */
+			/* If the file gets decoded, use the original MD5 for comparison. */
 			encoder->output_md5= &(sts->md5);
 		}
 	}

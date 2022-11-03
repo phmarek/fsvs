@@ -201,7 +201,7 @@
 /**
  * \addtogroup cmds
  *
- * \section uncp
+ * \section uncopy
  *
  * \code
  * fsvs uncopy DEST [DEST ...]
@@ -585,7 +585,7 @@ next_child:
 		children++;
 	}
 
-	/* Now do the comparisions. */
+	/* Now do the comparisons. */
 	for(i=0; i<simil_dir_count; i++)
 	{
 		common=0;
@@ -1386,7 +1386,7 @@ int cm__work(struct estat *root, int argc, char *argv[])
 	status=0;
 	is_load=is_dump=0;
 
-	/* We have to do the parameter checking in two halfs, because we must not 
+	/* We have to do the parameter checking in two halves, because we must not 
 	 * use "dump" or "load" as working copy path. So we first check what to do, 
 	 * eventually remove these strings from the parameters, and then look for 
 	 * the wc base. */

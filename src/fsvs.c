@@ -100,7 +100,7 @@
  *   <dt>\ref checkout <dd><tt>Fetch some part of the repository, and 
  *     register it as working copy</tt>
  *   <dt>\ref cat <dd><tt>Get a file from the directory</tt>
- *   <dt>\ref revert and \ref uncp <dd><tt>Undo local changes and 
+ *   <dt>\ref revert and \ref uncopy <dd><tt>Undo local changes and 
  *     entry markings</tt>
  *   <dt>\ref remote-status <dd><tt>Ask what an \ref update 
  *   would bring</tt>
@@ -259,8 +259,8 @@
  * action with a name matching some reserved prefixes.
  *
  * <tr><td>\anchor warn_ign_abs_not_base \e ignpat-wcbase<td>
- * This warning is issued if an \ref ignpat_shell_abs "absolute ignore 
- * pattern" does not match the working copy base directory. \n
+ * This warning is issued if an \ref ignpat_shell_abs "absolute ignore pattern"
+ * does not match the working copy base directory. \n
  * See \ref ignpat_shell_abs "absolute shell patterns" for more details.
  *
  * <tr><td>\e diff-status<td>
@@ -404,7 +404,7 @@ void _DEBUGP_open_output(FILE **output, int *was_popened)
  * Never called directly, used only via the macro DEBUGP().
  *
  * For uninitializing in the use case \c debug_buffer the \c line value is 
- * misused to show whether an error occured. */
+ * misused to show whether an error occurred. */
 void _DEBUGP(const char file[], int line, 
 		const char func[], 
 		const char format[], ...)
@@ -928,7 +928,7 @@ ex:
 /** This function is used for the component tests.
  * When FSVS is run with "-d" as parameter, a call to fileno() is 
  * guaranteed to happen here; a single "up" gets into this stack frame, and 
- * allows easy setting/quering of some values. */
+ * allows easy setting/querying of some values. */
 void *_do_component_tests(int a)
 {
 	/* How not to have them optimized out? */

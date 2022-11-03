@@ -44,7 +44,7 @@ struct wa__warnings
 	char text[24];
 	/** Action to take. When ONCE is reached, it gets changed to IGNORE. */
 	warning_action_e action;
-	/** How often this warning occured. Always incremented; 
+	/** How often this warning occurred. Always incremented; 
 	 * may be >1 for WARN_ONCE. */
 	unsigned count;
 	/** Whether the user set some value other than the default. */

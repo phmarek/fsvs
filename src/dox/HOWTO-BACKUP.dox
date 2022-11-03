@@ -23,7 +23,7 @@
 	to have stored in your backup, and what should be left out.
 
 	Depending on your system usage and environment you first have to decide:
-  <ul>
+        <ul>
 	<li> Do you only want to backup your data in \c /home?<ul>
 		<li> Less storage requirements
 		<li> In case of hardware crash the OS must be set up again</ul>
@@ -34,7 +34,7 @@
 		<li> Whole system versioned, restore is only a few commands
 		<li> Much more storage space needed - typically you'd need at least a few 
 			GB free space.</ul>
-  </ul>
+        </ul>
  
 	The next few moments should be spent thinking about the storage space for 
 	the repository - will it be on the system harddisk, a secondary or an 

@@ -360,7 +360,7 @@ int log__work(struct estat *root, int argc, char *argv[])
 		path=".";
 	}
 
-	/* Calculate the comparision string. */
+	/* Calculate the comparison string. */
 	STOPIF_SVNERR( svn_ra_get_repos_root2,
 			(current_url->session, &base_url, global_pool));
 		/* |- current_url->url -|

@@ -9,7 +9,7 @@
 /** \file
  * \ref info action.
  *
- * Allows the user to display various informations about his working copy
+ * Allows the user to display various information about his working copy
  * entries - eg. URL, revision number, stored meta-data, etc. */
 
 /** \addtogroup cmds

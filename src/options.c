@@ -187,7 +187,7 @@ opt___parse_t opt___debug_buffer;
 /**
  * Must be visible, so that the inline function have direct accecss.
  *
- * As delimiter should \c '_' be used; as the comparision is done via 
+ * As delimiter should \c '_' be used; as the comparison is done via 
  * hlp__strncmp_uline_eq_dash(), the user can also use '-'.  */
 struct opt__list_t opt__list[OPT__COUNT]=
 {

@@ -826,7 +826,7 @@ ex:
  * to that URL.
  *
  * Will be easier with mixed-WC operation; currently it's not correct if 
- * there are overlayed non-directory entries.
+ * there are overlaid non-directory entries.
  * */
 int cb__remove_from_url(struct estat *root, struct url_t *to_remove, 
 		int *was_changed)

@@ -119,7 +119,7 @@
  *
  * To see more easily what different patterns do you can use the \c test 
  * subcommand. The following combinations are available:<UL>
- * <li><tt>fsvs groups test \e pattern</tt>\n
+ * <li><tt>fsvs groups test \e pattern</tt><br>
  * Tests \b only the given pattern against all new entries in your working 
  * copy, and prints the matching paths. The pattern is not stored in the 
  * pattern list.
@@ -988,7 +988,7 @@ int ign___init_pattern_into(char *pattern, char *end, struct ignore_t *ignore)
 
 	data_seen=0;
 
-	/* gcc reports "used unitialized" - it doesn't see that the loop gets 
+	/* gcc reports "used uninitialized" - it doesn't see that the loop gets 
 	 * terminated in the case speclen==0. */
 	eo_parm=NULL;
 	/* This are the defaults: */
@@ -1384,7 +1384,7 @@ ex:
 
 /** Compares the given \c sstat_t \a st with the \b device ignore pattern 
  * \a ign.
- * Does the less-than, greater-than and/or equal comparision.
+ * Does the less-than, greater-than and/or equal comparison.
  * */
 int ign___compare_dev(struct sstat_t *st, struct ignore_t *ign)
 {

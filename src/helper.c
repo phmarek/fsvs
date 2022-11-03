@@ -586,7 +586,7 @@ char *hlp__pathcopy(char *dst, int *len, ...)
 
 /** -.
  *
- * Normally a number; currently a special case is recogniced, namely \c 
+ * Normally a number; currently a special case is recognised, namely \c 
  * HEAD .
  *
  * If the parameter \c eos is not \c NULL, it gets set to the character 
@@ -828,7 +828,7 @@ ex:
 
 
 /** -.
- * Some special values are recogniced - eg. \c \\r, \c \\n. 
+ * Some special values are recognised - eg. \c \\r, \c \\n. 
  */
 int hlp__safe_print(FILE *output, char *string, int maxlen)
 {
@@ -1678,7 +1678,7 @@ int hlp__format_path(struct estat *sts, char *wc_relative_path,
 			 *   - Disadv: Slow, because it has to be tried *every* time
 			 *   - Adv: Matches as much as possible
 			 *
-			 * Maybe there should simply be a choise between PATH_ENVIRON_FAST 
+			 * Maybe there should simply be a choice between PATH_ENVIRON_FAST 
 			 * and PATH_ENVIRON_FULL. */
 			match=NULL;
 			/* We need at least a single character to substitute. */
@@ -1761,11 +1761,11 @@ char *hlp__rev_to_string(svn_revnum_t rev)
 
 
 /** -.
- * If \a max<0, the comparision is done until the \c \\0.
+ * If \a max<0, the comparison is done until the \c \\0.
  * \a max is the maximum number of characters to compare; the result is 
  * always \c equal (\c ==0), if \c max==0.
  * 
- * Not useable for lesser/greater compares. */
+ * Not usable for lesser/greater compares. */
 int hlp__strncmp_uline_eq_dash(char *always_ul, char *other, int max)
 {
 	while (max)
@@ -1779,7 +1779,7 @@ int hlp__strncmp_uline_eq_dash(char *always_ul, char *other, int max)
 			return 1;
 
 		/* We need not check for *other==0, because they must be equal 
-		 * according the above comparision.
+		 * according the above comparison.
 		 * We must check afterwards, because the \0 must be compared, too. */
 		if (max<0 && *always_ul==0) break;
 
