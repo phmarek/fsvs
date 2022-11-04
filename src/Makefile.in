@@ -96,10 +96,10 @@ install:
 # No automatic rebuild (?)
 #../doc/USAGE: $(C_FILES) $(H_FILES)
 #.PHONY: ../doc/USAGE
-DOXDIR=../../doxygen/html/
-MANDIR=../../doxygen/man/man1/
+DOXDIR=../doxygen/html/
+MANDIR=../doxygen/man/man1/
 MANDEST=../doc/
-DOXFLAG=../../doxygen/html/index.html
+DOXFLAG=../doxygen/html/index.html
 $(DOXFLAG):
 	( cat doxygen-data/Doxyfile-man ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
 	( cat doxygen-data/Doxyfile ; echo PROJECT_NUMBER=$(VERSION)) | doxygen -
