@@ -672,7 +672,7 @@ extern void _DEBUGP(const char file[], int line, const char func[], const char f
 	 * \endcode
 	 *
 	 * It works by checking the return value; if it is not zero, a 
-	 * <tt>goto ex</tt> is done. At this mark some cleanup is possible. */
+	 * <tt>goto ex</tt> is done. At this mark some cleanup is possible.
 	 * @{ */
 	/** A flag to turn error printing temporarily off.
 	 * This is useful where entire calltrees would have to be equipped with 
@@ -835,6 +835,7 @@ __attribute__ ((format (printf, 5, 6) ));
 #include <valgrind/memcheck.h>
 #endif
 #endif
+/** @} */
 /** @} */
 
 
