@@ -1280,7 +1280,8 @@ HTML_FILE_EXTENSION    = .html
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
 ##HTML_HEADER            = doxygen-data/head.html
-HTML_HEADER            = 
+
+HTML_HEADER            =
 
 # The HTML_FOOTER tag can be used to specify a user-defined HTML footer for each
 # generated HTML page. If the tag is left blank doxygen will generate a standard
@@ -1291,7 +1292,8 @@ HTML_HEADER            =
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
 ##HTML_FOOTER            = doxygen-data/foot.html
-##HTML_FOOTER            = 
+
+HTML_FOOTER            =
 
 # The HTML_STYLESHEET tag can be used to specify a user-defined cascading style
 # sheet that is used by each HTML page. It can be used to fine-tune the look of
@@ -1304,7 +1306,8 @@ HTML_HEADER            =
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
 ##HTML_STYLESHEET        = doxygen-data/doxygen.css
-HTML_STYLESHEET        = 
+
+HTML_STYLESHEET        =
 
 # The HTML_EXTRA_STYLESHEET tag can be used to specify additional user-defined
 # cascading style sheets that are included after the standard style sheets
@@ -1941,7 +1944,7 @@ COMPACT_LATEX          = NO
 # The default value is: a4.
 # This tag requires that the tag GENERATE_LATEX is set to YES.
 
-PAPER_TYPE             = a4wide
+PAPER_TYPE             = a4
 
 # The EXTRA_PACKAGES tag can be used to specify one or more LaTeX package names
 # that should be included in the LaTeX output. The package can be specified just
@@ -2436,7 +2439,7 @@ DOT_NUM_THREADS        = 0
 # The default value is: fontname=Helvetica,fontsize=10.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-DOT_COMMON_ATTR        = "fontname=FreeSans,fontsize=10"
+DOT_COMMON_ATTR        =
 
 # DOT_EDGE_ATTR is concatenated with DOT_COMMON_ATTR. For elegant style you can
 # add 'arrowhead=open, arrowtail=open, arrowsize=0.5'. <a
@@ -2445,7 +2448,7 @@ DOT_COMMON_ATTR        = "fontname=FreeSans,fontsize=10"
 # The default value is: labelfontname=Helvetica,labelfontsize=10.
 # This tag requires that the tag HAVE_DOT is set to YES.
 
-DOT_EDGE_ATTR          = "labelfontname=FreeSans,labelfontsize=10"
+DOT_EDGE_ATTR          =
 
 # DOT_NODE_ATTR is concatenated with DOT_COMMON_ATTR. For view without boxes
 # around nodes set 'shape=plain' or 'shape=plaintext' <a
