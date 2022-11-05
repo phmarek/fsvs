@@ -337,7 +337,7 @@ struct estat {
 			unsigned int has_orig_md5:1;
 			/** Flag whether this entry has changed or not changed (as per 
 			 * MD5/manber-compare), or if this is unknown yet.
-			 * See \ref ChgFlag. */
+			 * See \ref ChgFlag "Change detection flags". */
 			unsigned int change_flag:2;
 		};
 		/** For directories.
@@ -430,7 +430,7 @@ struct estat {
 	 * The subpool is available from a hash lookup with key "" (len=0). */
   apr_hash_t *user_prop;
 
-	/** Flags for this entry. See \ref EntFlags for constant definitions. */
+	/** Flags for this entry. See \ref EntFlags "Various flags for entries" for constant definitions. */
 	AC_CV_C_UINT32_T flags;
 
 
@@ -441,7 +441,7 @@ struct estat {
 	 * value, defining which of the estat::entry_count and similar shared 
 	 * members are valid.
 	 *
-	 * See the special \ref fsvsS_constants below, too.
+	 * See the special \ref fsvsS_constants "Special FSVS file type constants", too.
 	 * @{ */
 	/** This is the value of the old revision. */
 	unsigned old_rev_mode_packed:PACKED_MODE_T_NEEDED_BITS;
@@ -453,10 +453,10 @@ struct estat {
 	/** @} */
 
 
-	/** Local status of this entry - \ref fs_bits. */
+	/** Local status of this entry - \ref fs_bits "File statii". */
 	unsigned int entry_status:10;
 
-	/** Remote status of this entry. \ref fs_bits. */
+	/** Remote status of this entry. \ref fs_bits "File statii". */
 	unsigned int remote_status:10;
 
 
@@ -505,7 +505,7 @@ struct estat {
 };
 
 
-/** \anchor fsvsS_constants Special FSVS file type constants.
+/** \anchor fsvsS_constants \name Special FSVS file type constants.
  * @{ */
 #define S_IFUNDEF (0)
 /** All sockets get filtered out when the directory gets read, so we can 
@@ -520,7 +520,7 @@ struct estat {
 #define S_ISGARBAGE S_ISFIFO
 /** @} */
 
-/** \anchor EntFlags Various flags for entries.
+/** \anchor EntFlags \name Various flags for entries.
  *
  * The RF means repos-flags, as these flags have a meaning when talking
  * to the repository.  */
@@ -607,10 +607,12 @@ struct estat {
 /** @} */
 
 
-/** \anchor ChgFlag Change detection flags. */
+/** \anchor ChgFlag \name Change detection flags. */
+/** @{ */
 #define CF_UNKNOWN (0)
 #define CF_CHANGED (1)
 #define CF_NOTCHANGED (2)
+/** @} */
 /** @} */
 
 
