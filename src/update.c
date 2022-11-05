@@ -923,7 +923,7 @@ into_stringbufs:
 		 *
 		 * This is a bit complicated.
 		 *
-		 * With the file:/// protocol, the source and destination 
+		 * With the %file:/// protocol, the source and destination 
 		 * filehandles are not closed by the subversion libraries; 
 		 * with svn+ssh:/// they are.
 		 *
