@@ -843,6 +843,7 @@ ex:
 }
 
 
+/** \details \anchor FHP */
 svn_error_t *up__apply_textdelta(void *file_baton,
 		const char *base_checksum,
 		apr_pool_t *pool,
@@ -919,7 +920,7 @@ into_stringbufs:
 	}
 	else
 	{
-		/** \anchor FHP File handle pools.
+		/** \details File handle pools.
 		 *
 		 * This is a bit complicated.
 		 *
