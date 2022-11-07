@@ -93,10 +93,10 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * These are stored in a subdirectory of the WAA, named by the MD5-sum of 
  * the WC-path.
  * @{ */
-/** \anchor dir List of files/subdirs/devices/symlinks in and below this
+/** List of files/subdirs/devices/symlinks in and below this
  * working copy directory. 
  *
- * The filelists remember the last committed state of entries. That 
+ * \anchor dir The filelists remember the last committed state of entries. That 
  * includes the ctime, mtime, unix-mode (with flags for 
  * directory/device/symlink/file), MD5 sum, size in bytes, inode, tree 
  * relation, number of child nodes, user and group, and filename.  The path 
@@ -109,28 +109,28 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * See also \a waa__output_tree().
  * */
 #define WAA__DIR_EXT		"dir"
-/** \anchor ign List of groupings ("Identification Groups for New entries", 
+/** List of groupings ("Identification Groups for New entries", 
  * formally "Ignore patterns").
- * They consist of a header with the number of patterns, followed by the 
+ * \anchor ign They consist of a header with the number of patterns, followed by the 
  * group, a whitespace, and the pattern (as, string with options); \c NUL 
  * -terminated, \c LF -separated. */
 #define WAA__IGNORE_EXT		"Ign"
-/** \anchor urls_l List of URLs.
- * They consist of a header with the number of URLs, followed by the URLs 
+/** List of URLs.
+ * \anchor urls_l They consist of a header with the number of URLs, followed by the URLs 
  * themselves; \c NUL -terminated, \c LF -separated.  */
 #define WAA__URLLIST_EXT		"Urls"
-/** \anchor revs Current revisions of the URLs.
- * Very similar to \c WAA__URLLIST_EXT (see \ref url__load_list()).
+/** Current revisions of the URLs.
+ * \anchor revs Very similar to \c WAA__URLLIST_EXT (see \ref url__load_list()).
  * These are split into a separate file, so that no data in \c /etc is 
  * changed after a commit. */
 #define WAA__URL_REVS		"revs"
-/** \anchor copy Hash of copyfrom relations.
- * The key is the destination-, the value is the source-path; they are 
+/** Hash of copyfrom relations.
+ * \anchor copy The key is the destination-, the value is the source-path; they are 
  * stored relative to the wc root, without the leading \c "./", ie. as \c 
  * "dir/test". The \c \\0 is included in the data.  */
 #define WAA__COPYFROM_EXT		"Copy"
-/** \anchor readme Information file.
- * Here a short explanation for this directory is stored. */
+/** Information file.
+ * \anchor readme Here a short explanation for this directory is stored. */
 #define WAA__README		"README.txt"
 /** @} */
 
@@ -139,9 +139,9 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * subdirectory of the WAA; two subdirectory levels are created below that.  
  *
  * @{ */
-/** \anchor md5s List of MD5s of the manber blocks of a file.
+/** List of MD5s of the manber blocks of a file.
  *
- * To speed up comparing and committing large files, these files hold a 
+ * \anchor md5s To speed up comparing and committing large files, these files hold a 
  * list of MD5 hashes for the manber blocks. \n
  * This way big files don't have to be hashed in full to check whether 
  * they've changed; and the manber blocks can be used for the delta algorithm.
@@ -152,11 +152,11 @@ extern struct waa__entry_blocks_t waa__entry_block;
  * Furthermore in the WAA directory of the working copy we store a 
  * (temporary) file as an index for all entries' MD5 checksums. */
 #define WAA__FILE_MD5s_EXT	"md5s"
-/** \anchor prop List of other properties.
- * These are properties not converted to meta-data. */
+/** List of other properties.
+ * \anchor prop These are properties not converted to meta-data. */
 #define WAA__PROP_EXT		"prop"
-/** \anchor cflct List of other conflict files.
- * Defined as <tt>filename\\0\\nfilename\\0\\n...</tt> */
+/** List of other conflict files.
+ * \anchor cflct Defined as <tt>filename\\0\\nfilename\\0\\n...</tt> */
 #define WAA__CONFLICT_EXT	"cflct"
 /** @} */
 
