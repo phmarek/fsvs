@@ -201,7 +201,7 @@
 /**
  * \addtogroup cmds
  *
- * \section uncopy
+ * \section uncp
  *
  * \code
  * fsvs uncopy DEST [DEST ...]

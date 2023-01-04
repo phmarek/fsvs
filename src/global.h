@@ -845,7 +845,7 @@ __attribute__ ((format (printf, 5, 6) ));
  * \ingroup dev
  *
  * A list of variables that can be set by commandline parameters or 
- * environment variables; these are used in nearly every action. */
+ * environment variables; these are used in nearly every action.
  * @{ */
 /** Flag for recursive/non-recursive behaviour.
  * Starting with 0, gets incremented with \c -R and decremented with \c 
