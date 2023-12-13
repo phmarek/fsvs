@@ -1253,6 +1253,9 @@ int ci__work(struct estat *root, int argc, char *argv[])
 		}
 
 
+		STOPIF_SVNERR( editor->close_directory, (root_baton, global_pool) );
+		root_baton=NULL;
+
 		STOPIF_SVNERR( editor->close_edit, (edit_baton, global_pool) );
 		edit_baton=NULL;
 
