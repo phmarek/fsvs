@@ -1,5 +1,9 @@
+Changes in 1.2.12
 - Don't use pcre2_get_match_data_size (github issue #2)
 - Allow comments in "fsvs ignore load" lists.
+- Repair webdav: close the root directory handle as well.
+  https://bugs.launchpad.net/ubuntu/+source/fsvs/+bug/1875642
+  https://github.com/phmarek/fsvs/issues/18
 
 Changes in 1.2.11
 - (Potentially) fixed a long-standing bug (only on webdav):
