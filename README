@@ -53,6 +53,7 @@ subversion book [3].
 
 First install subversion (and, by implication, apr). 
 Next compile fsvs.
+    ./configure
     cd src
     make
 And install the binary: (the man-pages are not automatically installed yet.)
