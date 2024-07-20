@@ -13,6 +13,14 @@ DIR	:= /usr/share/doc
 
 VERSION	:= $(shell git describe --tags --always)
 
+V	?= @
+ifneq ($(V),@)
+ifeq ($(V),1)
+override V :=
+else
+override V := @
+endif
+
 CFLAGS	:= @CFLAGS@
 CFLAGS	+= -Wall -funsigned-char -Os -DFSVS_VERSION='"$(VERSION)"'  -Wno-deprecated-declarations
 LDFLAGS	:= @LDFLAGS@
