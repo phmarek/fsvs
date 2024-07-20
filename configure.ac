@@ -1,11 +1,9 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.60)
-AC_INIT(fsvs, 
-	[esyscmd(make --quiet --no-print-directory -f Makefile.in version-nnl 2>/dev/null)], 
-	https://github.com/phmarek/fsvs)
-AC_GNU_SOURCE
+AC_PREREQ([2.71])
+AC_INIT([fsvs],[esyscmd(make --quiet --no-print-directory -f Makefile.in version-nnl 2>/dev/null)],[https://github.com/phmarek/fsvs])
+AC_USE_SYSTEM_EXTENSIONS
 
 # if [[ "x$cache_file" == /dev/null ]]
 # then
@@ -32,8 +30,7 @@ INCDIRS="/usr/local/include /usr/include /openpkg/include "
 # Furthermore there's apr-1/ as directory name, depending on apr version.
 # Is there something like this available for subversion?
 AC_ARG_WITH(aprinc,
-		AC_HELP_STRING([--with-aprinc=PATH],
-			[Specify an include directory for the APR headers.]),
+		AS_HELP_STRING([--with-aprinc=PATH],[Specify an include directory for the APR headers.]),
 		[
 			INCDIRS="$INCDIRS $withval"
 		], [
@@ -44,22 +41,19 @@ AC_ARG_WITH(aprinc,
 		])
 
 AC_ARG_WITH(svninc,
-		AC_HELP_STRING([--with-svninc=PATH],
-			[Specify an include directory for the subversion headers.]),
+		AS_HELP_STRING([--with-svninc=PATH],[Specify an include directory for the subversion headers.]),
 		[
 			INCDIRS="$INCDIRS $withval"
 		])
 
 AC_ARG_WITH(svninc,
-		AC_HELP_STRING([--with-svninc=PATH],
-			[Specify an include directory for the subversion headers.]),
+		AS_HELP_STRING([--with-svninc=PATH],[Specify an include directory for the subversion headers.]),
 		[
 			INCDIRS="$INCDIRS $withval"
 		])
 
 AC_ARG_WITH(waa_md5,
-		AC_HELP_STRING([--with-waa_md5=NUMBER],
-			[Specifies how many hex characters of the MD5 of the working copy root
+		AS_HELP_STRING([--with-waa_md5=NUMBER],[Specifies how many hex characters of the MD5 of the working copy root
 			 should be used to address the data in the WAA.
 			 This may be increased if you have a lot of different working 
 			 copies on a single machine.
@@ -96,15 +90,13 @@ AC_MSG_NOTICE(["CFLAGS=$CFLAGS"])
 LIBDIRS="/usr/local/lib /openpkg/lib"
 
 AC_ARG_WITH(aprlib,
-		AC_HELP_STRING([--with-aprlib=PATH],
-			[Specify a directory containing APR libraries.]),
+		AS_HELP_STRING([--with-aprlib=PATH],[Specify a directory containing APR libraries.]),
 		[
 			LIBDIRS="$LIBDIRS $withval"
 		])
 
 AC_ARG_WITH(svnlib,
-		AC_HELP_STRING([--with-svnlib=PATH],
-			[Specify a directory containing subversion libraries.]),
+		AS_HELP_STRING([--with-svnlib=PATH],[Specify a directory containing subversion libraries.]),
 		[
 			LIBDIRS="$LIBDIRS $withval"
 		])
@@ -152,7 +144,11 @@ AC_CHECK_LIB([gdbm], [gdbm_firstkey], [],
 	[AC_MSG_FAILURE([Sorry, can't find gdbm.])])
 
 # Checks for header files.
-AC_HEADER_STDC
+# Autoupdate added the next two lines to ensure that your configure
+# script's behavior did not change.  They are probably safe to remove.
+AC_CHECK_INCLUDES_DEFAULT
+AC_PROG_EGREP
+
 AC_CHECK_HEADERS([fcntl.h stddef.h stdlib.h string.h sys/time.h unistd.h pcre2.h ],
 		[],
 		[AC_MSG_FAILURE([Needed header file not found.])])
@@ -196,8 +192,7 @@ AC_RUN_IFELSE([AC_LANG_SOURCE([
 AC_CHECK_HEADERS([linux/kdev_t.h])
 
 AC_ARG_ENABLE(dev-fake,
-	AC_HELP_STRING([--enable-dev-fake], 
-		[Include fake definitions for MAJOR(), MINOR() and MKDEV(). Needed if none found.]),
+	AS_HELP_STRING([--enable-dev-fake],[Include fake definitions for MAJOR(), MINOR() and MKDEV(). Needed if none found.]),
 	[AC_DEFINE([ENABLE_DEV_FAKE])
 	 ENABLE_DEV_FAKE=1],
 	[])
@@ -205,8 +200,7 @@ AC_SUBST(ENABLE_DEV_FAKE)
 
 
 AC_ARG_ENABLE(debug,
-	AC_HELP_STRING([--enable-debug], 
-		[compile some extra debug checks in (valgrind, gdb) (default is no)]),
+	AS_HELP_STRING([--enable-debug],[compile some extra debug checks in (valgrind, gdb) (default is no)]),
 	[AC_DEFINE([ENABLE_DEBUG])
 	 ENABLE_DEBUG=1],
 	[])
@@ -214,8 +208,7 @@ AC_SUBST(ENABLE_DEBUG)
 
 
 AC_ARG_ENABLE(gcov,
-	AC_HELP_STRING([--enable-gcov], 
-		[whether to compile with instrumentation for gcov (default is no) (needs --enable-debug)]),
+	AS_HELP_STRING([--enable-gcov],[whether to compile with instrumentation for gcov (default is no) (needs --enable-debug)]),
 	[AC_DEFINE([ENABLE_GCOV])
 	 ENABLE_GCOV=1],
 	[])
@@ -269,8 +262,7 @@ AC_SUBST(HAVE_LOCALES)
 
 
 AC_ARG_WITH(chroot,
-	AC_HELP_STRING([--with-chroot=PATH],
-		[Specify a chroot environment for the fsvs-chrooter 
+	AS_HELP_STRING([--with-chroot=PATH],[Specify a chroot environment for the fsvs-chrooter 
 		helper.]),
 	[
 		if test "$withval" = "yes" ; then
@@ -285,8 +277,7 @@ AC_SUBST(CHROOTER_JAIL)
 
 
 AC_ARG_ENABLE(release,
-	AC_HELP_STRING([--enable-release], 
-		[whether to compile without debug messages. Makes image smaller (to about half size), but makes -d and -D inoperative. (Default is no)]),
+	AS_HELP_STRING([--enable-release],[whether to compile without debug messages. Makes image smaller (to about half size), but makes -d and -D inoperative. (Default is no)]),
 	[AC_DEFINE([ENABLE_RELEASE])
 	 ENABLE_RELEASE=1],
 	[])
@@ -309,7 +300,14 @@ AC_SYS_LARGEFILE
 AC_C_CONST
 AC_C_INLINE
 AC_CHECK_MEMBERS([struct stat.st_rdev])
-AC_HEADER_TIME
+m4_warn([obsolete],
+[Update your code to rely only on HAVE_SYS_TIME_H,
+then remove this warning and the obsolete code below it.
+All current systems provide time.h; it need not be checked for.
+Not all systems provide sys/time.h, but those that do, all allow
+you to include it and time.h simultaneously.])dnl
+AC_CHECK_HEADERS_ONCE([sys/time.h])
+
 AC_STRUCT_TM
 
 AC_DEFINE([HAS_FASTCALL])
@@ -347,7 +345,7 @@ AC_FUNC_MALLOC
 AC_FUNC_MEMCMP
 AC_FUNC_MMAP
 AC_FUNC_REALLOC
-AC_TYPE_SIGNAL
+
 AC_FUNC_VPRINTF
 AC_CHECK_FUNCS([fchdir getcwd gettimeofday memmove memset mkdir munmap rmdir strchr strdup strerror strrchr strtoul strtoull alphasort dirfd lchown lutimes strsep])
 
