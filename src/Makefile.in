@@ -13,8 +13,9 @@ DIR	:= /usr/share/doc
 
 VERSION	:= $(shell git describe --tags --always)
 
-V	?= @
-ifneq ($(V),@)
+# CC	:= clang-18
+# CFLAGS	+= -Wno-single-bit-bitfield-constant-conversion
+
 ifeq ($(V),1)
 override V :=
 else
@@ -31,6 +32,12 @@ WAA_CHARS?= @WAA_WC_MD5_CHARS@
 
 ifdef RPATH
 LDFLAGS	+= -Wl,-rpath,$(RPATH)
+endif
+
+ifdef ASAN
+CFLAGS += -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment
+EXTRALIBS += -lasan -lubsan
+# tests/Makefile needs LD_PRELOAD
 endif
 
 ifeq (@ENABLE_DEBUG@, 1)
@@ -155,13 +162,13 @@ docs: $(MANDEST)/fsvs-howto-backup.5 $(MANDEST)/fsvs-howto-master_local.5
 ################################ Rules ######################################
 %.o:	%.c
 	@echo "     CC $<"
-	@$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+	$(V)$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 # if the Makefile has changed, the output will (at least sometimes)
 # change, too.
 $(DEST): $(C_FILES:%.c=%.o)
 	@echo "     Link $@"
-	@$(CC) $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) -o $@ $^ $(BASELIBS) $(EXTRALIBS) 
+	$(V)$(CC) $(FSVS_LDFLAGS) $(LDLIBS) $(LIBS) -o $@ $^ $(BASELIBS) $(EXTRALIBS) 
 ifeq (@ENABLE_RELEASE@, 1)
 	-strip $@
 endif
@@ -178,7 +185,7 @@ endif
 deps:	$(D_FILES)
 .%.d:	%.c
 	@echo "     deps for $<"
-	@$(CC) $(CPPFLAGS) $(CFLAGS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
+	$(V)$(CC) $(CPPFLAGS) $(CFLAGS) -MM $< | perl -pe 's#\bdoc.g-c\b##' > $@
 include $(D_FILES)
 
 tools/fsvs-chrooter: tools/fsvs-chrooter.c

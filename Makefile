@@ -13,7 +13,7 @@ src/config.h: configure
 	@echo ''
 	@false
 
-configure:	configure.in
+configure:	configure.ac
 	@echo Generating configure.
 	autoconf
 
