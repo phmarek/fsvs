@@ -235,7 +235,9 @@ int ops__stat_to_action(struct estat *sts, struct sstat_t *new)
 	 * read from disk it has possibly only seconds!
 	 *
 	 * There's a long thread on dev@subversion.tigris.org about the
-	 * granularity of timestamps - auto detecting vs. setting, etc. */
+	 * granularity of timestamps - auto detecting vs. setting, etc.
+	 * UPDATE 20240720: tigris is no more, see archives like
+	 *   https://svn.haxx.se/users/archive-2008-03/0462.shtml */
 	file_status = 
 		old->mtim.tv_sec != new->mtim.tv_sec ? FS_META_MTIME : 0;
 	/* We don't show a changed ctime as "t" any more. On commit nothing 
