@@ -8,7 +8,6 @@
 
 #include <stdlib.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <ctype.h>
 #include <sys/select.h>
 #include <subversion-1/svn_dirent_uri.h>

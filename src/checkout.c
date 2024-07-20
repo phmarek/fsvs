@@ -8,7 +8,6 @@
 
 #include <stdlib.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <time.h>
 #include <ctype.h>
 #include <sys/select.h>

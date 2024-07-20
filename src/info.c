@@ -50,7 +50,6 @@
  * directory; with another \c -R you'll get the whole (sub-)tree. */
 
 
-#include <unistd.h>
 #include <fcntl.h>
 
 #include "global.h"

@@ -7,7 +7,6 @@
  ************************************************************************/
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <ctype.h>
 #include <pcre2.h>
 #include <sys/mman.h>

@@ -21,7 +21,6 @@
 
 #include <sys/types.h>
 #include <limits.h>
-#include <unistd.h>
 #include <gdbm.h>
 #include <fcntl.h>
 #include <subversion-1/svn_props.h>

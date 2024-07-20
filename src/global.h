@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <gdbm.h>
 #include <stddef.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <apr_md5.h>
 #include <apr_file_io.h>

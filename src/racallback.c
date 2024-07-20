@@ -13,7 +13,6 @@
 
 #include <errno.h>
 #include <time.h>
-#include <unistd.h>
 
 #include <subversion-1/svn_ra.h>
 #include <subversion-1/svn_auth.h>

@@ -8,7 +8,6 @@
 
 #include <stdio.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <ctype.h>
 #include <dlfcn.h>
 #include <netdb.h>

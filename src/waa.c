@@ -14,7 +14,6 @@
 #include <apr_md5.h>
 #include <subversion-1/svn_md5.h>
 #include <ctype.h>
-#include <unistd.h>
 #include <strings.h>
 #include <time.h>
 #include <sys/mman.h>

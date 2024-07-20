@@ -7,7 +7,6 @@
  ************************************************************************/
 
 #include <stdlib.h>
-#include <unistd.h>
 #include <poll.h>
 #include <alloca.h>
 #include <time.h>
