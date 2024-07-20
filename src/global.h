@@ -362,14 +362,14 @@ struct estat {
 			struct estat **by_name;
 
 			/** How many entries this directory has. */
-			AC_CV_C_UINT32_T entry_count;
+			uint32_t entry_count;
 
 			/** Used to know when this directories' children are finished.
 			 * Counts the number of unfinished subdirectories.
 			 * This is volatile and should be in the union below (with \ref 
 			 * estat::child_index), but as it's only used for directories it 
 			 * conserves memory to keep it here. */
-			AC_CV_C_UINT32_T unfinished;
+			uint32_t unfinished;
 
 			/** This flag is set if any child is *not* at the same revision,
 			 * so this directory has to be descended on reporting. */
@@ -407,11 +407,11 @@ struct estat {
 		};
 		struct {
 			/** Used in waa__input_tree() and waa__update_tree(). */
-			AC_CV_C_UINT32_T child_index;
+			uint32_t child_index;
 		};
 		struct {
 			/** Used in output_tree(). */
-			AC_CV_C_UINT32_T file_index;
+			uint32_t file_index;
 		};
 	};
 
@@ -432,7 +432,7 @@ struct estat {
   apr_hash_t *user_prop;
 
 	/** Flags for this entry. See \ref EntFlags "Various flags for entries" for constant definitions. */
-	AC_CV_C_UINT32_T flags;
+	uint32_t flags;
 
 
 	/** Packed representations of the file type; see \c preproc.h for 

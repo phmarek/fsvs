@@ -58,19 +58,6 @@
 /** OpenBSD has no locales support. */
 #undef HAVE_LOCALES
 
-/** Unsigned 32bit type.
- * The value of \c AC_CV_C_UINT32_T changed between autoconf 2.59e and 2.60.
- * Since 2.60 we get \c yes instead of the type.
- * And there's no \c HAVE_UINT32_T ... 
- * I don't seem to get that to work properly.
- * So I changed configure.in to substitute \c yes to \c uint32_t. */
-#undef HAVE_UINT32_T
-/* #if HAVE_UINT32_T
-  #include <stdint.h> 
-  #include <inttypes.h>
-#endif
-*/
-#undef AC_CV_C_UINT32_T 
 
 /** Whether \c linux/types.h was found. */
 #undef HAVE_LINUX_TYPES_H

@@ -30,7 +30,7 @@
  * We calculate it once, and reuse it. */
 struct t_manber_parms
 {
-	AC_CV_C_UINT32_T values[256];
+	uint32_t values[256];
 };
 
 /** Everything needed to calculate manber-hashes out of a stream.
@@ -61,9 +61,9 @@ struct t_manber_data
 
 
 	/** The internal manber-state. */
-	AC_CV_C_UINT32_T state;
+	uint32_t state;
 	/** The previous manber-state.  */
-	AC_CV_C_UINT32_T last_state;
+	uint32_t last_state;
 	/** Count of bytes in backtrack buffer. */
 	int bktrk_bytes;
 	/** The last byte in the rotating backtrack-buffer. */
@@ -543,7 +543,7 @@ ex:
 void cs___manber_init(struct t_manber_parms *mb_d)
 {
 	int i;
-	AC_CV_C_UINT32_T p;
+	uint32_t p;
 
 	if (mb_d->values[0]) return;
 
@@ -992,7 +992,7 @@ int cs__read_manber_hashes(struct estat *sts, struct cs__manber_hashes *data)
 	unsigned estimated, count;
 	t_ull length, start;
 	char buffer[MANBER_LINELEN+10], *cp;
-	AC_CV_C_UINT32_T value;
+	uint32_t value;
 
 
 	status=0;

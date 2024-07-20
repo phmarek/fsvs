@@ -659,12 +659,6 @@ const char* Version(FILE *output)
 #ifdef HAVE_LOCALES
 				STRINGIFY(HAVE_LOCALES)
 #endif
-#ifdef HAVE_UINT32_T
-				STRINGIFY(HAVE_UINT32_T)
-#endif
-#ifdef AC_CV_C_UINT32_T
-				STRINGIFY(AC_CV_C_UINT32_T)
-#endif
 #ifdef HAVE_LINUX_TYPES_H
 				STRINGIFY(HAVE_LINUX_TYPES_H)
 #endif

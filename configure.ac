@@ -300,43 +300,9 @@ AC_SYS_LARGEFILE
 AC_C_CONST
 AC_C_INLINE
 AC_CHECK_MEMBERS([struct stat.st_rdev])
-m4_warn([obsolete],
-[Update your code to rely only on HAVE_SYS_TIME_H,
-then remove this warning and the obsolete code below it.
-All current systems provide time.h; it need not be checked for.
-Not all systems provide sys/time.h, but those that do, all allow
-you to include it and time.h simultaneously.])dnl
 AC_CHECK_HEADERS_ONCE([sys/time.h])
 
 AC_STRUCT_TM
-
-AC_DEFINE([HAS_FASTCALL])
-AC_SUBST(HAS_FASTCALL)
-
-# Only i386 (32bit) has fastcall.
-if [[ `uname -m` = i?86 ]]
-then
-	HAS_FASTCALL=1
-fi
-
-
-AC_TYPE_UINT32_T
-AC_SUBST(HAVE_UINT32_T)
-# See config.h for an explanation.
-if [[ "$ac_cv_c_uint32_t" = "yes" ]]
-then
-	ac_cv_c_uint32_t=uint32_t
-fi
-AC_DEFINE_UNQUOTED(AC_CV_C_UINT32_T, [$ac_cv_c_uint32_t])
-
-AC_TYPE_UINT64_T
-AC_SUBST(HAVE_UINT64_T)
-if [[ "$ac_cv_c_uint64_t" = "yes" ]]
-then
-	ac_cv_c_uint64_t=uint64_t
-fi
-AC_DEFINE_UNQUOTED(AC_CV_C_UINT64_T, [$ac_cv_c_uint64_t])
-
 
 # Checks for library functions.
 AC_FUNC_CHOWN

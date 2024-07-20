@@ -22,14 +22,14 @@
 struct cs__manber_hashes 
 {
 	/** The manber-hashes */
-	AC_CV_C_UINT32_T *hash;
+	uint32_t *hash;
 	/** The MD5-digests */
 	md5_digest_t *md5;
 	/** The position of the first byte of the next block, ie.
 	 * N for a block which ends at byte N-1. */
 	off_t *end;
 	/** The index into the above arrays - sorted by manber-hash. */
-	AC_CV_C_UINT32_T *index;
+	uint32_t *index;
 
 	/** Number of manber-hash-entries stored */
 	unsigned count;
