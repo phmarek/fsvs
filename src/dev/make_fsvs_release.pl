@@ -22,8 +22,9 @@ sub C { system("rm -rf '$tempdir'"); };
 
 $SIG{"__DIE__"}=sub { print @_; C(); exit($! || 1); };
 
+chdir ".." || die $! if -e 'ac_list.c';
 
-system("git archive --prefix '$tagdir/' | tar -xf -C '$tempdir'");
+system("git archive --prefix '$tagdir/' '$tagdir' | tar -xf - -C '$tempdir'");
 die "Fehler $?" if $?;
 
 chdir($tempdir);
