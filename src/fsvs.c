@@ -716,6 +716,14 @@ const char* Version(FILE *output)
 	return Id;
 }
 
+void do__BUG(int line)
+{
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+	*(int*)42 = line;
+#pragma GCC diagnostic pop
+}
+
 
 /** \addtogroup cmds
  *

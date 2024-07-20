@@ -806,7 +806,8 @@ __attribute__ ((format (printf, 5, 6) ));
 /** Makes the program abort.
  * If the configure had --enable-debug and \c gdb is in the path, try
  * to use \c gdb to debug this problem (only if STDIN and STDOUT are ttys). */
-#define BUG(...) do { fflush(NULL); debuglevel=1; DEBUGP(__VA_ARGS__); *(int*)42=__LINE__; while(1) sleep(1); } while (0)
+void do__BUG(int);
+#define BUG(...) do { fflush(NULL); debuglevel=1; DEBUGP(__VA_ARGS__); do__BUG(__LINE__); while(1) sleep(1); } while (0)
 /** The same as BUG(), but conditionalized. 
  * \code
  *   BUG_ON(a == b, "HELP")
